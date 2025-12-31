@@ -112,26 +112,14 @@
         }
         
         .logo {
-            height: 45px;
+            height: 55px;
             width: auto;
             transition: transform 0.3s ease, filter 0.3s ease;
         }
-        
+
         .logo:hover {
             transform: scale(1.05);
             filter: drop-shadow(0 0 20px var(--gold-glow));
-        }
-        
-        .logo-text {
-            font-family: 'Syne', sans-serif;
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: var(--white);
-            letter-spacing: -0.02em;
-        }
-        
-        .logo-text .dot {
-            color: var(--gold);
         }
         
         nav {
@@ -572,11 +560,11 @@
             header {
                 padding: 1rem 1.5rem;
             }
-            
-            .logo-text {
-                display: none;
+
+            .logo {
+                height: 40px;
             }
-            
+
             nav {
                 display: none;
             }
@@ -594,12 +582,11 @@
 <body>
     <header>
         <a href="#" class="logo-link">
-            <img src="byzyb-bee-nav-50.png" alt="ByZyB.ai" class="logo">
-            <span class="logo-text">ByZyB<span class="dot">.ai</span></span>
+            <img src="byzyb-full-transparent-400.png" alt="ByZyB.ai" class="logo">
         </a>
         <nav>
-            <a href="#about">About</a>
             <a href="#products">Products</a>
+            <a href="#about">About</a>
             <a href="#education">Education</a>
             <a href="#contact">Contact</a>
         </nav>
@@ -610,8 +597,7 @@
             <img src="byzyb-full-transparent-400.png" alt="ByZyB.ai - Busy Bee Building Software" class="hero-logo">
             <p class="hero-tagline">Building <span class="gold">Digital</span> Products</p>
             <p class="hero-subtitle">
-                A personal portfolio of software innovations by Robin Hutchinson. 
-                Always busy. Always building.
+                A portfolio of software innovation.
             </p>
             <div class="scroll-indicator">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
@@ -619,7 +605,57 @@
                 </svg>
             </div>
         </section>
-        
+
+        <section id="products">
+            <h2 class="section-title">Products</h2>
+            <p class="section-intro">
+                AI-powered applications designed to solve real problems. Built with enterprise-grade thinking and indie agility.
+            </p>
+            <div class="products-grid">
+                <article class="product-card">
+                    <div class="product-icon">🗣️</div>
+                    <h3>Fluenca</h3>
+                    <span class="status development">In Development</span>
+                    <p>
+                        A native iOS app that connects language learners through swipe-based matching—like dating apps,
+                        but for finding conversation partners. Real-time chat with an innovative message interface: swipe
+                        right on any message to reveal its translation, swipe left for grammar suggestions and alternative
+                        expressions. AI-powered contextual learning that adapts to your proficiency level, with vocabulary
+                        tracking and text-to-speech pronunciation guidance.
+                    </p>
+                </article>
+
+                <article class="product-card">
+                    <div class="product-icon">🏋️</div>
+                    <h3>Training Beast</h3>
+                    <span class="status development">In Development</span>
+                    <p>
+                        A web application that transforms how coaches plan training sessions. Intuitive drag-and-drop
+                        interface for building professional practice plans from a searchable activity library with
+                        hundreds of drills. Supports 50+ sports and activities across team sports, individual sports,
+                        fitness training, and outdoor recreation. Each activity template includes detailed setup instructions,
+                        objectives, player requirements, equipment lists, and skill-level modifications. Create custom drills,
+                        share plans with your coaching staff, and generate printable session plans. Team management features
+                        let you organize multiple teams and control plan access.
+                    </p>
+                </article>
+
+                <article class="product-card">
+                    <div class="product-icon">🏠</div>
+                    <h3>PropertyConnect Pro</h3>
+                    <span class="status development">In Development</span>
+                    <p>
+                        A comprehensive SaaS platform that streamlines property maintenance workflows by connecting
+                        property management companies, tenants, contractors, and property owners. Features AI-powered
+                        assessment that dynamically generates questions and determines coverage areas. Multi-tenant
+                        architecture with secure data isolation, real-time WebSocket updates, granular role-based
+                        permissions, and a mobile-optimized progressive web app. Advanced reporting provides performance
+                        insights and analytics across your property portfolio.
+                    </p>
+                </article>
+            </div>
+        </section>
+
         <section id="about">
             <h2 class="section-title">About</h2>
             <p class="section-intro">
@@ -628,104 +664,82 @@
             <div class="about-content">
                 <div class="about-text">
                     <p>
-                        I'm <span class="highlight">Robin Hutchinson</span>, head of Customer Success and Commercials 
-                        at EY's Client Technology. I lead the end-to-end journey of our technology products and AI 
-                        solutions—from client adoption through commercial strategy and implementation.
+                        I'm <span class="highlight">Robin Hutchinson</span>, and I lead Customer Success and Commercials
+                        for EY's global Client Technology division. But the title only tells part of the story. In practice,
+                        I shape how one of the world's largest professional services firms turns technology ideas into
+                        revenue—guiding commercialization strategy for AI, platforms, and digital products across 30+ countries.
                     </p>
                     <p>
-                        Drawing on <span class="highlight">27+ years as a partner at EY</span> and previous technology 
-                        leadership experience, I've built and scaled business initiatives with P&L responsibilities 
-                        exceeding $500M. My teams across 30+ countries develop commercialization pathways for products 
-                        created by our global technical network.
+                        Every Service Line technology officer reports into my organization, which means I'm accountable for
+                        the commercial viability of everything we build—from concept through adoption. I work daily with our
+                        10 regional Chief Technology Officers to align go-to-market strategy for EY Fabric, MyEY, and our
+                        AI platform EYQ. When we deploy AI capabilities to clients, my teams determine how we price it,
+                        position it, and ensure it delivers measurable value.
                     </p>
                     <p>
-                        Outside of the enterprise world, <span class="highlight">ByZyB.ai</span> — a play on "busy bee" — 
-                        represents my continuous drive to create, innovate, and bring ideas to life through code. 
-                        Based between Toronto and London, I combine enterprise-scale thinking with the agility of 
-                        independent development.
+                        My technical foundation runs deeper than most assume. I studied AI at the University of Texas back
+                        in 1991—long before the current wave—and that perspective has shaped how I've approached commercializing
+                        AI at enterprise scale. I've helped build the frameworks that govern how EY implements and monetizes
+                        AI solutions globally.
+                    </p>
+                    <p>
+                        <span class="highlight">Twenty-seven years as an EY partner.</span> P&L responsibility exceeding $500M.
+                        A track record that includes founding and selling a security software company, and building products
+                        that led to a $190M acquisition. The pattern is consistent: take complex technology, find the commercial
+                        pathway, and scale it.
+                    </p>
+                    <p>
+                        EY's mandatory retirement age means I'll be stepping away from the partnership in July 2026. My career,
+                        however, continues. I'm actively building software through <span class="highlight">ByZyB.ai</span>—my
+                        personal venture focused on AI-powered applications—and I remain energized by the intersection of
+                        technology strategy and execution. For the right opportunity, I'm very much open to conversation.
+                    </p>
+                    <p>
+                        Based between Toronto and London. Still building. Still shipping.
                     </p>
                 </div>
-                
+
                 <div class="career-timeline">
                     <h3>Career Highlights</h3>
-                    
+
                     <div class="timeline-item">
-                        <div class="role">Global Commercials and Strategy Leader, Client Technology</div>
+                        <div class="role">Global Head, Customer Success & Commercials – Client Technology</div>
                         <div class="company">EY</div>
                         <div class="period">Jan 2020 – Present · 6 years</div>
-                        <div class="description">Leading customer success function that drives adoption, implementation excellence, and continuous value realization for technology solutions worldwide.</div>
+                        <div class="description">Lead the global function responsible for technology product adoption, commercial strategy, and value realization across EY's Client Technology division. All Service Line technology officers report into this organization. Direct collaboration with regional CTOs across 10 super-regions to execute go-to-market strategy for EY Fabric, MyEY, EYQ, and the broader AI platform ecosystem. P&L responsibility exceeding $500M.</div>
                     </div>
-                    
+
                     <div class="timeline-item">
-                        <div class="role">Customer Success & CTO Global Markets</div>
+                        <div class="role">Global Technology Strategy & CTO Partnerships</div>
                         <div class="company">EY</div>
                         <div class="period">Oct 1997 – Present · 28+ years</div>
-                        <div class="description">Directing Service Line technology officers, regional hubs, and acquisition strategies. Building frameworks for AI systems that transform how clients operate.</div>
+                        <div class="description">Built and evolved frameworks for AI commercialization at enterprise scale. Directed regional technology hub strategy, Service Line alignment, and acquisition integration. Established commercial governance models that determine how AI and platform capabilities are priced, provisioned, and deployed globally.</div>
                     </div>
-                    
+
                     <div class="timeline-item">
-                        <div class="role">Global Managing Partner - Digital Products & Solutions</div>
+                        <div class="role">Global Managing Partner – Digital Products & Solutions</div>
                         <div class="company">EY</div>
                         <div class="period">Aug 2014 – Jul 2021 · 7 years</div>
-                        <div class="description">Responsible for sponsoring, building and deploying diverse technology into the business.</div>
+                        <div class="description">Sponsored, built, and deployed technology products across the firm. Responsible for identifying market opportunities, securing investment, and scaling solutions from pilot to global adoption.</div>
                     </div>
-                    
+
                     <div class="timeline-item">
                         <div class="role">CEO</div>
                         <div class="company">eSecurityOnline LLC / Ernst & Young, LLP</div>
                         <div class="period">2002 – 2004 · 2 years</div>
-                        <div class="description">Responsible for all aspects of growth, management, product fit. Sold to Computer Associates.</div>
+                        <div class="description">Full P&L responsibility for growth, operations, and product-market fit. Successfully sold to Computer Associates.</div>
                     </div>
-                    
+
                     <div class="timeline-item">
                         <div class="role">Director of Marketing and Product Management</div>
                         <div class="company">Secure Computing</div>
                         <div class="period">Jun 1994 – Sep 1997 · 3 years 4 months</div>
-                        <div class="description">Acquired Border Network Technologies for $190M in July 1996, where I'd developed the product since 1994.</div>
+                        <div class="description">Developed and commercialized products at Border Network Technologies, which was acquired by Secure Computing for $190M in July 1996.</div>
                     </div>
                 </div>
             </div>
         </section>
-        
-        <section id="products">
-            <h2 class="section-title">Products</h2>
-            <p class="section-intro">
-                Software products designed to make a difference. Some are live, others are taking shape.
-            </p>
-            <div class="products-grid">
-                <article class="product-card">
-                    <div class="product-icon">🗣️</div>
-                    <h3>Fluenca</h3>
-                    <span class="status development">In Development</span>
-                    <p>
-                        A language learning app that combines dating-app mechanics with AI-powered 
-                        translation. Connect with native speakers, practice conversations, and 
-                        build fluency naturally.
-                    </p>
-                </article>
-                
-                <article class="product-card">
-                    <div class="product-icon">🏠</div>
-                    <h3>PropertyConnect Pro</h3>
-                    <span class="status planning">Planning</span>
-                    <p>
-                        A modern property management SaaS platform designed to streamline 
-                        landlord-tenant relationships, maintenance requests, and financial tracking.
-                    </p>
-                </article>
-                
-                <article class="product-card">
-                    <div class="product-icon">🚀</div>
-                    <h3>Coming Soon</h3>
-                    <span class="status planning">Ideas Brewing</span>
-                    <p>
-                        More products are always in the pipeline. The busy bee never stops 
-                        building. Check back for new additions to the hive.
-                    </p>
-                </article>
-            </div>
-        </section>
-        
+
         <section id="education">
             <h2 class="section-title">Education</h2>
             <div class="education-grid">
@@ -752,12 +766,6 @@
                         <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
                     </svg>
                     robin@byzyb.ai
-                </a>
-                <a href="https://www.linkedin.com/in/robinhutchinson" target="_blank" rel="noopener" class="contact-link">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
-                    </svg>
-                    LinkedIn
                 </a>
             </div>
         </section>
