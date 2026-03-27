@@ -409,10 +409,17 @@
             transform: scaleX(1);
         }
         
+        .product-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+        }
+
         .product-icon {
-            width: 70px;
-            height: 70px;
-            margin-bottom: 1.5rem;
+            width: 50px;
+            height: 50px;
+            flex-shrink: 0;
         }
 
         .product-icon img {
@@ -424,7 +431,7 @@
         
         .product-card h3 {
             font-size: 1.5rem;
-            margin-bottom: 0.75rem;
+            margin-bottom: 0;
             color: var(--white);
         }
         
@@ -610,8 +617,10 @@
             <div class="products-grid">
                 <a href="https://language-match.com" target="_blank" style="text-decoration: none; color: inherit;">
                 <article class="product-card">
-                    <div class="product-icon"><img src="language-match-icon.png" alt="Language Match"></div>
-                    <h3>Language Match</h3>
+                    <div class="product-header">
+                        <div class="product-icon"><img src="language-match-icon.png" alt="Language Match"></div>
+                        <h3>Language Match</h3>
+                    </div>
                     <span class="status active">On the App Store</span>
                     <p>
                         A native iOS app that connects language learners through swipe-based matching—like dating apps,
@@ -625,8 +634,10 @@
 
                 <a href="https://liquid-relay.com" target="_blank" style="text-decoration: none; color: inherit;">
                 <article class="product-card">
-                    <div class="product-icon"><img src="liquid-relay-icon.png" alt="Liquid Relay"></div>
-                    <h3>Liquid Relay</h3>
+                    <div class="product-header">
+                        <div class="product-icon"><img src="liquid-relay-icon.png" alt="Liquid Relay"></div>
+                        <h3>Liquid Relay</h3>
+                    </div>
                     <span class="status active">Available for Mac & Windows</span>
                     <p>
                         A desktop application for Mac and Windows that moves files, clipboard content, and screenshots
@@ -642,8 +653,10 @@
 
             <div class="products-grid" style="margin-top: 2rem;">
                 <article class="product-card">
-                    <div class="product-icon"><img src="pencilbee.jpg" alt="Training Beast"></div>
-                    <h3>Training Beast</h3>
+                    <div class="product-header">
+                        <div class="product-icon"><img src="pencilbee.jpg" alt="Training Beast"></div>
+                        <h3>Training Beast</h3>
+                    </div>
                     <span class="status development">In Development</span>
                     <p>
                         A web application for coaches to plan training sessions. Intuitive drag-and-drop
@@ -657,8 +670,10 @@
                 </article>
 
                 <article class="product-card">
-                    <div class="product-icon"><img src="pencilbee.jpg" alt="PropertyConnect Pro"></div>
-                    <h3>PropertyConnect Pro</h3>
+                    <div class="product-header">
+                        <div class="product-icon"><img src="pencilbee.jpg" alt="PropertyConnect Pro"></div>
+                        <h3>PropertyConnect Pro</h3>
+                    </div>
                     <span class="status development">In Development</span>
                     <p>
                         A SaaS platform that streamlines property maintenance workflows by connecting
