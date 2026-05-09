@@ -201,6 +201,31 @@
             font-weight: 400;
         }
 
+        .hero-download {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.65rem 1.5rem;
+            border: 1px solid var(--gold);
+            color: var(--gold);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            letter-spacing: 0.04em;
+            transition: background 0.25s, color 0.25s;
+            animation: fadeInUp 1s ease-out 0.5s both;
+        }
+
+        .hero-download:hover {
+            background: var(--gold);
+            color: var(--bg);
+        }
+
+        .hero-download svg {
+            width: 16px;
+            height: 16px;
+        }
+
         .scroll-indicator {
             position: absolute;
             bottom: 2rem;
@@ -709,6 +734,12 @@
             <p class="hero-subtitle">
                 Technology executive with 27+ years as an EY partner. Leading commercialisation strategy for AI, platforms, and digital products globally.
             </p>
+            <a href="Robin_Hutchinson_CV.pdf" download class="hero-download">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                </svg>
+                Download CV
+            </a>
             <div class="scroll-indicator">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
