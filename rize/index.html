@@ -501,11 +501,12 @@
   .waitlist-form button .arrow{display:inline-block;width:24px;height:1px;background:currentColor;position:relative}
   .waitlist-form button .arrow:after{content:'';position:absolute;right:0;top:-3px;width:7px;height:7px;border-top:1px solid currentColor;border-right:1px solid currentColor;transform:rotate(45deg)}
 
-  .waitlist-prefs{margin-top:28px;display:flex;justify-content:center;flex-wrap:wrap;gap:10px}
-  .waitlist-prefs .pref-label{font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--mute);width:100%;text-align:center;margin-bottom:8px}
-  .waitlist-prefs button{padding:10px 16px;border:1px solid var(--line);font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.15em;text-transform:uppercase;color:#888;transition:all .25s ease;background:transparent}
-  .waitlist-prefs button:hover{color:var(--ink);border-color:#3a3a3a}
-  .waitlist-prefs button.on{color:var(--ink);background:#181818}
+  .waitlist-prefs{margin-bottom:24px;display:flex;justify-content:center;flex-wrap:wrap;gap:10px}
+  .waitlist-prefs .pref-label{font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--ink);width:100%;text-align:center;margin-bottom:12px}
+  .waitlist-prefs button{padding:12px 18px;border:1px solid #3a3a3a;font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.15em;text-transform:uppercase;color:var(--ink);transition:all .25s ease;background:transparent}
+  .waitlist-prefs button:hover{border-color:#666}
+  .waitlist-prefs button.on{background:#181818}
+  .waitlist-prefs button.on[data-v="concept"]{border-color:var(--gold);color:var(--gold)}
   .waitlist-prefs button.on[data-v="athletic"]{border-color:var(--coral);color:var(--coral)}
   .waitlist-prefs button.on[data-v="calm"]{border-color:var(--sage);color:var(--sage)}
   .waitlist-prefs button.on[data-v="alert"]{border-color:var(--ice);color:var(--ice)}
@@ -1002,16 +1003,17 @@
     <p class="waitlist-sub">First-run production is small and deliberate. Waitlist members get launch notification, pre-order priority, and founder pricing on the formulation they pick below.</p>
 
     <div id="form-block">
-      <div class="waitlist-form">
-        <input type="email" id="email" placeholder="your@email.com" autocomplete="email" />
-        <button onclick="submitWaitlist()">Join <span class="arrow"></span></button>
-      </div>
-
       <div class="waitlist-prefs">
-        <span class="pref-label">Most interested in (pick any):</span>
+        <span class="pref-label">What interests you? (pick any)</span>
+        <button data-v="concept" onclick="togglePref(this)">The Overall Concept</button>
         <button data-v="athletic" onclick="togglePref(this)">RIZE Athletic</button>
         <button data-v="calm" onclick="togglePref(this)">RIZE Calm</button>
         <button data-v="alert" onclick="togglePref(this)">RIZE Alert</button>
+      </div>
+
+      <div class="waitlist-form">
+        <input type="email" id="email" placeholder="your@email.com" autocomplete="email" />
+        <button onclick="submitWaitlist()">Join <span class="arrow"></span></button>
       </div>
 
       <div class="waitlist-count"><strong id="count">1,247</strong>already on the waitlist</div>
@@ -1076,7 +1078,7 @@
 
     // Collect selected SKU preferences
     const prefs = document.querySelectorAll('.waitlist-prefs button.on');
-    const skuMap = { athletic: 'Athletic version', calm: 'Calm version', alert: 'Alert version' };
+    const skuMap = { concept: 'The overall concept', athletic: 'Athletic version', calm: 'Calm version', alert: 'Alert version' };
 
     // Build form data for Google Forms
     const formUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSc4RY8ygoseztA1lire-OLFsEGTA0QX4aYf-zYm9GKGm2qefA/formResponse';
