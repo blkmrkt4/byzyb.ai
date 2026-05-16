@@ -496,6 +496,19 @@
             padding: 0.35rem 0.85rem;
             border-radius: 3px;
             font-weight: 600;
+        }
+
+        .deployment-badge.ios {
+            background: linear-gradient(135deg, #3478F6, #5AC8FA);
+            color: var(--white);
+        }
+
+        .deployment-badge.desktop {
+            background: linear-gradient(135deg, #8E44AD, #C39BD3);
+            color: var(--white);
+        }
+
+        .deployment-badge.saas {
             background: linear-gradient(135deg, var(--gold), var(--amber));
             color: var(--black);
         }
@@ -662,7 +675,7 @@
                     </div>
                     <div class="badge-row">
                         <span class="status active">On the App Store</span>
-                        <span class="deployment-badge">iOS App</span>
+                        <span class="deployment-badge ios">iOS App</span>
                     </div>
                     <p>
                         A native iOS app that connects language learners through swipe-based matching—like dating apps,
@@ -682,7 +695,7 @@
                     </div>
                     <div class="badge-row">
                         <span class="status active">Available for Mac & Windows</span>
-                        <span class="deployment-badge">Desktop App</span>
+                        <span class="deployment-badge desktop">Desktop App</span>
                     </div>
                     <p>
                         A desktop application for Mac and Windows that moves files, clipboard content, and screenshots
@@ -704,7 +717,7 @@
                     </div>
                     <div class="badge-row">
                         <span class="status near-launch">Near Launch</span>
-                        <span class="deployment-badge">SaaS</span>
+                        <span class="deployment-badge saas">SaaS</span>
                     </div>
                     <p>
                         Makes your writing sound like you wrote it — not a chatbot. Instead of rewriting your document
@@ -725,7 +738,7 @@
                     </div>
                     <div class="badge-row">
                         <span class="status internal">Internal Tool</span>
-                        <span class="deployment-badge">SaaS</span>
+                        <span class="deployment-badge saas">SaaS</span>
                     </div>
                     <p>
                         Turns a fuzzy "make me a design system" idea into a prompt Claude Desktop can actually build from.
@@ -746,7 +759,7 @@
                     </div>
                     <div class="badge-row">
                         <span class="status internal">Internal Tool</span>
-                        <span class="deployment-badge">SaaS</span>
+                        <span class="deployment-badge saas">SaaS</span>
                     </div>
                     <p>
                         Description coming soon.
@@ -760,7 +773,7 @@
                     </div>
                     <div class="badge-row">
                         <span class="status experiment">Experiment</span>
-                        <span class="deployment-badge">SaaS</span>
+                        <span class="deployment-badge saas">SaaS</span>
                     </div>
                     <p>
                         Keeps enterprise risk and compliance from sprawling across spreadsheets, inboxes, and disconnected
