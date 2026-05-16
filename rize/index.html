@@ -511,9 +511,6 @@
   .waitlist-prefs button.on[data-v="calm"]{border-color:var(--sage);color:var(--sage)}
   .waitlist-prefs button.on[data-v="alert"]{border-color:var(--ice);color:var(--ice)}
 
-  .waitlist-count{margin-top:36px;font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.25em;text-transform:uppercase;color:var(--mute)}
-  .waitlist-count strong{color:var(--ink);font-family:'Anton',sans-serif;font-size:18px;letter-spacing:.04em;font-weight:400;margin:0 6px}
-
   .thanks{display:none;padding:40px;border:1px solid var(--gold);background:rgba(196,149,42,.04)}
   .thanks.show{display:block}
   .thanks h3{font-family:'Anton',sans-serif;font-size:36px;letter-spacing:.02em;margin-bottom:12px;color:var(--gold);text-transform:uppercase}
@@ -1015,8 +1012,6 @@
         <input type="email" id="email" placeholder="your@email.com" autocomplete="email" />
         <button onclick="submitWaitlist()">Join <span class="arrow"></span></button>
       </div>
-
-      <div class="waitlist-count"><strong id="count">1,247</strong>already on the waitlist</div>
     </div>
 
     <div class="thanks" id="thanks">
@@ -1098,14 +1093,6 @@
     document.getElementById('thanks').classList.add('show');
   }
 
-  const countEl = document.getElementById('count');
-  let baseCount = 1247;
-  setInterval(()=>{
-    if(Math.random() > 0.7){
-      baseCount += 1;
-      countEl.textContent = baseCount.toLocaleString();
-    }
-  }, 5000);
 
   document.getElementById('email').addEventListener('keydown', (e)=>{
     if(e.key === 'Enter') submitWaitlist();
