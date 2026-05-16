@@ -461,6 +461,21 @@
             background: var(--navy);
             color: var(--white);
         }
+
+        .status.near-launch {
+            background: var(--amber);
+            color: var(--white);
+        }
+
+        .status.internal {
+            background: var(--plum);
+            color: var(--white);
+        }
+
+        .status.experiment {
+            background: var(--navy);
+            color: var(--white);
+        }
         
         .product-card p {
             color: var(--white-muted);
@@ -655,34 +670,64 @@
             <div class="products-grid" style="margin-top: 2rem;">
                 <article class="product-card">
                     <div class="product-header">
-                        <div class="product-icon"><img src="pencilbee.jpg" alt="Training Beast"></div>
-                        <h3>Training Beast</h3>
+                        <div class="product-icon"><img src="pencilbee.jpg" alt="Ezsay"></div>
+                        <h3>Ezsay</h3>
                     </div>
-                    <span class="status development">In Development</span>
+                    <span class="status near-launch">Near Launch</span>
                     <p>
-                        A web application for coaches to plan training sessions. Intuitive drag-and-drop
-                        interface for building professional practice plans from a searchable activity library with
-                        hundreds of drills. Supports 50+ sports and activities across team sports, individual sports,
-                        fitness training, and outdoor recreation. Each activity template includes detailed setup instructions,
-                        objectives, player requirements, equipment lists, and skill-level modifications. Create custom drills,
-                        share plans with your coaching staff, and generate printable session plans. Team management features
-                        let you organize multiple teams and control plan access.
+                        Makes your writing sound like you wrote it — not a chatbot. Instead of rewriting your document
+                        behind a black box, it analyzes your draft across six dimensions — AI detectability, AI artifacts,
+                        writing quality, plagiarism, citations, and tone — and flags every issue in one unified queue for
+                        you to accept, reject, or edit yourself. Every flag comes with a "why this matters" explanation,
+                        so you don't just fix the draft, you learn to stop writing in AI patterns altogether. It even
+                        extracts your citations, verifies the sources exist, and converts between eight academic styles,
+                        from APA to Bluebook. Built for students and professionals who want a polished, defensible
+                        document — and full control over every word in it.
                     </p>
                 </article>
 
                 <article class="product-card">
                     <div class="product-header">
-                        <div class="product-icon"><img src="pencilbee.jpg" alt="PropertyConnect Pro"></div>
-                        <h3>PropertyConnect Pro</h3>
+                        <div class="product-icon"><img src="pencilbee.jpg" alt="Soul System"></div>
+                        <h3>Soul System</h3>
                     </div>
-                    <span class="status development">In Development</span>
+                    <span class="status internal">Internal Tool</span>
                     <p>
-                        A SaaS platform that streamlines property maintenance workflows by connecting
-                        property management companies, tenants, contractors, and property owners. Features AI-powered
-                        assessment that dynamically generates questions and determines coverage areas. Multi-tenant
-                        architecture with secure data isolation, real-time WebSocket updates, granular role-based
-                        permissions, and a mobile-optimized progressive web app. Advanced reporting provides performance
-                        insights and analytics across your property portfolio.
+                        Turns a fuzzy "make me a design system" idea into a prompt Claude Desktop can actually build from.
+                        A Brief Collector walks you through a 13-step wizard — vibe, color, modes, rules, components — then
+                        outputs a structured prompt that generates a complete design system bundle: CLAUDE.md, DESIGN.md,
+                        tokens, per-component specs, and a light/dark mood board. Save components once to a reusable library
+                        and pull them into any future project, so each new design system takes 10–15 minutes instead of a day
+                        of decisions. Runs entirely on localhost with IndexedDB — no API calls, no cloud, no generation costs.
+                    </p>
+                </article>
+            </div>
+
+            <div class="products-grid" style="margin-top: 2rem;">
+                <article class="product-card">
+                    <div class="product-header">
+                        <div class="product-icon"><img src="pencilbee.jpg" alt="Photo-Seed"></div>
+                        <h3>Photo-Seed</h3>
+                    </div>
+                    <span class="status internal">Internal Tool</span>
+                    <p>
+                        Description coming soon.
+                    </p>
+                </article>
+
+                <article class="product-card">
+                    <div class="product-header">
+                        <div class="product-icon"><img src="pencilbee.jpg" alt="Project ARC"></div>
+                        <h3>Project ARC</h3>
+                    </div>
+                    <span class="status experiment">Experiment</span>
+                    <p>
+                        Keeps enterprise risk and compliance from sprawling across spreadsheets, inboxes, and disconnected
+                        trackers. Centralizes legal, privacy, and security regulations into one platform, routing each
+                        requirement to the right risk stakeholders across every jurisdiction you operate in. Instead of
+                        chasing down who owns what obligation in which region, your compliance team sees the whole map —
+                        regulations, owners, and status — in a single source of truth. Built on Next.js, TypeScript, and
+                        Prisma for multinational organizations that need regulatory visibility across overlapping frameworks.
                     </p>
                 </article>
             </div>
