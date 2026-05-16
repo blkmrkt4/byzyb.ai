@@ -476,7 +476,30 @@
             background: var(--navy);
             color: var(--white);
         }
-        
+
+        .badge-row {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .badge-row .status {
+            margin-bottom: 0;
+        }
+
+        .deployment-badge {
+            display: inline-block;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding: 0.35rem 0.85rem;
+            border-radius: 3px;
+            font-weight: 600;
+            background: var(--gray);
+            color: var(--white-muted);
+        }
+
         .product-card p {
             color: var(--white-muted);
             font-weight: 400;
@@ -637,7 +660,10 @@
                         <div class="product-icon"><img src="language-match-icon.png" alt="Language Match"></div>
                         <h3>Language Match</h3>
                     </div>
-                    <span class="status active">On the App Store</span>
+                    <div class="badge-row">
+                        <span class="status active">On the App Store</span>
+                        <span class="deployment-badge">iOS App</span>
+                    </div>
                     <p>
                         A native iOS app that connects language learners through swipe-based matching—like dating apps,
                         but for finding conversation partners. Real-time chat with an innovative message interface: swipe
@@ -654,7 +680,10 @@
                         <div class="product-icon"><img src="liquid-relay-icon.png" alt="Liquid Relay"></div>
                         <h3>Liquid Relay</h3>
                     </div>
-                    <span class="status active">Available for Mac & Windows</span>
+                    <div class="badge-row">
+                        <span class="status active">Available for Mac & Windows</span>
+                        <span class="deployment-badge">Desktop App</span>
+                    </div>
                     <p>
                         A desktop application for Mac and Windows that moves files, clipboard content, and screenshots
                         instantly between machines—no cables, no cloud uploads, no NAS drives. Built for people who
@@ -673,7 +702,10 @@
                         <div class="product-icon"><img src="pencilbee.jpg" alt="Ezsay"></div>
                         <h3>Ezsay</h3>
                     </div>
-                    <span class="status near-launch">Near Launch</span>
+                    <div class="badge-row">
+                        <span class="status near-launch">Near Launch</span>
+                        <span class="deployment-badge">SaaS</span>
+                    </div>
                     <p>
                         Makes your writing sound like you wrote it — not a chatbot. Instead of rewriting your document
                         behind a black box, it analyzes your draft across six dimensions — AI detectability, AI artifacts,
@@ -691,14 +723,17 @@
                         <div class="product-icon"><img src="pencilbee.jpg" alt="Soul System"></div>
                         <h3>Soul System</h3>
                     </div>
-                    <span class="status internal">Internal Tool</span>
+                    <div class="badge-row">
+                        <span class="status internal">Internal Tool</span>
+                        <span class="deployment-badge">SaaS</span>
+                    </div>
                     <p>
                         Turns a fuzzy "make me a design system" idea into a prompt Claude Desktop can actually build from.
                         A Brief Collector walks you through a 13-step wizard — vibe, color, modes, rules, components — then
                         outputs a structured prompt that generates a complete design system bundle: CLAUDE.md, DESIGN.md,
                         tokens, per-component specs, and a light/dark mood board. Save components once to a reusable library
                         and pull them into any future project, so each new design system takes 10–15 minutes instead of a day
-                        of decisions. Runs entirely on localhost with IndexedDB — no API calls, no cloud, no generation costs.
+                        of decisions.
                     </p>
                 </article>
             </div>
@@ -709,7 +744,10 @@
                         <div class="product-icon"><img src="pencilbee.jpg" alt="Photo-Seed"></div>
                         <h3>Photo-Seed</h3>
                     </div>
-                    <span class="status internal">Internal Tool</span>
+                    <div class="badge-row">
+                        <span class="status internal">Internal Tool</span>
+                        <span class="deployment-badge">SaaS</span>
+                    </div>
                     <p>
                         Description coming soon.
                     </p>
@@ -720,7 +758,10 @@
                         <div class="product-icon"><img src="pencilbee.jpg" alt="Project ARC"></div>
                         <h3>Project ARC</h3>
                     </div>
-                    <span class="status experiment">Experiment</span>
+                    <div class="badge-row">
+                        <span class="status experiment">Experiment</span>
+                        <span class="deployment-badge">SaaS</span>
+                    </div>
                     <p>
                         Keeps enterprise risk and compliance from sprawling across spreadsheets, inboxes, and disconnected
                         trackers. Centralizes legal, privacy, and security regulations into one platform, routing each
