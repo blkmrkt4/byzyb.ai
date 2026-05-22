@@ -1,1206 +1,1824 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>RIZE — The Breath Tool For The Moment Before.</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RIZE — Brand Master Document v2.1</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter+Tight:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter+Tight:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root{
-    --bg:#0A0A0A;
-    --bg-2:#0F0F0F;
-    --ink:#F0F0F0;
-    --mute:#7A7A7A;
-    --line:#1F1F1F;
-    --gold:#F4EE35;
-    --premium-gold:#C4952A;
-    --coral:#FF5F3A;
-    --sage:#6BBF8A;
-    --ice:#3AAFFF;
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  html,body{background:var(--bg);color:var(--ink);font-family:'Inter Tight',sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden;scroll-behavior:smooth}
-  a{color:inherit;text-decoration:none}
-  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
-  input{font-family:inherit}
-
-  /* ===================== NAV ===================== */
-  nav.topnav{
-    position:fixed;top:0;left:0;right:0;z-index:100;
-    padding:18px 40px;
-    display:flex;justify-content:space-between;align-items:center;
-    background:rgba(10,10,10,.72);
-    backdrop-filter:blur(20px);
-    border-bottom:1px solid var(--line);
-  }
-  .nav-logo{font-family:'Anton',sans-serif;font-size:30px;letter-spacing:.04em;color:var(--ink);display:flex;align-items:baseline;gap:2px}
-  .nav-logo .slash{display:inline-block;color:var(--gold);transform:translateY(-2px) skewX(-12deg);margin:0 -2px}
-  .nav-links{display:flex;gap:36px;font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase}
-  .nav-links a{color:var(--mute);transition:color .3s ease}
-  .nav-links a:hover{color:var(--ink)}
-  .nav-cta{padding:11px 20px;border:1px solid var(--gold);color:var(--gold);transition:all .3s ease;font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase}
-  .nav-cta:hover{background:var(--gold);color:var(--bg)}
-
-  /* ===================== HERO ===================== */
-  .hero{
-    min-height:100vh;
-    padding:120px 40px 60px;
-    position:relative;
-    display:grid;
-    grid-template-columns:1.15fr .85fr;
-    gap:80px;
-    align-items:center;
-    overflow:hidden;
-  }
-  .hero-bg-grid{
-    position:absolute;inset:0;
-    background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
-    background-size:80px 80px;
-    opacity:.3;
-    pointer-events:none;
-    mask-image:radial-gradient(ellipse at 60% 50%, black 30%, transparent 80%);
-  }
-  .hero-glow{position:absolute;width:600px;height:600px;border-radius:50%;background:var(--gold);filter:blur(180px);opacity:.08;top:30%;right:-10%;pointer-events:none}
-
-  .hero-left{position:relative;z-index:2}
-
-  .hero-label{
-    font:500 11px/1 'JetBrains Mono',monospace;
-    letter-spacing:.3em;text-transform:uppercase;color:var(--mute);
-    margin-bottom:32px;display:flex;align-items:center;gap:14px;
-    opacity:0;animation:fade .8s ease .2s forwards;
-  }
-  .hero-label .dot{width:7px;height:7px;background:var(--gold);border-radius:50%;animation:pulse 2s infinite}
-  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.85)}}
-  @keyframes fade{to{opacity:1}}
-
-  .hero h1{
-    font-family:'Anton',sans-serif;
-    font-size:clamp(56px,8vw,112px);
-    line-height:.92;
-    letter-spacing:-.015em;
-    text-transform:uppercase;
-    color:var(--ink);
-    max-width:760px;
-  }
-  .hero h1 .line{display:block;overflow:hidden}
-  .hero h1 .line span{display:inline-block;transform:translateY(110%);animation:rise 1.1s cubic-bezier(.77,0,.18,1) forwards}
-  .hero h1 .line:nth-child(1) span{animation-delay:.1s}
-  .hero h1 .line:nth-child(2) span{animation-delay:.28s}
-  .hero h1 .line:nth-child(3) span{animation-delay:.46s}
-  @keyframes rise{to{transform:translateY(0)}}
-  .hero h1 .skew{display:inline-block;color:var(--gold);transform:skewX(-12deg) translateY(-.02em);margin:0 .02em}
-
-  .hero-body{
-    margin-top:32px;max-width:520px;
-    font-size:17px;line-height:1.55;color:#B5B5B5;font-weight:300;
-    opacity:0;animation:fade .8s ease .9s forwards;
-  }
-  .hero-body em{font-style:normal;color:var(--ink)}
-
-  .hero-ctas{margin-top:40px;display:flex;gap:16px;flex-wrap:wrap;opacity:0;animation:fade .8s ease 1.1s forwards}
-  .btn{
-    display:inline-flex;align-items:center;gap:14px;
-    padding:18px 28px;
-    font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase;
-    transition:all .3s ease;
-  }
-  .btn-primary{background:var(--gold);color:var(--bg);border:1px solid var(--gold)}
-  .btn-primary:hover{background:transparent;color:var(--gold);gap:22px}
-  .btn-ghost{border:1px solid var(--line);color:var(--ink)}
-  .btn-ghost:hover{border-color:var(--ink);gap:22px}
-  .btn .arrow{display:inline-block;width:30px;height:1px;background:currentColor;position:relative}
-  .btn .arrow:after{content:'';position:absolute;right:0;top:-3px;width:8px;height:8px;border-top:1px solid currentColor;border-right:1px solid currentColor;transform:rotate(45deg)}
-
-  .hero-strip{
-    margin-top:48px;display:flex;gap:32px;flex-wrap:wrap;
-    padding-top:24px;border-top:1px solid var(--line);
-    opacity:0;animation:fade .8s ease 1.3s forwards;
-  }
-  .hero-strip-item{font:500 10px/1.5 'JetBrains Mono',monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--mute)}
-  .hero-strip-item strong{display:block;color:var(--ink);font-family:'Anton',sans-serif;font-size:22px;letter-spacing:.02em;font-weight:400;margin-bottom:4px}
-
-  /* HERO PRODUCT — single static bottle, variant text speck-dissolves */
-  .hero-product{
-    position:relative;z-index:1;
-    height:600px;display:grid;place-items:center;
-    opacity:0;animation:fade 1.2s ease .5s forwards;
-  }
-  .hero-stage{ position:relative; width:280px; height:500px; }
-
-  .hero-device{
-    position:relative;
-    width:260px;height:460px;
-    transform:rotate(-4deg);
-    animation:floatBig 6s ease-in-out infinite;
-    margin:20px auto 0;
-  }
-  @keyframes floatBig{0%,100%{transform:rotate(-4deg) translateY(0)}50%{transform:rotate(-3deg) translateY(-12px)}}
-
-  .device-shadow{position:absolute;bottom:-30px;left:50%;transform:translateX(-50%);width:180px;height:30px;background:radial-gradient(ellipse,rgba(0,0,0,.7) 0%,transparent 70%);filter:blur(8px)}
-
-  .hero-device .device-cap{
-    position:absolute;top:-8px;left:50%;transform:translateX(-50%);
-    width:218px;height:62px;
-    background:linear-gradient(180deg,#2c2c2c 0%,#0f0f0f 100%);
-    border:1px solid #2a2a2a;
-    border-radius:10px 10px 2px 2px;
-    box-shadow:0 8px 24px rgba(0,0,0,.5);
-  }
-  .hero-device .device-cap::after{
-    content:'';position:absolute;left:12px;right:12px;bottom:10px;height:2px;
-    background:repeating-linear-gradient(90deg,#2a2a2a,#2a2a2a 3px,transparent 3px,transparent 6px);
-  }
-  .device-body-hero{
-    position:absolute;top:52px;left:0;right:0;bottom:0;
-    background:linear-gradient(180deg,#1c1c1c 0%,#0a0a0a 100%);
-    border:1px solid #222;
-    border-radius:5px;
-    box-shadow:inset 0 0 60px rgba(0,0,0,.6),0 30px 80px rgba(0,0,0,.7);
-    padding:38px 26px 32px;
-    display:flex;flex-direction:column;justify-content:space-between;
-  }
-  .device-top-line{display:flex;justify-content:space-between;align-items:center;font:500 8px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#555;text-transform:uppercase}
-  .device-name-big{
-    font-family:'Anton',sans-serif;font-size:64px;line-height:.88;letter-spacing:.02em;color:var(--ink);text-align:center;
-    display:flex;justify-content:center;align-items:baseline;
-  }
-  .device-name-big .slash{display:inline-block;color:var(--gold);transform:skewX(-12deg) translateY(-3px);margin:0 -3px}
-
-  /* The bits that morph: variant label + accent bar + bottom strap line.
-     KEY: at rest the text has NO mask — it renders pristinely, no specks.
-     The noise mask is only applied during dissolve via the .dissolving class.
-     Resolving (specks-in) uses a brief fade with no mask, so the text appears
-     cleanly rather than having residual specks. */
-  .variant-zone{ --variant-color: #FF5F3A; }
-
-  .device-variant-big{
-    font-family:'Anton',sans-serif;font-size:30px;line-height:.9;letter-spacing:.1em;text-align:center;
-    color:var(--variant-color);
-    margin-top:8px;
-    opacity:1;
-    /* No mask at rest — text is perfectly clean */
-    -webkit-mask-image:none;
-    mask-image:none;
-    transition:opacity .35s ease;
-  }
-  .device-accent-big{
-    width:70%;height:3px;margin:18px auto 0;transform:skewX(-20deg);
-    background:var(--variant-color);
-    opacity:1;
-    transition:opacity .35s ease, background .35s ease;
-  }
-  .device-bottom{
-    font:500 8px/1.5 'JetBrains Mono',monospace;letter-spacing:.18em;color:#666;text-align:center;text-transform:uppercase;
-    opacity:1;
-    transition:opacity .35s ease;
-  }
-  .device-bottom strong{display:block;color:#aaa;font-size:9px;margin-bottom:4px;font-weight:500}
-
-  /* Hero bottle gets a larger version of the bottom strap so it's actually
-     readable at the size the hero renders. The smaller .device-bottom on
-     the SKU section bottles stays as-is. */
-  .hero-device .device-bottom{
-    font-size:14px;
-    line-height:1.55;
-    letter-spacing:.2em;
-    margin-top:4px;
-  }
-  .hero-device .device-bottom strong{
-    font-size:15px;
-    margin-bottom:8px;
+  :root {
+    --bg: #0A0A0A;
+    --bg-2: #0F0F0F;
+    --ink: #F0F0F0;
+    --mute: #7A7A7A;
+    --dim: #555;
+    --line: #1F1F1F;
+    --line-2: #2A2A2A;
+    --yellow: #F4EE35;
+    --yellow-deep: #B0AA10;
+    --premium-gold: #C4952A;
+    --premium-gold-deep: #8a5e10;
+    --coral: #FF5F3A;
+    --sage: #6BBF8A;
+    --ice: #3AAFFF;
   }
 
-  /* DISSOLVING — mask kicks in, scattering the text into specks while
-     opacity drops. Mask animates from 0 to off-screen so previously-visible
-     pixels get progressively clipped, producing the scatter effect. */
-  .variant-zone.dissolving .device-variant-big{
-    -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='100'><filter id='n'><feTurbulence baseFrequency='0.7' numOctaves='2' seed='3'/><feColorMatrix values='0 0 0 0 1   0 0 0 0 1   0 0 0 0 1   0 0 0 10 -5'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-    mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='100'><filter id='n'><feTurbulence baseFrequency='0.7' numOctaves='2' seed='3'/><feColorMatrix values='0 0 0 0 1   0 0 0 0 1   0 0 0 0 1   0 0 0 10 -5'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-    -webkit-mask-size:400px 100px;
-    mask-size:400px 100px;
-    -webkit-mask-repeat:no-repeat;
-    mask-repeat:no-repeat;
-    -webkit-mask-position:400px 0;
-    mask-position:400px 0;
-    opacity:0;
-    transition:opacity .35s ease, -webkit-mask-position .35s ease, mask-position .35s ease;
-  }
-  .variant-zone.dissolving .device-accent-big{ opacity:0; }
-  .variant-zone.dissolving .device-bottom{ opacity:0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
 
-  /* SKU label that morphs alongside the bottle.
-     Sits well above the cap so it never overlaps the chrome top. */
-  .hero-sku-label{
-    position:absolute;top:-44px;left:50%;transform:translateX(-50%);
-    font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.3em;text-transform:uppercase;
-    color:var(--mute);white-space:nowrap;z-index:3;
-    transition:opacity .8s ease;
-  }
-  .hero-sku-label.dissolving{opacity:0}
-  .hero-sku-label .dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:10px;vertical-align:middle;background:var(--variant-color);transition:background .9s ease}
-
-  /* progress indicator dots */
-  .hero-dots{
-    position:absolute;bottom:-44px;left:50%;transform:translateX(-50%);
-    display:flex;gap:14px;z-index:5;
-  }
-  .hero-dots button{
-    width:28px;height:3px;background:var(--line);border:none;cursor:pointer;
-    transition:background .4s ease;padding:0;border-radius:0;
-  }
-  .hero-dots button.on[data-v="athletic"]{background:var(--coral)}
-  .hero-dots button.on[data-v="calm"]{background:var(--sage)}
-  .hero-dots button.on[data-v="alert"]{background:var(--ice)}
-
-  /* Orbit text — pushed well outside the bottle's silhouette.
-     The stage is 280px wide; negative values float the text in the
-     surrounding hero space instead of over the packaging. */
-  .orbit{position:absolute;font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.2em;color:var(--mute);text-transform:uppercase;pointer-events:none;transition:opacity .8s ease;white-space:nowrap}
-  .orbit.dissolving{opacity:0}
-  .orbit-h1{top:80px;left:-140px;animation:float 4s ease-in-out infinite}
-  .orbit-h2{bottom:60px;right:-130px;animation:float 4s ease-in-out infinite 1s}
-  .orbit-h3{bottom:140px;left:-90px;animation:float 4s ease-in-out infinite 2s}
-  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
-
-  /* ===================== MARQUEE ===================== */
-  .marquee{
-    border-top:1px solid var(--line);
-    border-bottom:1px solid var(--line);
-    background:var(--bg-2);
-    overflow:hidden;
-    padding:28px 0;
-  }
-  .marquee-track{
-    display:flex;gap:64px;white-space:nowrap;
-    animation:scroll 60s linear infinite;
-    font-family:'Anton',sans-serif;
-    font-size:32px;letter-spacing:.04em;
-    color:#222;
-  }
-  .marquee-track span{display:inline-flex;align-items:center;gap:64px}
-  .marquee-track span::after{content:'/';color:var(--gold);font-size:38px;transform:skewX(-12deg);display:inline-block}
-  @keyframes scroll{to{transform:translateX(-50%)}}
-
-  /* ===================== THESIS BLOCK ===================== */
-  .thesis{
-    padding:140px 40px;
-    border-bottom:1px solid var(--line);
-    max-width:1400px;margin:0 auto;
-  }
-  .thesis-grid{display:grid;grid-template-columns:1fr 1.6fr;gap:100px;align-items:start}
-  .thesis-label{font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.3em;text-transform:uppercase;color:var(--mute);position:sticky;top:120px}
-  .thesis-label .num{display:block;font-family:'Anton',sans-serif;font-size:72px;color:var(--ink);margin-bottom:14px;letter-spacing:.02em}
-  .thesis-body{
-    font-family:'Anton',sans-serif;
-    font-size:clamp(36px,4.2vw,64px);
-    line-height:1.04;letter-spacing:-.01em;
-    color:var(--ink);text-transform:uppercase;
-  }
-  .thesis-body .mute{color:#2e2e2e}
-  .thesis-body .gold{color:var(--gold)}
-  .thesis-body .skew{display:inline-block;transform:skewX(-10deg);color:var(--gold)}
-
-  .thesis-foot{
-    margin-top:60px;padding-top:32px;border-top:1px solid var(--line);
-    font-size:16px;line-height:1.55;color:#A8A8A8;font-weight:300;max-width:680px;
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
   }
 
-  /* ===================== USE CASES MOMENTS GRID ===================== */
-  .moments{padding:140px 40px;border-bottom:1px solid var(--line);position:relative;overflow:hidden}
-  .moments-inner{max-width:1400px;margin:0 auto}
-  .moments-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:80px;gap:40px;flex-wrap:wrap}
-  .moments-head-text h2{font-family:'Anton',sans-serif;font-size:clamp(48px,7vw,96px);line-height:.92;letter-spacing:-.02em;text-transform:uppercase;margin-bottom:18px}
-  .moments-head-text h2 .gold{color:var(--gold)}
-  .moments-head-text .sub{font-size:16px;line-height:1.55;color:#A8A8A8;font-weight:300;max-width:520px}
-  .moments-head .tag{font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.3em;text-transform:uppercase;color:var(--mute)}
-  .moments-head .tag .gold{color:var(--gold);display:block;font-family:'Anton',sans-serif;font-size:64px;letter-spacing:.02em;margin-top:6px;line-height:1}
-
-  .moments-grid{
-    display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--line);border:1px solid var(--line);
+  /* ════════ COVER ════════ */
+  .cover {
+    background: var(--bg);
+    padding: 100px 60px 80px;
+    border-bottom: 1px solid var(--line);
+    position: relative;
+    overflow: hidden;
   }
-  .moment{
-    background:var(--bg);
-    padding:28px 22px;
-    min-height:170px;
-    display:flex;flex-direction:column;justify-content:space-between;
-    transition:background .3s ease;
-    position:relative;
+  .cover-glow {
+    position: absolute;
+    width: 600px; height: 600px;
+    border-radius: 50%;
+    background: var(--yellow);
+    filter: blur(180px);
+    opacity: 0.06;
+    top: 20%; right: -10%;
+    pointer-events: none;
   }
-  .moment:hover{background:var(--bg-2)}
-  .moment .num{font:500 9px/1 'JetBrains Mono',monospace;letter-spacing:.2em;color:var(--mute)}
-  .moment .title{font-family:'Anton',sans-serif;font-size:22px;line-height:.95;letter-spacing:.01em;text-transform:uppercase;margin-top:8px}
-  .moment .ctx{font-size:12px;line-height:1.45;color:#888;font-weight:300;margin-top:10px}
-  .moment .accent{position:absolute;top:0;left:0;width:0;height:2px;transition:width .4s ease}
-  .moment:hover .accent{width:100%}
-  .moment[data-c="coral"] .accent{background:var(--coral)}
-  .moment[data-c="sage"] .accent{background:var(--sage)}
-  .moment[data-c="ice"] .accent{background:var(--ice)}
-
-  /* ===================== SKU SECTIONS ===================== */
-  .sku{
-    padding:140px 40px;
-    border-bottom:1px solid var(--line);
-    position:relative;
-    overflow:hidden;
+  .cover-grid {
+    position: absolute; inset: 0;
+    background-image: linear-gradient(var(--line) 1px, transparent 1px),
+                      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 80px 80px;
+    opacity: 0.25;
+    pointer-events: none;
+    mask-image: radial-gradient(ellipse at 50% 50%, black 30%, transparent 80%);
   }
-  .sku-glow{position:absolute;width:700px;height:700px;border-radius:50%;filter:blur(140px);opacity:.16;pointer-events:none;z-index:0}
-  .sku-athletic .sku-glow{background:var(--coral);top:-200px;right:-200px}
-  .sku-calm .sku-glow{background:var(--sage);bottom:-200px;left:-200px}
-  .sku-alert .sku-glow{background:var(--ice);top:-200px;left:50%;transform:translateX(-50%)}
-
-  .sku-inner{
-    position:relative;z-index:1;
-    max-width:1400px;margin:0 auto;
-    display:grid;
-    grid-template-columns:1.05fr .95fr;
-    gap:100px;
-    align-items:center;
+  .cover-inner {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: 1.15fr 0.85fr;
+    gap: 80px;
+    align-items: center;
+    min-height: 580px;
   }
-  .sku-calm .sku-inner{grid-template-columns:.95fr 1.05fr}
-  .sku-calm .sku-text{order:2}
-  .sku-calm .sku-visual{order:1}
-
-  .sku-head{display:flex;align-items:center;gap:18px;margin-bottom:32px}
-  .sku-num{font:500 11px/1 'JetBrains Mono',monospace;color:var(--mute);letter-spacing:.2em}
-  .sku-bar{height:1px;flex:1;background:var(--line)}
-  .sku-tag{font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase}
-  .sku-athletic .sku-tag{color:var(--coral)}
-  .sku-calm .sku-tag{color:var(--sage)}
-  .sku-alert .sku-tag{color:var(--ice)}
-
-  .sku-name{
-    font-family:'Anton',sans-serif;
-    font-size:clamp(72px,10vw,160px);
-    line-height:.84;letter-spacing:-.02em;text-transform:uppercase;
-    margin-bottom:24px;
+  .cover-left { display: flex; flex-direction: column; }
+  .cover-right {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 480px;
   }
-  .sku-name .rize{display:inline-block;color:var(--ink)}
-  .sku-name .rize .slash{display:inline-block;color:var(--gold);transform:skewX(-12deg) translateY(-.04em);margin:0 -.02em}
-  .sku-name .variant{display:block;margin-top:0}
-  .sku-athletic .sku-name .variant{color:var(--coral)}
-  .sku-calm .sku-name .variant{color:var(--sage)}
-  .sku-alert .sku-name .variant{color:var(--ice)}
 
-  .sku-hook{
-    font-family:'Anton',sans-serif;
-    font-size:clamp(24px,2.6vw,38px);
-    line-height:1.05;letter-spacing:-.005em;text-transform:uppercase;
-    color:var(--ink);max-width:580px;margin-bottom:28px;
+  .cover-eyebrow {
+    font: 500 11px/1 'JetBrains Mono', monospace;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--mute);
+    margin-bottom: 40px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
   }
-  .sku-hook .accent{color:var(--ink)}
-  .sku-athletic .sku-hook .accent{color:var(--coral)}
-  .sku-calm .sku-hook .accent{color:var(--sage)}
-  .sku-alert .sku-hook .accent{color:var(--ice)}
+  .cover-eyebrow .dot { width: 7px; height: 7px; background: var(--yellow); border-radius: 50%; }
 
-  .sku-pitch{font-size:17px;line-height:1.6;color:#C5C5C5;font-weight:300;max-width:560px;margin-bottom:40px}
-
-  /* When-you-need-it list — replaces dry specs */
-  .when-list{
-    margin-bottom:40px;max-width:580px;
-    border-top:1px solid var(--line);
+  .cover-wordmark {
+    font-family: 'Anton', sans-serif;
+    font-size: 180px;
+    line-height: 0.9;
+    letter-spacing: -0.015em;
+    color: var(--ink);
+    margin-bottom: 20px;
   }
-  .when-row{
-    display:grid;grid-template-columns:60px 1fr auto;gap:20px;
-    padding:14px 0;border-bottom:1px solid var(--line);
-    align-items:center;
+  .cover-wordmark .slash {
+    display: inline-block;
+    color: var(--yellow);
+    transform: skewX(-12deg) translateY(-6px);
+    margin: 0 -8px;
   }
-  .when-row .idx{font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.15em;color:var(--mute)}
-  .when-row .moment-name{font-family:'Anton',sans-serif;font-size:18px;letter-spacing:.02em;text-transform:uppercase;color:var(--ink)}
-  .when-row .moment-desc{font-size:13px;color:#888;font-weight:300;line-height:1.4;display:block;margin-top:3px;letter-spacing:0;text-transform:none;font-family:'Inter Tight',sans-serif}
-  .when-row .indicator{width:30px;height:1px;background:var(--line)}
-  .sku-athletic .when-row:hover .indicator{background:var(--coral)}
-  .sku-calm .when-row:hover .indicator{background:var(--sage)}
-  .sku-alert .when-row:hover .indicator{background:var(--ice)}
 
-  .sku-tags{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:40px;max-width:560px}
-  .sku-chip{font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.15em;text-transform:uppercase;color:var(--ink);padding:10px 14px;border:1px solid var(--line)}
-  .sku-athletic .sku-chip{border-color:rgba(255,95,58,.3)}
-  .sku-calm .sku-chip{border-color:rgba(107,191,138,.3)}
-  .sku-alert .sku-chip{border-color:rgba(58,175,255,.3)}
-
-  /* PRODUCT VISUAL */
-  .sku-visual{position:relative;height:560px;display:grid;place-items:center}
-  .device{
-    position:relative;width:220px;height:400px;transform:rotate(-3deg);
-    transition:transform .8s cubic-bezier(.34,1.56,.64,1);
+  .cover-title {
+    font-family: 'Anton', sans-serif;
+    font-size: 32px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--yellow);
+    margin-bottom: 40px;
   }
-  .sku-visual:hover .device{transform:rotate(0deg) scale(1.04)}
-  .device-body{
-    position:absolute;top:44px;left:0;right:0;bottom:0;
-    background:linear-gradient(180deg,#1a1a1a 0%,#0a0a0a 100%);
-    border:1px solid #222;border-radius:5px;
-    box-shadow:inset 0 0 60px rgba(0,0,0,.6),0 20px 60px rgba(0,0,0,.7);
-    padding:32px 22px 28px;
-    display:flex;flex-direction:column;justify-content:space-between;
+
+  .cover-meta {
+    display: flex;
+    gap: 40px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    font: 500 10px/1.6 'JetBrains Mono', monospace;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--mute);
   }
-  .device .device-cap{width:184px;height:54px;border-radius:8px 8px 2px 2px}
-  .device-name{font-family:'Anton',sans-serif;font-size:52px;line-height:.88;letter-spacing:.02em;color:var(--ink);text-align:center;display:flex;justify-content:center;align-items:baseline}
-  .device-name .slash{display:inline-block;color:var(--gold);transform:skewX(-12deg) translateY(-2px);margin:0 -2px}
-  .device-variant{font-family:'Anton',sans-serif;font-size:28px;line-height:.9;letter-spacing:.08em;text-align:center;margin-top:6px}
-  .sku-athletic .device-variant{color:var(--coral)}
-  .sku-calm .device-variant{color:var(--sage)}
-  .sku-alert .device-variant{color:var(--ice)}
-  .device-accent{width:70%;height:3px;margin:16px auto 0;transform:skewX(-20deg)}
-  .sku-athletic .device-accent{background:var(--coral)}
-  .sku-calm .device-accent{background:var(--sage)}
-  .sku-alert .device-accent{background:var(--ice)}
+  .cover-meta strong { color: var(--ink); font-weight: 600; }
 
-  .orbit-1{top:30px;left:0;animation:float 4s ease-in-out infinite}
-  .orbit-2{bottom:50px;right:0;animation:float 4s ease-in-out infinite 1s}
-  .orbit-3{top:50%;right:-30px;animation:float 4s ease-in-out infinite 2s}
-  .orbit-4{top:50%;left:-30px;animation:float 4s ease-in-out infinite .5s;color:#444}
-
-  /* Pull-quote treatment — each SKU gets its accent color in the border + highlight word */
-  .sku-pullquote{
-    margin-top:60px;padding:32px 0 0;border-top:1px solid var(--line);max-width:560px;
+  .cover-deck {
+    margin-top: 24px;
+    max-width: 700px;
+    font-size: 17px;
+    line-height: 1.6;
+    color: #B5B5B5;
+    font-weight: 300;
   }
-  .sku-athletic .sku-pullquote{border-top-color:rgba(255,95,58,.3)}
-  .sku-calm .sku-pullquote{border-top-color:rgba(107,191,138,.3)}
-  .sku-alert .sku-pullquote{border-top-color:rgba(58,175,255,.3)}
-  .sku-pullquote .q{font-family:'Anton',sans-serif;font-size:22px;line-height:1.15;letter-spacing:-.005em;text-transform:uppercase;color:var(--ink)}
-  .sku-pullquote .q .coral{color:var(--coral)}
-  .sku-pullquote .q .sage{color:var(--sage)}
-  .sku-pullquote .q .ice{color:var(--ice)}
-  .sku-pullquote .attr{margin-top:14px;font:500 10px/1.5 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--mute)}
+  .cover-deck em { font-style: normal; color: var(--ink); }
 
-  /* ===================== WHAT'S IN IT (alternating left block) ===================== */
-  .compare{padding:140px 40px;border-bottom:1px solid var(--line);background:var(--bg-2)}
-  .compare-inner{max-width:1400px;margin:0 auto}
-  .compare-head{margin-bottom:64px;max-width:780px}
-  .compare-head .tag{font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.3em;text-transform:uppercase;color:var(--gold);margin-bottom:20px}
-  .compare-head h2{font-family:'Anton',sans-serif;font-size:clamp(40px,6vw,80px);line-height:.95;letter-spacing:-.015em;text-transform:uppercase;margin-bottom:20px}
-  .compare-head h2 .gold{color:var(--gold)}
-  .compare-head p{font-size:16px;line-height:1.6;color:#B0B0B0;font-weight:300}
-  .compare-cols{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line)}
-  .compare-col{background:var(--bg);padding:48px 40px}
-  .compare-col h3{font-family:'Anton',sans-serif;font-size:32px;letter-spacing:.02em;text-transform:uppercase;margin-bottom:24px;display:flex;align-items:center;gap:12px}
-  .compare-col.no h3{color:#555}
-  .compare-col.yes h3{color:var(--gold)}
-  .compare-col .marker{display:inline-block;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:14px}
-  .compare-col.no .marker{border:1px solid #444;color:#555}
-  .compare-col.yes .marker{background:var(--gold);color:var(--bg)}
-  .compare-col ul{list-style:none;display:flex;flex-direction:column;gap:14px}
-  .compare-col li{font-size:15px;line-height:1.5;font-weight:300}
-  .compare-col.no li{color:#666}
-  .compare-col.yes li{color:#D5D5D5}
-
-  /* ===================== WAITLIST ===================== */
-  .waitlist{padding:160px 40px;border-bottom:1px solid var(--line);position:relative;overflow:hidden;text-align:center}
-  .waitlist .bg-mark{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Anton',sans-serif;font-size:clamp(280px,42vw,720px);line-height:.85;letter-spacing:-.02em;color:#0e0e0e;pointer-events:none;white-space:nowrap;user-select:none}
-  .waitlist .bg-mark .slash{display:inline-block;color:#161616;transform:translateY(-.04em) skewX(-12deg)}
-  .waitlist-inner{position:relative;z-index:1;max-width:780px;margin:0 auto}
-  .waitlist-tag{font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.3em;text-transform:uppercase;color:var(--gold);margin-bottom:24px;display:flex;align-items:center;justify-content:center;gap:14px}
-  .waitlist-tag .dot{width:7px;height:7px;background:var(--gold);border-radius:50%;animation:pulse 2s infinite}
-  .waitlist-head{font-family:'Anton',sans-serif;font-size:clamp(56px,9vw,140px);line-height:.9;letter-spacing:-.02em;text-transform:uppercase;margin-bottom:24px}
-  .waitlist-head .skew{display:inline-block;transform:skewX(-10deg);color:var(--gold);margin:0 .02em}
-  .waitlist-sub{font-size:17px;line-height:1.6;color:#B0B0B0;max-width:520px;margin:0 auto 48px;font-weight:300}
-  .waitlist-form{display:flex;gap:0;max-width:520px;margin:0 auto;border:1px solid var(--line);background:var(--bg);transition:border-color .3s ease}
-  .waitlist-form:focus-within{border-color:var(--gold)}
-  .waitlist-form input{flex:1;padding:20px 24px;background:transparent;border:none;outline:none;color:var(--ink);font-size:15px;letter-spacing:.02em}
-  .waitlist-form input::placeholder{color:#555}
-  .waitlist-form button{padding:0 28px;background:var(--gold);color:var(--bg);font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase;transition:background .3s ease;display:flex;align-items:center;gap:12px}
-  .waitlist-form button:hover{background:#d8a534}
-  .waitlist-form button .arrow{display:inline-block;width:24px;height:1px;background:currentColor;position:relative}
-  .waitlist-form button .arrow:after{content:'';position:absolute;right:0;top:-3px;width:7px;height:7px;border-top:1px solid currentColor;border-right:1px solid currentColor;transform:rotate(45deg)}
-
-  .waitlist-prefs{margin-top:28px;display:flex;justify-content:center;flex-wrap:wrap;gap:10px}
-  .waitlist-prefs .pref-label{font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--mute);width:100%;text-align:center;margin-bottom:8px}
-  .waitlist-prefs button{padding:10px 16px;border:1px solid var(--line);font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.15em;text-transform:uppercase;color:#888;transition:all .25s ease;background:transparent}
-  .waitlist-prefs button:hover{color:var(--ink);border-color:#3a3a3a}
-  .waitlist-prefs button.on{color:var(--ink);background:#181818}
-  .waitlist-prefs button.on[data-v="athletic"]{border-color:var(--coral);color:var(--coral)}
-  .waitlist-prefs button.on[data-v="calm"]{border-color:var(--sage);color:var(--sage)}
-  .waitlist-prefs button.on[data-v="alert"]{border-color:var(--ice);color:var(--ice)}
-
-  .waitlist-count{margin-top:36px;font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.25em;text-transform:uppercase;color:var(--mute)}
-  .waitlist-count strong{color:var(--ink);font-family:'Anton',sans-serif;font-size:18px;letter-spacing:.04em;font-weight:400;margin:0 6px}
-
-  .thanks{display:none;padding:40px;border:1px solid var(--gold);background:rgba(196,149,42,.04)}
-  .thanks.show{display:block}
-  .thanks h3{font-family:'Anton',sans-serif;font-size:36px;letter-spacing:.02em;margin-bottom:12px;color:var(--gold);text-transform:uppercase}
-  .thanks p{font-size:15px;color:#B5B5B5;font-weight:300}
-
-  /* ===================== FOOTER ===================== */
-  footer{padding:80px 40px 40px;background:#080808}
-  .footer-top{max-width:1400px;margin:0 auto;display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:60px;margin-bottom:60px}
-  .footer-logo{font-family:'Anton',sans-serif;font-size:72px;line-height:.85;letter-spacing:.02em;margin-bottom:20px;display:flex;align-items:baseline}
-  .footer-logo .slash{display:inline-block;color:var(--gold);transform:translateY(-4px) skewX(-12deg);margin:0 -3px}
-  .footer-tag{font:500 11px/1.5 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--mute);max-width:320px}
-  .footer-col h4{font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--ink);margin-bottom:20px}
-  .footer-col ul{list-style:none;display:flex;flex-direction:column;gap:14px}
-  .footer-col a{font-size:14px;color:var(--mute);transition:color .3s ease}
-  .footer-col a:hover{color:var(--ink)}
-  .footer-bottom{max-width:1400px;margin:0 auto;border-top:1px solid var(--line);padding-top:24px;display:flex;justify-content:space-between;align-items:center;font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--mute)}
-  .footer-bottom .gold{color:var(--gold)}
-
-  /* ===================== RESPONSIVE ===================== */
-  @media(max-width:900px){
-    nav.topnav{padding:16px 20px}
-    .nav-links{display:none}
-    .hero{grid-template-columns:1fr;padding:120px 24px 60px;gap:40px;min-height:auto}
-    .hero-product{height:420px;order:-1;transform:scale(.85)}
-    .hero-ctas{flex-direction:column;align-items:stretch}
-    .btn{justify-content:center}
-    .thesis{padding:80px 24px}
-    .thesis-grid{grid-template-columns:1fr;gap:40px}
-    .thesis-label{position:static}
-    .moments{padding:80px 24px}
-    .moments-grid{grid-template-columns:1fr 1fr}
-    .sku{padding:80px 24px}
-    .sku-inner{grid-template-columns:1fr;gap:60px}
-    .sku-calm .sku-text{order:1}
-    .sku-calm .sku-visual{order:2}
-    .sku-visual{height:480px;transform:scale(.9)}
-    .compare{padding:80px 24px}
-    .compare-cols{grid-template-columns:1fr}
-    .waitlist{padding:100px 24px}
-    .waitlist-form{flex-direction:column}
-    .waitlist-form button{padding:18px;justify-content:center}
-    .footer-top{grid-template-columns:1fr 1fr;gap:40px}
-    .footer-bottom{flex-direction:column;gap:12px;text-align:center}
+  /* ════════ TOC ════════ */
+  .toc {
+    background: var(--bg-2);
+    padding: 60px;
+    border-bottom: 1px solid var(--line);
   }
+  .toc-title {
+    font: 600 11px/1 'JetBrains Mono', monospace;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--yellow);
+    margin-bottom: 28px;
+  }
+  .toc-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; }
+  .toc-item {
+    display: grid;
+    grid-template-columns: 40px 1fr auto;
+    align-items: center;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .toc-item .num {
+    font: 500 10px/1 'JetBrains Mono', monospace;
+    color: var(--yellow);
+    letter-spacing: 0.1em;
+  }
+  .toc-item .ttl { color: var(--ink); }
+  .toc-item .sub { color: var(--mute); font: 500 9px/1 'JetBrains Mono', monospace; letter-spacing: 0.2em; text-transform: uppercase; }
+
+  /* ════════ SECTIONS ════════ */
+  section {
+    padding: 80px 60px;
+    border-bottom: 1px solid var(--line);
+  }
+  section:nth-child(odd) { background: var(--bg); }
+  section:nth-child(even) { background: var(--bg-2); }
+
+  .sec-label {
+    font: 500 10px/1 'JetBrains Mono', monospace;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--yellow);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .sec-label .bar { width: 24px; height: 1px; background: var(--yellow); }
+
+  h2.sec-title {
+    font-family: 'Anton', sans-serif;
+    font-size: clamp(40px, 5vw, 64px);
+    line-height: 1;
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
+    color: var(--ink);
+    margin-bottom: 48px;
+  }
+  h2.sec-title .accent { color: var(--yellow); }
+  h2.sec-title .skew { display: inline-block; color: var(--yellow); transform: skewX(-12deg) translateY(-0.02em); margin: 0 0.02em; }
+
+  h3 {
+    font-family: 'Anton', sans-serif;
+    font-size: 22px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--ink);
+    margin: 40px 0 16px;
+  }
+  h3:first-child { margin-top: 0; }
+
+  h4 {
+    font: 600 10px/1 'JetBrains Mono', monospace;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--yellow);
+    margin-bottom: 12px;
+  }
+
+  p {
+    color: #B5B5B5;
+    font-weight: 300;
+    margin-bottom: 14px;
+    max-width: 760px;
+    font-size: 15px;
+    line-height: 1.65;
+  }
+  p strong { color: var(--ink); font-weight: 500; }
+  p em { font-style: normal; color: var(--ink); }
+
+  /* ════════ LAYOUT ════════ */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
+  .four-col { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+  .card {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    padding: 28px;
+    border-radius: 4px;
+    position: relative;
+    transition: border-color 0.3s ease;
+  }
+  .card.accent-top::before {
+    content: '';
+    position: absolute;
+    top: -1px; left: -1px; right: -1px;
+    height: 2px;
+    background: var(--yellow);
+  }
+  .card-coral.accent-top::before { background: var(--coral); }
+  .card-sage.accent-top::before { background: var(--sage); }
+  .card-ice.accent-top::before { background: var(--ice); }
+
+  .card p { font-size: 13px; max-width: none; margin-bottom: 0; }
+  .card p + p { margin-top: 10px; }
+
+  /* ════════ HERO STATS ════════ */
+  .stats-strip {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    margin: 32px 0;
+  }
+  .stat-item {
+    padding: 28px;
+    border-right: 1px solid var(--line);
+  }
+  .stat-item:last-child { border-right: none; }
+  .stat-num {
+    font-family: 'Anton', sans-serif;
+    font-size: 56px;
+    line-height: 1;
+    color: var(--ink);
+    margin-bottom: 8px;
+  }
+  .stat-label {
+    font: 500 10px/1.5 'JetBrains Mono', monospace;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--mute);
+  }
+
+  /* ════════ BOTTLE MOCKUP ════════ */
+  .bottle-row {
+    display: flex;
+    gap: 32px;
+    justify-content: center;
+    align-items: flex-end;
+    padding: 60px 40px;
+    background: linear-gradient(180deg, var(--bg-2) 0%, #050505 100%);
+    border-radius: 6px;
+    margin: 16px 0 28px;
+    border: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+
+  .bottle {
+    position: relative;
+    width: 220px;
+    height: 380px;
+    transform: rotate(-3deg);
+    transition: transform 0.3s ease;
+  }
+  .bottle:hover { transform: rotate(-2deg) translateY(-4px); }
+
+  .bottle-shadow {
+    position: absolute;
+    bottom: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 160px;
+    height: 24px;
+    background: radial-gradient(ellipse, rgba(0,0,0,.7) 0%, transparent 70%);
+    filter: blur(6px);
+  }
+
+  /* ── Flip-cap top ── */
+  .bottle-cap {
+    position: absolute;
+    top: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 188px;
+    height: 52px;
+    background: linear-gradient(180deg, #2c2c2c 0%, #0f0f0f 100%);
+    border: 1px solid #2a2a2a;
+    border-radius: 8px 8px 2px 2px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.5);
+  }
+  .bottle-cap::after {
+    content: '';
+    position: absolute;
+    left: 12px; right: 12px;
+    bottom: 8px;
+    height: 2px;
+    background: repeating-linear-gradient(90deg, #2a2a2a, #2a2a2a 3px, transparent 3px, transparent 6px);
+  }
+
+  /* ── Body ── */
+  .bottle-body {
+    position: absolute;
+    top: 44px; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(180deg, #1c1c1c 0%, #0a0a0a 100%);
+    border: 1px solid #222;
+    border-radius: 4px;
+    box-shadow: inset 0 0 40px rgba(0,0,0,.6), 0 20px 60px rgba(0,0,0,.5);
+    padding: 28px 18px 22px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .b-top-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font: 500 7px/1 'JetBrains Mono', monospace;
+    letter-spacing: 0.18em;
+    color: #555;
+    text-transform: uppercase;
+  }
+
+  .b-name {
+    font-family: 'Anton', sans-serif;
+    font-size: 52px;
+    line-height: 0.88;
+    letter-spacing: 0.02em;
+    color: var(--ink);
+    text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+  }
+  .b-name .slash {
+    display: inline-block;
+    color: var(--yellow);
+    transform: skewX(-12deg) translateY(-3px);
+    margin: 0 -3px;
+  }
+
+  .b-variant {
+    font-family: 'Anton', sans-serif;
+    font-size: 22px;
+    line-height: 0.9;
+    letter-spacing: 0.1em;
+    text-align: center;
+    margin-top: 8px;
+  }
+  .b-accent {
+    width: 70%;
+    height: 3px;
+    margin: 14px auto 0;
+    transform: skewX(-20deg);
+  }
+  .b-bottom {
+    font: 500 7px/1.5 'JetBrains Mono', monospace;
+    letter-spacing: 0.18em;
+    color: #666;
+    text-align: center;
+    text-transform: uppercase;
+  }
+  .b-bottom strong {
+    display: block;
+    color: #aaa;
+    font-size: 8px;
+    margin-bottom: 4px;
+    font-weight: 500;
+  }
+
+  /* Variant colours */
+  .bottle.athletic .b-variant { color: var(--coral); }
+  .bottle.athletic .b-accent { background: var(--coral); }
+  .bottle.calm .b-variant { color: var(--sage); }
+  .bottle.calm .b-accent { background: var(--sage); }
+  .bottle.alert .b-variant { color: var(--ice); }
+  .bottle.alert .b-accent { background: var(--ice); }
+
+  .bottle-caption {
+    text-align: center;
+    margin-top: 36px;
+    font: 500 10px/1 'JetBrains Mono', monospace;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--mute);
+  }
+
+  /* ════════ TYPOGRAPHY DEMOS ════════ */
+  .type-demo {
+    display: grid;
+    grid-template-columns: 200px 1fr 220px;
+    gap: 32px;
+    align-items: center;
+    padding: 28px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .type-meta {
+    font: 500 9px/1.5 'JetBrains Mono', monospace;
+    letter-spacing: 0.2em;
+    color: var(--mute);
+    text-transform: uppercase;
+  }
+  .type-anton { font-family: 'Anton', sans-serif; font-size: 56px; line-height: 1; letter-spacing: 0.02em; color: var(--ink); }
+  .type-anton .slash { color: var(--yellow); transform: skewX(-12deg) translateY(-3px); display: inline-block; margin: 0 -3px; }
+  .type-inter-tight-big { font-family: 'Inter Tight', sans-serif; font-size: 24px; font-weight: 600; color: var(--ink); }
+  .type-inter-tight-body { font-family: 'Inter Tight', sans-serif; font-size: 14px; font-weight: 300; color: #B5B5B5; }
+  .type-jetbrains { font: 500 12px/1 'JetBrains Mono', monospace; letter-spacing: 0.2em; color: var(--yellow); text-transform: uppercase; }
+
+  /* ════════ COLOUR ════════ */
+  .swatch-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin: 24px 0;
+  }
+  .swatch {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .swatch-box {
+    width: 100%;
+    height: 120px;
+    border-bottom: 1px solid var(--line);
+  }
+  .swatch-meta { padding: 16px 18px; }
+  .swatch-name { font: 600 11px/1 'JetBrains Mono', monospace; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink); margin-bottom: 6px; }
+  .swatch-hex { font: 400 11px/1.5 'JetBrains Mono', monospace; color: var(--mute); }
+  .swatch-role { font: 400 11px/1.5 'Inter Tight', sans-serif; color: var(--mute); margin-top: 6px; }
+
+  /* ════════ VOICE / VOCAB ════════ */
+  .voice-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    margin: 10px 0;
+    background: var(--line);
+  }
+  .voice-do, .voice-dont {
+    padding: 16px 22px;
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .voice-do { background: #0d1f0d; color: #8fc98f; font-weight: 400; }
+  .voice-dont { background: #1f0d0d; color: #b08080; text-decoration: line-through; opacity: 0.7; }
+  .voice-do::before, .voice-dont::before {
+    display: block;
+    font: 600 9px/1 'JetBrains Mono', monospace;
+    letter-spacing: 0.25em;
+    margin-bottom: 8px;
+  }
+  .voice-do::before { content: 'USE'; color: #4a9e4a; }
+  .voice-dont::before { content: 'AVOID'; color: #9e4a4a; text-decoration: none; opacity: 0.9; }
+
+  .vocab-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 14px 0 28px;
+  }
+  .vocab-tag {
+    padding: 8px 16px;
+    border-radius: 2px;
+    font: 500 11px/1 'JetBrains Mono', monospace;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+  .vocab-use { background: rgba(74, 158, 74, 0.1); border: 1px solid #2a6e2a; color: #8fc98f; }
+  .vocab-never { background: rgba(158, 74, 74, 0.08); border: 1px solid #6e2a2a; color: #8e6868; text-decoration: line-through; opacity: 0.7; }
+
+  .lexicon {
+    display: grid;
+    grid-template-columns: 200px 1fr 1fr;
+    gap: 0;
+    margin: 16px 0;
+    border-top: 1px solid var(--line);
+  }
+  .lex-row { display: contents; }
+  .lex-row > div {
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--line);
+  }
+  .lex-phrase {
+    font-family: 'Anton', sans-serif;
+    font-size: 22px;
+    color: var(--yellow);
+    letter-spacing: 0.02em;
+  }
+  .lex-does, .lex-tone { font-size: 13px; color: #B5B5B5; font-weight: 300; }
+  .lex-tone { color: var(--mute); font-style: italic; }
+
+  /* ════════ COMPARISON ════════ */
+  .compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin: 24px 0;
+  }
+  .compare-card {
+    padding: 28px;
+    border-radius: 4px;
+  }
+  .compare-not { background: rgba(158, 74, 74, 0.06); border: 1px solid #4a1f1f; }
+  .compare-is { background: rgba(244, 238, 53, 0.08); border: 1px solid var(--yellow-deep); }
+  .compare-card h4 { margin-bottom: 16px; font-size: 11px; }
+  .compare-not h4 { color: #b08080; }
+  .compare-is h4 { color: var(--yellow); }
+  .compare-card ul { list-style: none; }
+  .compare-card li {
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 13px;
+    color: #B5B5B5;
+    font-weight: 300;
+  }
+  .compare-card li:last-child { border-bottom: none; }
+  .compare-not li::before { content: '✗ '; color: #9e4a4a; margin-right: 4px; }
+  .compare-is li::before { content: '✓ '; color: var(--yellow); margin-right: 4px; }
+
+  /* ════════ SPEC ROWS ════════ */
+  .spec-row {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    border-bottom: 1px solid var(--line);
+  }
+  .spec-label {
+    padding: 14px 0;
+    font: 500 10px/1.5 'JetBrains Mono', monospace;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--yellow);
+  }
+  .spec-value {
+    padding: 14px 0;
+    font-size: 14px;
+    color: var(--ink);
+    font-weight: 300;
+  }
+
+  /* ════════ PULL QUOTE ════════ */
+  .pull-quote {
+    border-left: 3px solid var(--yellow);
+    padding: 16px 24px;
+    margin: 24px 0;
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 18px;
+    line-height: 1.55;
+    color: var(--ink);
+    font-weight: 400;
+    font-style: italic;
+    max-width: 760px;
+  }
+  .pull-quote .skew { display: inline-block; color: var(--yellow); transform: skewX(-12deg); margin: 0 2px; font-style: normal; }
+
+  /* ════════ COVER BOTTLE CLUSTER ════════ */
+  .cover-bottle-cluster {
+    position: relative;
+    display: flex;
+    gap: 16px;
+    align-items: flex-end;
+    padding: 20px 0;
+  }
+  .cover-bottle-cluster .bottle.small:nth-child(1) {
+    transform: rotate(-7deg) translateY(8px);
+  }
+  .cover-bottle-cluster .bottle.small:nth-child(2) {
+    transform: rotate(-2deg) translateY(-16px);
+    z-index: 2;
+  }
+  .cover-bottle-cluster .bottle.small:nth-child(3) {
+    transform: rotate(3deg) translateY(8px);
+  }
+  .cover-bottle-cluster .bottle.small:nth-child(1):hover { transform: rotate(-6deg) translateY(2px); }
+  .cover-bottle-cluster .bottle.small:nth-child(2):hover { transform: rotate(-1deg) translateY(-22px); }
+  .cover-bottle-cluster .bottle.small:nth-child(3):hover { transform: rotate(2deg) translateY(2px); }
+
+  .bottle.small {
+    width: 150px;
+    height: 270px;
+    transition: transform 0.4s ease;
+  }
+  .bottle.small .bottle-cap {
+    width: 128px;
+    height: 38px;
+    top: -3px;
+    border-radius: 7px 7px 1px 1px;
+  }
+  .bottle.small .bottle-cap::after {
+    left: 9px; right: 9px;
+    bottom: 6px;
+    height: 1.5px;
+  }
+  .bottle.small .bottle-body {
+    top: 32px;
+    padding: 18px 12px 14px;
+  }
+  .bottle.small .b-top-line {
+    font-size: 5.5px;
+  }
+  .bottle.small .b-name {
+    font-size: 36px;
+  }
+  .bottle.small .b-name .slash {
+    transform: skewX(-12deg) translateY(-2px);
+    margin: 0 -2px;
+  }
+  .bottle.small .b-variant {
+    font-size: 16px;
+    margin-top: 6px;
+  }
+  .bottle.small .b-accent {
+    height: 2px;
+    margin: 10px auto 0;
+  }
+  .bottle.small .b-bottom {
+    font-size: 5.5px;
+  }
+  .bottle.small .b-bottom strong {
+    font-size: 6px;
+    margin-bottom: 2px;
+  }
+  .bottle.small .bottle-shadow {
+    width: 100px;
+    height: 16px;
+    bottom: -16px;
+  }
+
+  /* ════════ PERSONA / USE CASE ════════ */
+  .use-cases {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 14px 0;
+  }
+  .use-case-tag {
+    padding: 8px 14px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--line-2);
+    border-radius: 2px;
+    font: 500 11px/1 'JetBrains Mono', monospace;
+    letter-spacing: 0.12em;
+    color: var(--ink);
+    text-transform: uppercase;
+  }
+
+  /* ════════ HOOK ════════ */
+  .sku-hook {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 17px;
+    line-height: 1.55;
+    color: var(--ink);
+    font-weight: 300;
+    margin: 16px 0;
+    max-width: 720px;
+  }
+  .sku-hook .accent { font-weight: 500; }
+  .sku-coral .sku-hook .accent { color: var(--coral); }
+  .sku-sage .sku-hook .accent { color: var(--sage); }
+  .sku-ice .sku-hook .accent { color: var(--ice); }
+
+  /* ════════ CONFLICT CALLOUT ════════ */
+  .delta-note {
+    background: rgba(244, 238, 53, 0.05);
+    border-left: 3px solid var(--yellow);
+    padding: 14px 22px;
+    margin: 16px 0;
+    border-radius: 0 3px 3px 0;
+    font-size: 13px;
+    color: #B5B5B5;
+    font-weight: 300;
+  }
+  .delta-note strong {
+    font: 600 10px/1 'JetBrains Mono', monospace;
+    color: var(--yellow);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  .open-flag {
+    background: rgba(255, 95, 58, 0.06);
+    border-left: 3px solid var(--coral);
+    padding: 14px 22px;
+    margin: 16px 0;
+    border-radius: 0 3px 3px 0;
+    font-size: 13px;
+    color: #B5B5B5;
+    font-weight: 300;
+  }
+  .open-flag strong {
+    font: 600 10px/1 'JetBrains Mono', monospace;
+    color: var(--coral);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  /* ════════ TABLE ════════ */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 13px;
+  }
+  th {
+    background: var(--bg-2);
+    color: var(--yellow);
+    font: 600 10px/1 'JetBrains Mono', monospace;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    padding: 14px 18px;
+    text-align: left;
+    border-bottom: 1px solid var(--yellow-deep);
+  }
+  td {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+    color: #B5B5B5;
+    font-weight: 300;
+  }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.015); }
+
+  /* ════════ FOOTER ════════ */
+  .doc-footer {
+    background: var(--bg-2);
+    padding: 60px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .doc-footer p { color: var(--dim); font-size: 11px; margin: 0; max-width: none; font: 500 10px/1.6 'JetBrains Mono', monospace; letter-spacing: 0.18em; text-transform: uppercase; }
+  .doc-footer strong { color: var(--yellow); }
+  .footer-mark {
+    font-family: 'Anton', sans-serif;
+    font-size: 48px;
+    color: var(--ink);
+    letter-spacing: 0.02em;
+  }
+  .footer-mark .slash { color: var(--yellow); transform: skewX(-12deg) translateY(-2px); display: inline-block; margin: 0 -3px; }
 </style>
 </head>
 <body>
 
-<nav class="topnav">
-  <div class="nav-logo">RI<span class="slash">Z</span>E</div>
-  <div class="nav-links">
-    <a href="#athletic">Athletic</a>
-    <a href="#calm">Calm</a>
-    <a href="#alert">Alert</a>
-    <a href="#what-is-it">What It Is</a>
-  </div>
-  <a href="#waitlist" class="nav-cta">Join Waitlist</a>
-</nav>
-
-<!-- ===================== HERO ===================== -->
-<section class="hero">
-  <div class="hero-bg-grid"></div>
-  <div class="hero-glow"></div>
-
-  <div class="hero-left">
-    <div class="hero-label"><span class="dot"></span> LAUNCHING 2026 · A POCKET BREATH TOOL</div>
-    <h1>
-      <span class="line"><span>For the moment</span></span>
-      <span class="line"><span>before the <span class="skew">hard</span> part.</span></span>
-    </h1>
-    <p class="hero-body">RIZE is a pocket-sized breath tool engineered for the seconds that matter — on the sideline, at the start line, in the school pickup lane, before the call you've been dreading. A botanical hit that shifts state on for a breath and off when you're done. <em>Zero stimulants. Three formulations.</em></p>
-    <div class="hero-ctas">
-      <a href="#waitlist" class="btn btn-primary">Join the Waitlist <span class="arrow"></span></a>
-      <a href="#what-is-it" class="btn btn-ghost">What is it? <span class="arrow"></span></a>
+<!-- ════════════════════════════════════════════ COVER -->
+<div class="cover">
+  <div class="cover-grid"></div>
+  <div class="cover-glow"></div>
+  <div class="cover-inner">
+    <div class="cover-left">
+      <div class="cover-eyebrow"><span class="dot"></span>BRAND MASTER · VERSION 2.1 · MAY 2026</div>
+      <div class="cover-wordmark">RI<span class="slash">Z</span>E</div>
+      <div class="cover-title">The Breath Tool For The Moment Before</div>
+      <p class="cover-deck">RIZE is a pocket-sized breath tool engineered for the seconds that matter — on the sideline, at the start line, in the school pickup lane, before the call you've been dreading. A botanical hit that shifts state on for a breath and off when you're done. <em>Zero stimulants. Three formulations.</em></p>
+      <div class="cover-meta">
+        <div><strong>Document</strong><br>Brand Master v2.1</div>
+        <div><strong>Status</strong><br>Confidential — Painkiller Labs</div>
+        <div><strong>Supersedes</strong><br>v2.0 (May 2026)</div>
+      </div>
     </div>
-    <div class="hero-strip">
-      <div class="hero-strip-item"><strong>35g</strong>Pocket-sized</div>
-      <div class="hero-strip-item"><strong>0</strong>Stimulants</div>
-      <div class="hero-strip-item"><strong>03</strong>Formulations</div>
-    </div>
-  </div>
 
-  <div class="hero-product" id="heroProduct">
-    <span class="orbit orbit-h1" id="orbit1">SHARP ·</span>
-    <span class="orbit orbit-h2" id="orbit2">· INVIGORATING</span>
-    <span class="orbit orbit-h3">35g</span>
+    <div class="cover-right">
+      <div class="cover-bottle-cluster">
 
-    <div class="hero-stage">
-      <div class="hero-sku-label" id="skuLabel"><span class="dot"></span><span class="label-text">/ 01 · Athletic</span></div>
-
-      <div class="hero-device variant-zone" id="variantZone">
-        <div class="device-shadow"></div>
-        <div class="device-cap"></div>
-        <div class="device-body-hero">
-          <div class="device-top-line"><span>BREATHE · FOCUS · MOVE</span><span id="variantNum">01</span></div>
-          <div>
-            <div class="device-name-big">RI<span class="slash">Z</span>E</div>
-            <div class="device-variant-big" id="variantName">ATHLETIC</div>
-            <div class="device-accent-big"></div>
+        <div class="bottle small athletic">
+          <div class="bottle-shadow"></div>
+          <div class="bottle-cap"></div>
+          <div class="bottle-body">
+            <div class="b-top-line"><span>BREATHE · FOCUS · MOVE</span><span>01</span></div>
+            <div>
+              <div class="b-name">RI<span class="slash">Z</span>E</div>
+              <div class="b-variant">ATHLETIC</div>
+              <div class="b-accent"></div>
+            </div>
+            <div class="b-bottom"><strong>INVIGORATING</strong>STIMULANT-FREE · 35g</div>
           </div>
-          <div class="device-bottom"><strong id="variantStrong">INVIGORATING</strong><span id="variantStrap">STIMULANT-FREE · 35g</span></div>
         </div>
-      </div>
 
-      <div class="hero-dots" id="heroDots">
-        <button data-v="athletic" data-i="0" class="on" aria-label="Athletic"></button>
-        <button data-v="calm" data-i="1" aria-label="Calm"></button>
-        <button data-v="alert" data-i="2" aria-label="Alert"></button>
+        <div class="bottle small calm">
+          <div class="bottle-shadow"></div>
+          <div class="bottle-cap"></div>
+          <div class="bottle-body">
+            <div class="b-top-line"><span>BREATHE · FOCUS · MOVE</span><span>02</span></div>
+            <div>
+              <div class="b-name">RI<span class="slash">Z</span>E</div>
+              <div class="b-variant">CALM</div>
+              <div class="b-accent"></div>
+            </div>
+            <div class="b-bottom"><strong>CEDAR · CITRUS</strong>STIMULANT-FREE · 35g</div>
+          </div>
+        </div>
+
+        <div class="bottle small alert">
+          <div class="bottle-shadow"></div>
+          <div class="bottle-cap"></div>
+          <div class="bottle-body">
+            <div class="b-top-line"><span>BREATHE · FOCUS · MOVE</span><span>03</span></div>
+            <div>
+              <div class="b-name">RI<span class="slash">Z</span>E</div>
+              <div class="b-variant">ALERT</div>
+              <div class="b-accent"></div>
+            </div>
+            <div class="b-bottom"><strong>STIMULANT-FREE</strong>CLARITY · 35g</div>
+          </div>
+        </div>
+
       </div>
     </div>
-  </div>
-</section>
-
-<!-- ===================== MARQUEE ===================== -->
-<div class="marquee">
-  <div class="marquee-track">
-    <span>BEFORE THE LIFT</span><span>BEFORE THE WHISTLE</span><span>BEFORE THE STAGE</span><span>BEFORE THE CLIMB</span><span>BEFORE THE BREATH</span><span>BEFORE THE LIFT</span><span>BEFORE THE WHISTLE</span><span>BEFORE THE STAGE</span><span>BEFORE THE CLIMB</span><span>BEFORE THE BREATH</span>
   </div>
 </div>
 
-<!-- ===================== WHAT IS IT / THESIS ===================== -->
-<section class="thesis" id="what-is-it">
-  <div class="thesis-grid">
-    <div class="thesis-label"><span class="num">01</span>What it is</div>
+<!-- ════════════════════════════════════════════ TOC -->
+<div class="toc">
+  <div class="toc-title">Contents</div>
+  <div class="toc-grid">
+    <div class="toc-item"><span class="num">01</span><span class="ttl">Brand Architecture &amp; Thesis</span><span class="sub">Position</span></div>
+    <div class="toc-item"><span class="num">02</span><span class="ttl">The Lexicon</span><span class="sub">Vocabulary</span></div>
+    <div class="toc-item"><span class="num">03</span><span class="ttl">What RIZE Is — What RIZE Is Not</span><span class="sub">Position</span></div>
+    <div class="toc-item"><span class="num">04</span><span class="ttl">Audience &amp; Use Cases</span><span class="sub">Position</span></div>
+    <div class="toc-item"><span class="num">05</span><span class="ttl">The Three SKUs</span><span class="sub">Product</span></div>
+    <div class="toc-item"><span class="num">06</span><span class="ttl">Formulations</span><span class="sub">Product</span></div>
+    <div class="toc-item"><span class="num">07</span><span class="ttl">Packaging &amp; Form Factor</span><span class="sub">Product</span></div>
+    <div class="toc-item"><span class="num">08</span><span class="ttl">Bottle Mockups — Flip-Cap</span><span class="sub">Identity</span></div>
+    <div class="toc-item"><span class="num">09</span><span class="ttl">Colour System</span><span class="sub">Identity</span></div>
+    <div class="toc-item"><span class="num">10</span><span class="ttl">Typography</span><span class="sub">Identity</span></div>
+    <div class="toc-item"><span class="num">11</span><span class="ttl">Brand Voice</span><span class="sub">Voice</span></div>
+    <div class="toc-item"><span class="num">12</span><span class="ttl">Vocabulary — Use &amp; Avoid</span><span class="sub">Voice</span></div>
+    <div class="toc-item"><span class="num">13</span><span class="ttl">Photography &amp; Imagery</span><span class="sub">Identity</span></div>
+    <div class="toc-item"><span class="num">14</span><span class="ttl">Social &amp; Digital Channels</span><span class="sub">Voice</span></div>
+    <div class="toc-item"><span class="num">15</span><span class="ttl">Brand Rules</span><span class="sub">Identity</span></div>
+    <div class="toc-item"><span class="num">16</span><span class="ttl">Target Markets &amp; Sourcing</span><span class="sub">Operations</span></div>
+    <div class="toc-item"><span class="num">A1</span><span class="ttl">Appendix A — Health Canada NHP Path</span><span class="sub">Regulatory</span></div>
+    <div class="toc-item"><span class="num">A2</span><span class="ttl">Appendix B — Items Still Open</span><span class="sub">Status</span></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ 01 BRAND ARCHITECTURE -->
+<section>
+  <div class="sec-label"><span class="bar"></span>01 · POSITION</div>
+  <h2 class="sec-title">Brand Architecture &amp; <span class="skew">Thesis</span></h2>
+
+  <div class="two-col">
     <div>
-      <div class="thesis-body">
-        A breath tool. <span class="mute">A flip cap.</span> A <span class="skew">botanical hit</span> that you inhale the moment before you need to bring it.
+      <h3>One Brand. Three Formulations.</h3>
+      <p>RIZE is the single consumer-facing brand. Three formulations — <strong>RIZE Athletic</strong>, <strong>RIZE Calm</strong>, and <strong>RIZE Alert</strong> — share a single identity system, a single physical form, and a single brand voice.</p>
+      <p>The electric yellow slash through the Z is the primary visual identifier across all touchpoints — packaging, digital, social, retail.</p>
+
+      <div class="delta-note">
+        <strong>Delta Reconciliation</strong>
+        v1.0 framed a parent-brand / sub-brand architecture with LOM as the consumer line. That structure has been retired. RIZE is the single public brand. LOM exists internally only and is no longer referenced in any consumer-facing material.
       </div>
-      <div class="thesis-foot">RIZE isn't a supplement, an energy drink, or a wellness product. It's a state-shift device — small enough to live in a kit bag, a glove box, a school-run handbag, or a back pocket. You flip the cap, take two deliberate breaths, and the formulation goes to work. It's faster than caffeine, doesn't touch your heart rate, and clears in minutes. You'll pick the formulation that fits the moment.</div>
+
+      <h3>Brand Thesis</h3>
+      <p class="pull-quote">"For the moment before the hard part."</p>
+      <p>This is the primary brand hook. It is broad enough to span every audience — the powerlifter and the parent at school pickup — while specific enough to name what RIZE actually does.</p>
+
+      <p class="pull-quote">"A breath tool. A flip cap. A <span class="skew">botanical hit</span> that you inhale the moment before you need to bring it."</p>
+      <p>This is the site-wide thesis line. It compresses category, mechanism, and experience into a single sentence.</p>
+
+      <div class="delta-note">
+        <strong>Delta Reconciliation</strong>
+        The v1.0 mission ("To make the focused inhale a universal athletic ritual — as natural as chalk, as deliberate as the belt") has been retired entirely — along with the related "Chalk is a ritual. The mouthguard is a ritual…" Athletic line. Both were too lifting-specific to survive the audience expansion beyond serious gym-goers. Don't revive them. The Athletic pull quote is now "Sharpened breath. Ready for the effort."
+      </div>
+    </div>
+
+    <div>
+      <h3>Brand Personality</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+        <div class="card accent-top">
+          <h4>RIZE IS</h4>
+          <p>Focused · Minimal · Confident · Athletic · Premium · Raw</p>
+        </div>
+        <div class="card" style="border-color:#3a1f1f">
+          <h4 style="color:#b08080">NOT</h4>
+          <p>Intense · Plain · Arrogant · Exclusive · Expensive · Aggressive</p>
+        </div>
+      </div>
+
+      <h3>Internal-Only Pillars</h3>
+      <p>The Earned / Functional / Precise / Universal framework remains as an internal brand reference but is no longer used as a public callout block. The Breathe / Focus / Move triplet stays only as the top strap line on packaging — it is not a public brand statement.</p>
+
+      <div class="delta-note">
+        <strong>Delta Reconciliation</strong>
+        Both pillar systems were public-facing in v1.0. They have been moved to internal use only. The "rule of three" pattern has been retired as a stylistic device — trios appear only where genuinely natural.
+      </div>
     </div>
   </div>
 </section>
 
-<!-- ===================== MOMENTS GRID ===================== -->
-<section class="moments">
-  <div class="moments-inner">
-    <div class="moments-head">
-      <div class="moments-head-text">
-        <h2>For the moments <span class="gold">that ask for more.</span></h2>
-        <p class="sub">A different formulation for different states. Which one fits the moment? Pick the colour that matches what you need.</p>
-      </div>
-      <div class="tag">/ 02<br/><span class="gold">USE</span></div>
+<!-- ════════════════════════════════════════════ 02 LEXICON -->
+<section>
+  <div class="sec-label"><span class="bar"></span>02 · VOCABULARY</div>
+  <h2 class="sec-title">The <span class="skew">Lexicon</span></h2>
+
+  <p>Three phrases form a rotating vocabulary used across all RIZE copy. They are <strong>not assigned 1:1 to specific SKUs</strong> — they are deployed based on what each piece of copy needs to convey.</p>
+
+  <div class="lexicon">
+    <div class="lex-row" style="border-top:1px solid var(--yellow)">
+      <div class="lex-phrase">Breath tool</div>
+      <div class="lex-does">Names the <strong>category</strong> — the formal noun for the object. The preferred descriptor in headers, page titles, and hero labels.</div>
+      <div class="lex-tone">Functional · Athletic</div>
     </div>
+    <div class="lex-row">
+      <div class="lex-phrase">Botanical hit</div>
+      <div class="lex-does">Names the <strong>experience</strong> — what you feel when you use it. Pairs well with Athletic and high-energy moments.</div>
+      <div class="lex-tone">Punchy · Immediate</div>
+    </div>
+    <div class="lex-row">
+      <div class="lex-phrase">Botanical lift</div>
+      <div class="lex-does">A softer alternative to "botanical hit." Pairs well with Alert and Calm moments where "hit" would feel too punchy.</div>
+      <div class="lex-tone">Premium · Refined</div>
+    </div>
+  </div>
 
-    <div class="moments-grid">
-      <!-- Athletic -->
-      <a href="#athletic" class="moment" data-c="coral">
-        <div class="accent"></div>
-        <div><div class="num">/ ATHLETIC</div><div class="title">Heavy Set</div></div>
-        <div class="ctx">Before the deadlift. Before the squat that scares you.</div>
-      </a>
-      <a href="#athletic" class="moment" data-c="coral">
-        <div class="accent"></div>
-        <div><div class="num">/ ATHLETIC</div><div class="title">On the Sideline</div></div>
-        <div class="ctx">Football, basketball, hockey bench. Before you go back on.</div>
-      </a>
-      <a href="#athletic" class="moment" data-c="coral">
-        <div class="accent"></div>
-        <div><div class="num">/ ATHLETIC</div><div class="title">Court Switch</div></div>
-        <div class="ctx">Tennis change-over. Squash. Padel. The 90 seconds between games.</div>
-      </a>
-      <a href="#athletic" class="moment" data-c="coral">
-        <div class="accent"></div>
-        <div><div class="num">/ ATHLETIC</div><div class="title">Start Line</div></div>
-        <div class="ctx">10k, parkrun, sprint set. Before the gun.</div>
-      </a>
-      <a href="#athletic" class="moment" data-c="coral">
-        <div class="accent"></div>
-        <div><div class="num">/ ATHLETIC</div><div class="title">Class Floor</div></div>
-        <div class="ctx">Barry's, F45, OrangeTheory. Off the treadmill, onto the floor.</div>
-      </a>
-      <a href="#athletic" class="moment" data-c="coral">
-        <div class="accent"></div>
-        <div><div class="num">/ ATHLETIC</div><div class="title">The Climb</div></div>
-        <div class="ctx">Mountain bike. Road cycle. Before the wall you've been dreading.</div>
-      </a>
+  <h3>Reference Lines</h3>
+  <p class="pull-quote">"A breath tool. A flip cap. A <span class="skew">botanical hit</span> that you inhale the moment before you need to bring it."</p>
+  <p class="pull-quote">"One flip from a botanical hit."</p>
+  <p>The second line is a recurring tagline that compresses the experience into five words.</p>
 
-      <!-- Calm -->
-      <a href="#calm" class="moment" data-c="sage">
-        <div class="accent"></div>
-        <div><div class="num">/ CALM</div><div class="title">School Pickup</div></div>
-        <div class="ctx">Sitting in the car at 3pm. Twenty minutes to reset.</div>
-      </a>
-      <a href="#calm" class="moment" data-c="sage">
-        <div class="accent"></div>
-        <div><div class="num">/ CALM</div><div class="title">The Commute</div></div>
-        <div class="ctx">Train home. Bus home. The handover from work to not-work.</div>
-      </a>
-      <a href="#calm" class="moment" data-c="sage">
-        <div class="accent"></div>
-        <div><div class="num">/ CALM</div><div class="title">Before the Class</div></div>
-        <div class="ctx">Yoga mat. Pilates reformer. Breathwork session. Set the tone.</div>
-      </a>
-      <a href="#calm" class="moment" data-c="sage">
-        <div class="accent"></div>
-        <div><div class="num">/ CALM</div><div class="title">Kitchen at 6pm</div></div>
-        <div class="ctx">The transition zone. Cooking, homework, dinner, decompress.</div>
-      </a>
-      <a href="#calm" class="moment" data-c="sage">
-        <div class="accent"></div>
-        <div><div class="num">/ CALM</div><div class="title">Long Flight</div></div>
-        <div class="ctx">Window seat, hour three. The forest, ported.</div>
-      </a>
-      <a href="#calm" class="moment" data-c="sage">
-        <div class="accent"></div>
-        <div><div class="num">/ CALM</div><div class="title">Sunday Reset</div></div>
-        <div class="ctx">Walk, journal, breathe. The week hasn't started yet.</div>
-      </a>
+  <h3>SKU Two-Word Descriptors</h3>
+  <p>Each SKU has a two-word descriptor that captures its mood in a short, repeatable form. They are a vocabulary pool — deploy them where they serve the copy, not as forced labels on every piece.</p>
 
-      <!-- Alert -->
-      <a href="#alert" class="moment" data-c="ice">
-        <div class="accent"></div>
-        <div><div class="num">/ ALERT</div><div class="title">Study Session</div></div>
-        <div class="ctx">Maths exam tomorrow. Three hours deep. The nice-smelling one.</div>
-      </a>
-      <a href="#alert" class="moment" data-c="ice">
-        <div class="accent"></div>
-        <div><div class="num">/ ALERT</div><div class="title">Before the Stage</div></div>
-        <div class="ctx">Wings of the venue. Backstage at the conference. One last hit.</div>
-      </a>
-      <a href="#alert" class="moment" data-c="ice">
-        <div class="accent"></div>
-        <div><div class="num">/ ALERT</div><div class="title">The Long Drive</div></div>
-        <div class="ctx">Mile 200. Eyelids heavy. No coffee for another hour.</div>
-      </a>
-      <a href="#alert" class="moment" data-c="ice">
-        <div class="accent"></div>
-        <div><div class="num">/ ALERT</div><div class="title">The Call</div></div>
-        <div class="ctx">Hard conversation. Board meeting. Pitch on the line.</div>
-      </a>
-      <a href="#alert" class="moment" data-c="ice">
-        <div class="accent"></div>
-        <div><div class="num">/ ALERT</div><div class="title">3pm Slump</div></div>
-        <div class="ctx">Open-plan office. Two more hours. Nothing in the cup.</div>
-      </a>
-      <a href="#alert" class="moment" data-c="ice">
-        <div class="accent"></div>
-        <div><div class="num">/ ALERT</div><div class="title">The Handbag</div></div>
-        <div class="ctx">Lives in the bag. Out a few times a day. Always nice.</div>
-      </a>
+  <div class="lexicon">
+    <div class="lex-row" style="border-top:1px solid var(--coral)">
+      <div class="lex-phrase" style="color:var(--coral)">Sharpened Breath</div>
+      <div class="lex-does">Athletic descriptor. <strong>Used selectively, rarely alone.</strong> Pairs with the pull quote ("Sharpened breath. Ready for the effort.") and surfaces in campaign copy for sport-specific audiences.</div>
+      <div class="lex-tone">Functional · Coach</div>
+    </div>
+    <div class="lex-row" style="border-top:1px solid var(--sage)">
+      <div class="lex-phrase" style="color:var(--sage)">Grounded Breath</div>
+      <div class="lex-does">Calm descriptor. <strong>Usable in isolation.</strong> The two words can stand on their own as headline, social caption, or product callout.</div>
+      <div class="lex-tone">Quiet · Grounding</div>
+    </div>
+    <div class="lex-row" style="border-top:1px solid var(--ice)">
+      <div class="lex-phrase" style="color:var(--ice)">Bright Moments</div>
+      <div class="lex-does">Alert descriptor. <strong>Carries the dual personality of the SKU</strong> — the high-pressure "moments" (the stage, the call) and the everyday "bright" hours (studying, driving, the 3pm office). Pairs with the pull quote ("Clear head. Bright moments.")</div>
+      <div class="lex-tone">Bright · Dual-purpose</div>
     </div>
   </div>
 </section>
 
-<!-- ===================== SKU 01 — ATHLETIC ===================== -->
-<section class="sku sku-athletic" id="athletic">
-  <div class="sku-glow"></div>
-  <div class="sku-inner">
-    <div class="sku-text">
-      <div class="sku-head">
-        <span class="sku-num">/ 01</span>
-        <span class="sku-bar"></span>
-        <span class="sku-tag">FOR THE GAME · THE SET · THE CLIMB</span>
+<!-- ════════════════════════════════════════════ 03 IS / IS NOT -->
+<section>
+  <div class="sec-label"><span class="bar"></span>03 · POSITION</div>
+  <h2 class="sec-title">What RIZE Is. <span class="accent">What It Is Not.</span></h2>
+
+  <p>An approved positioning device. Defines RIZE by contrast — useful in long-form copy, retail conversation training, sales decks, and comparison content.</p>
+
+  <div class="compare-grid">
+    <div class="compare-card compare-not">
+      <h4>NOT RIZE</h4>
+      <ul>
+        <li>Isn't something you plan ahead for</li>
+        <li>Won't spike heart rate or cause crash</li>
+        <li>Isn't a supplement, a nootropic, or a wellness shot</li>
+        <li>Doesn't go through the stomach, bloodstream, or liver</li>
+        <li>Isn't something you dose, track, or cycle</li>
+      </ul>
+    </div>
+    <div class="compare-card compare-is">
+      <h4>IS RIZE</h4>
+      <ul>
+        <li>On for a breath. Off when you're done with it.</li>
+        <li>Botanical inhalation — no stimulants, no caffeine, no crash</li>
+        <li>Pocket-sized — kit bag, glovebox, handbag, back pocket</li>
+        <li>Use once a day or twelve times — no tolerance, no taper</li>
+        <li>You'll know if it works the first time you flip the cap</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════ 04 AUDIENCE -->
+<section>
+  <div class="sec-label"><span class="bar"></span>04 · POSITION</div>
+  <h2 class="sec-title">Audience &amp; <span class="skew">Use Cases</span></h2>
+
+  <div class="delta-note">
+    <strong>Major Reframe</strong>
+    v1.0 positioned powerlifting / CrossFit / serious-gym as the beachhead audience. That framing has been retired. Powerlifters are now considered "the smallest audience." The real audience is dramatically broader — multi-sport athletes, everyday-carry consumers, and the moments before any kind of pressure or transition.
+  </div>
+
+  <p>RIZE is for anyone who needs to shift state quickly without putting anything in their stomach or bloodstream. The product earns its place by being used <em>with</em> the person, not just by them — pulled out at the moment, then back in the pocket.</p>
+
+  <div class="three-col" style="margin-top:32px">
+
+    <div class="card card-coral accent-top">
+      <h4 style="color:var(--coral)">RIZE ATHLETIC — USE CASES</h4>
+      <p style="color:var(--ink);font-weight:400;margin-bottom:14px">Pulled out with the athlete, not just before the workout.</p>
+      <div class="use-cases">
+        <span class="use-case-tag">Hockey bench</span>
+        <span class="use-case-tag">Baseball dugout</span>
+        <span class="use-case-tag">Football sideline</span>
+        <span class="use-case-tag">Basketball bench</span>
+        <span class="use-case-tag">Tennis change-over</span>
+        <span class="use-case-tag">Squash · Padel</span>
+        <span class="use-case-tag">10k start line</span>
+        <span class="use-case-tag">Parkrun</span>
+        <span class="use-case-tag">Sprint sets</span>
+        <span class="use-case-tag">Barry's · F45 · OrangeTheory</span>
+        <span class="use-case-tag">MTB · Road cycling climbs</span>
+        <span class="use-case-tag">Heavy lifts</span>
       </div>
-      <div class="sku-name">
-        <span class="rize">RI<span class="slash">Z</span>E</span>
-        <span class="variant">ATHLETIC</span>
+    </div>
+
+    <div class="card card-sage accent-top">
+      <h4 style="color:var(--sage)">RIZE CALM — USE CASES</h4>
+      <p style="color:var(--ink);font-weight:400;margin-bottom:14px">A daily-carry, everyday-life product.</p>
+      <div class="use-cases">
+        <span class="use-case-tag">School pickup line</span>
+        <span class="use-case-tag">Commute home</span>
+        <span class="use-case-tag">Kitchen at 6pm</span>
+        <span class="use-case-tag">Long-haul flights</span>
+        <span class="use-case-tag">Sunday reset</span>
+        <span class="use-case-tag">Pre-sleep wind-down</span>
+        <span class="use-case-tag">Yoga · breathwork</span>
+        <span class="use-case-tag">After hard conversations</span>
+        <span class="use-case-tag">In traffic</span>
       </div>
+    </div>
+
+    <div class="card card-ice accent-top">
+      <h4 style="color:var(--ice)">RIZE ALERT — USE CASES</h4>
+      <p style="color:var(--ink);font-weight:400;margin-bottom:14px">Two-faces: high-pressure AND everyday-pleasant. The "smells good" angle is explicit.</p>
+      <div class="use-cases">
+        <span class="use-case-tag">Before the stage</span>
+        <span class="use-case-tag">Before the pitch</span>
+        <span class="use-case-tag">Before the camera</span>
+        <span class="use-case-tag">Midnight study</span>
+        <span class="use-case-tag">The long drive</span>
+        <span class="use-case-tag">3pm office slump</span>
+        <span class="use-case-tag">In the handbag · just because</span>
+        <span class="use-case-tag">Before a difficult call</span>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:48px">Common Thread</h3>
+  <p>Every use case names a <strong>specific moment</strong>. Not a lifestyle, not an aesthetic, not a vibe. A moment. The before-moment. The between-moment. The transition moment. Copy and imagery should always be anchored to a moment, not a persona.</p>
+</section>
+
+<!-- ════════════════════════════════════════════ 05 SKUs -->
+<section>
+  <div class="sec-label"><span class="bar"></span>05 · PRODUCT</div>
+  <h2 class="sec-title">The <span class="skew">Three SKUs</span></h2>
+
+  <div class="three-col">
+
+    <div class="card card-coral accent-top sku-coral">
+      <h4 style="color:var(--coral)">RIZE ATHLETIC · 01</h4>
+      <p style="font-family:'Anton',sans-serif;font-size:32px;color:var(--ink);margin:8px 0 16px;line-height:1">Athletic</p>
       <p class="sku-hook">The one you bring <span class="accent">with you</span>. Out of the kit bag mid-game, mid-set, mid-climb. A cool hit that snaps you into the next effort.</p>
-      <p class="sku-pitch">Camphor, menthol, peppermint. It hits sharp on purpose — the smell tells you it's working. Take it to the bench between shifts in hockey. The dugout between innings. The change-over in tennis. The 90 seconds between rounds at Barry's. The trailhead before the climb. Footballers, runners, lifters, cyclists, weekend players — anyone whose sport has a "before the hard part" moment.</p>
-
-      <div class="when-list">
-        <div class="when-row">
-          <span class="idx">/ 01</span>
-          <div><div class="moment-name">In the bag</div><span class="moment-desc">Hockey bench, dugout, sideline, kit bag, gym bag, backpack pocket.</span></div>
-          <span class="indicator"></span>
-        </div>
-        <div class="when-row">
-          <span class="idx">/ 02</span>
-          <div><div class="moment-name">Mid-Session</div><span class="moment-desc">Between sets, between games, between rounds. When you need the next one to count.</span></div>
-          <span class="indicator"></span>
-        </div>
-        <div class="when-row">
-          <span class="idx">/ 03</span>
-          <div><div class="moment-name">Before the Effort</div><span class="moment-desc">The deadlift, the sprint, the climb, the kickoff, the last 200m.</span></div>
-          <span class="indicator"></span>
-        </div>
-      </div>
-
-      <div class="sku-tags">
-        <span class="sku-chip">Camphor</span>
-        <span class="sku-chip">Menthol</span>
-        <span class="sku-chip">Peppermint</span>
-        <span class="sku-chip">Sharp · Cool</span>
-        <span class="sku-chip">Stimulant-Free</span>
-      </div>
-      <a href="#waitlist" class="btn btn-ghost">Notify me first <span class="arrow"></span></a>
-
-      <div class="sku-pullquote">
-        <div class="q"><span class="coral">Sharpened breath.</span> Ready for the effort.</div>
-        <div class="attr">— RIZE Athletic</div>
-      </div>
+      <div class="spec-row"><div class="spec-label">Descriptor</div><div class="spec-value">Sharpened Breath <span style="color:var(--mute);font-size:10px;margin-left:8px">[used selectively]</span></div></div>
+      <div class="spec-row"><div class="spec-label">Front face</div><div class="spec-value">INVIGORATING</div></div>
+      <div class="spec-row"><div class="spec-label">Strap line</div><div class="spec-value">STIMULANT-FREE · 35g</div></div>
+      <div class="spec-row"><div class="spec-label">Profile</div><div class="spec-value">Camphor, peppermint, menthol</div></div>
+      <div class="spec-row"><div class="spec-label">Accent</div><div class="spec-value">Hot Coral · #FF5F3A</div></div>
+      <div class="pull-quote" style="margin-top:20px;font-size:14px">"Sharpened breath. Ready for the effort."<br><span style="color:var(--mute);font-size:11px;font-family:'JetBrains Mono',monospace;letter-spacing:0.18em;text-transform:uppercase;font-style:normal;display:block;margin-top:8px">Athletic pull quote</span></div>
     </div>
 
-    <div class="sku-visual">
-      <span class="orbit orbit-1">SHARP ·</span>
-      <span class="orbit orbit-2">· COOL</span>
-      <span class="orbit orbit-3">35g</span>
-      <span class="orbit orbit-4">/ 01</span>
-      <div class="device">
-        <div class="device-cap"></div>
-        <div class="device-body">
-          <div class="device-top-line"><span>BREATHE · FOCUS · MOVE</span><span>01</span></div>
-          <div>
-            <div class="device-name">RI<span class="slash">Z</span>E</div>
-            <div class="device-variant">ATHLETIC</div>
-            <div class="device-accent"></div>
-          </div>
-          <div class="device-bottom"><strong>INVIGORATING</strong>STIMULANT-FREE · 35g</div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ===================== SKU 02 — CALM ===================== -->
-<section class="sku sku-calm" id="calm">
-  <div class="sku-glow"></div>
-  <div class="sku-inner">
-    <div class="sku-text">
-      <div class="sku-head">
-        <span class="sku-num">/ 02</span>
-        <span class="sku-bar"></span>
-        <span class="sku-tag">FOR THE OVERWHELM · THE TRANSITION · THE PAUSE</span>
-      </div>
-      <div class="sku-name">
-        <span class="rize">RI<span class="slash">Z</span>E</span>
-        <span class="variant">CALM</span>
-      </div>
+    <div class="card card-sage accent-top sku-sage">
+      <h4 style="color:var(--sage)">RIZE CALM · 02</h4>
+      <p style="font-family:'Anton',sans-serif;font-size:32px;color:var(--ink);margin:8px 0 16px;line-height:1">Calm</p>
       <p class="sku-hook">The one that lives in <span class="accent">the handbag</span>, the glove box, the bedside drawer. For the days the world's a lot, and you need a forest in your pocket. One flip from a botanical hit.</p>
-      <p class="sku-pitch">Three Canadian Western Red Cedars with a quiet citrus turn. Deep, green, settling. It's the inhale you take in the school pickup lane at 3pm. On the train home. In the kitchen at six. Before the yoga class, before the breath, before the conversation you've been avoiding. Use it daily, use it often — there's no ramp-up, no taper, no dependency.</p>
-
-      <div class="when-list">
-        <div class="when-row">
-          <span class="idx">/ 01</span>
-          <div><div class="moment-name">Daily Carry</div><span class="moment-desc">Handbag, desk drawer, glove box, nightstand. Always within reach.</span></div>
-          <span class="indicator"></span>
-        </div>
-        <div class="when-row">
-          <span class="idx">/ 02</span>
-          <div><div class="moment-name">The Transition</div><span class="moment-desc">School pickup, the commute home, the kitchen at six. From one mode to another.</span></div>
-          <span class="indicator"></span>
-        </div>
-        <div class="when-row">
-          <span class="idx">/ 03</span>
-          <div><div class="moment-name">Set the Tone</div><span class="moment-desc">Before yoga, before breathwork, before the long flight, before sleep.</span></div>
-          <span class="indicator"></span>
-        </div>
-      </div>
-
-      <div class="sku-tags">
-        <span class="sku-chip">Western Red Cedar</span>
-        <span class="sku-chip">Cedar Leaf</span>
-        <span class="sku-chip">Orange</span>
-        <span class="sku-chip">Grounded · Green</span>
-        <span class="sku-chip">Stimulant-Free</span>
-      </div>
-      <a href="#waitlist" class="btn btn-ghost">Notify me first <span class="arrow"></span></a>
-
-      <div class="sku-pullquote">
-        <div class="q"><span class="sage">A grounded breath</span> for a louder world.</div>
-        <div class="attr">— RIZE Calm</div>
+      <div class="spec-row"><div class="spec-label">Descriptor</div><div class="spec-value">Grounded Breath <span style="color:var(--mute);font-size:10px;margin-left:8px">[usable in isolation]</span></div></div>
+      <div class="spec-row"><div class="spec-label">Front face</div><div class="spec-value">CEDAR · CITRUS <span style="color:var(--coral);font-size:10px;margin-left:8px">[WORKING]</span></div></div>
+      <div class="spec-row"><div class="spec-label">Strap line</div><div class="spec-value">STIMULANT-FREE · 35g</div></div>
+      <div class="spec-row"><div class="spec-label">Profile</div><div class="spec-value">Three Western Red Cedars + sweet orange</div></div>
+      <div class="spec-row"><div class="spec-label">Accent</div><div class="spec-value">Cedar Sage · #6BBF8A</div></div>
+      <div class="pull-quote" style="margin-top:20px;font-size:14px">"A grounded breath for a louder world."<br><span style="color:var(--mute);font-size:11px;font-family:'JetBrains Mono',monospace;letter-spacing:0.18em;text-transform:uppercase;font-style:normal;display:block;margin-top:8px">Calm pull quote</span></div>
+      <div class="open-flag">
+        <strong>Open Item</strong>
+        Front-face copy not finalised. "CEDAR · CITRUS" is a working placeholder. Current direction may be to omit a category descriptor entirely and let "RIZE CALM" carry the meaning — the name itself describes the state. Final decision pending.
       </div>
     </div>
 
-    <div class="sku-visual">
-      <span class="orbit orbit-1">GROUNDED ·</span>
-      <span class="orbit orbit-2">· CEDAR</span>
-      <span class="orbit orbit-3">35g</span>
-      <span class="orbit orbit-4">/ 02</span>
-      <div class="device">
-        <div class="device-cap"></div>
-        <div class="device-body">
-          <div class="device-top-line"><span>BREATHE · FOCUS · MOVE</span><span>02</span></div>
-          <div>
-            <div class="device-name">RI<span class="slash">Z</span>E</div>
-            <div class="device-variant">CALM</div>
-            <div class="device-accent"></div>
-          </div>
-          <div class="device-bottom"><strong>CEDAR · CITRUS</strong>STIMULANT-FREE · 35g</div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ===================== SKU 03 — ALERT ===================== -->
-<section class="sku sku-alert" id="alert">
-  <div class="sku-glow"></div>
-  <div class="sku-inner">
-    <div class="sku-text">
-      <div class="sku-head">
-        <span class="sku-num">/ 03</span>
-        <span class="sku-bar"></span>
-        <span class="sku-tag">FOR THE PRESSURE · THE FOCUS · THE LONG STRETCH</span>
-      </div>
-      <div class="sku-name">
-        <span class="rize">RI<span class="slash">Z</span>E</span>
-        <span class="variant">ALERT</span>
-      </div>
+    <div class="card card-ice accent-top sku-ice">
+      <h4 style="color:var(--ice)">RIZE ALERT · 03</h4>
+      <p style="font-family:'Anton',sans-serif;font-size:32px;color:var(--ink);margin:8px 0 16px;line-height:1">Alert</p>
       <p class="sku-hook">The one that smells <span class="accent">good</span>. A botanical lift for the moments that matter — and the hours that drag. Sharper than coffee, gentler than energy.</p>
-      <p class="sku-pitch">Two faces, one formulation. Clean and crisp enough for the moment before the stage, the call, the pitch — and pleasant enough that you'll reach for it studying for a maths exam at midnight, on the long drive, or just because it makes the open-plan office at 3pm feel a little better. It works because you want to use it, and you want to use it because it smells nice.</p>
-
-      <div class="when-list">
-        <div class="when-row">
-          <span class="idx">/ 01</span>
-          <div><div class="moment-name">Pressure Moments</div><span class="moment-desc">Before the stage, the call, the close, the conversation, the camera.</span></div>
-          <span class="indicator"></span>
-        </div>
-        <div class="when-row">
-          <span class="idx">/ 02</span>
-          <div><div class="moment-name">The Long Stretch</div><span class="moment-desc">Study sessions, the drive home, the deadline, the deep work hours.</span></div>
-          <span class="indicator"></span>
-        </div>
-        <div class="when-row">
-          <span class="idx">/ 03</span>
-          <div><div class="moment-name">Just Because</div><span class="moment-desc">It smells good. It feels good. Reach for it any time you want.</span></div>
-          <span class="indicator"></span>
-        </div>
-      </div>
-
-      <div class="sku-tags">
-        <span class="sku-chip">Clean Citrus</span>
-        <span class="sku-chip">Crisp · Bright</span>
-        <span class="sku-chip">Daily Carry</span>
-        <span class="sku-chip">Pleasant</span>
-        <span class="sku-chip">Stimulant-Free</span>
-      </div>
-      <a href="#waitlist" class="btn btn-ghost">Notify me first <span class="arrow"></span></a>
-
-      <div class="sku-pullquote">
-        <div class="q"><span class="ice">Clear head.</span> Bright moments.</div>
-        <div class="attr">— RIZE Alert</div>
-      </div>
-    </div>
-
-    <div class="sku-visual">
-      <span class="orbit orbit-1">CLEAR ·</span>
-      <span class="orbit orbit-2">· CRISP</span>
-      <span class="orbit orbit-3">35g</span>
-      <span class="orbit orbit-4">/ 03</span>
-      <div class="device">
-        <div class="device-cap"></div>
-        <div class="device-body">
-          <div class="device-top-line"><span>BREATHE · FOCUS · MOVE</span><span>03</span></div>
-          <div>
-            <div class="device-name">RI<span class="slash">Z</span>E</div>
-            <div class="device-variant">ALERT</div>
-            <div class="device-accent"></div>
-          </div>
-          <div class="device-bottom"><strong>STIMULANT-FREE</strong>CLARITY · 35g</div>
-        </div>
+      <div class="spec-row"><div class="spec-label">Descriptor</div><div class="spec-value">Bright Moments</div></div>
+      <div class="spec-row"><div class="spec-label">Front face</div><div class="spec-value">STIMULANT-FREE</div></div>
+      <div class="spec-row"><div class="spec-label">Strap line</div><div class="spec-value">CLARITY · 35g</div></div>
+      <div class="spec-row"><div class="spec-label">Profile</div><div class="spec-value">TBD — sharp, clarifying, clean</div></div>
+      <div class="spec-row"><div class="spec-label">Accent</div><div class="spec-value">Electric Ice · #3AAFFF</div></div>
+      <div class="pull-quote" style="margin-top:20px;font-size:14px">"Clear head. Bright moments."<br><span style="color:var(--mute);font-size:11px;font-family:'JetBrains Mono',monospace;letter-spacing:0.18em;text-transform:uppercase;font-style:normal;display:block;margin-top:8px">Alert pull quote</span></div>
+      <div class="open-flag">
+        <strong>Open Item</strong>
+        Final formula TBD. Directionally: sharp, clarifying, clean. Eucalyptus, rosemary, or citrus-forward candidates under evaluation.
       </div>
     </div>
   </div>
 </section>
 
-<!-- ===================== COMPARE BLOCK ===================== -->
-<section class="compare">
-  <div class="compare-inner">
-    <div class="compare-head">
-      <div class="tag">/ THE DIFFERENCE</div>
-      <h2>What RIZE <span class="gold">isn't.</span></h2>
-      <p>RIZE doesn't compete with energy drinks, pre-workouts, or supplements. It sits in a category they don't reach — the inhaled moment, with no aftermath.</p>
+<!-- ════════════════════════════════════════════ 06 FORMULATIONS -->
+<section>
+  <div class="sec-label"><span class="bar"></span>06 · PRODUCT</div>
+  <h2 class="sec-title">Formulations</h2>
+
+  <h3>RIZE Athletic</h3>
+  <p>Baseline reference: the Hanuman Thai inhaler (~52% menthol, 13% Borneo camphor). RIZE Athletic adapts this for a Western sports context with cleaner ingredient labelling.</p>
+  <table>
+    <thead><tr><th>Ingredient</th><th>Role</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Menthol crystals</td><td>Base carrier · primary active</td><td>~50%+ by weight. Cooling, airway-opening sensation. Primary delivery mechanism.</td></tr>
+      <tr><td>Camphor</td><td>Invigorating agent</td><td>~13–16%. Borneo camphor preferred. Warming counterpoint to menthol.</td></tr>
+      <tr><td>Peppermint essential oil</td><td>Aromatic modifier</td><td>Freshens the blend, extends the experience.</td></tr>
+      <tr><td>Borneol</td><td>Secondary aromatic</td><td>~6–7%. Traditional yadom ingredient. Verify Western regulatory status.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>RIZE Calm</h3>
+  <table>
+    <thead><tr><th>Ingredient</th><th>Role</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Western Red Cedar (var. 1)</td><td>Primary aromatic</td><td>Canadian sourcing preferred. Three varieties layered for complexity.</td></tr>
+      <tr><td>Western Red Cedar (var. 2)</td><td>Mid-note</td><td>Creates the "forest walk" depth.</td></tr>
+      <tr><td>Western Red Cedar (var. 3)</td><td>Base note</td><td>Provides longevity and grounding.</td></tr>
+      <tr><td>Sweet Orange essential oil</td><td>Brightening modifier</td><td>Prevents the blend from reading as overly woody. Lifts the profile.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>RIZE Alert</h3>
+  <p>Formula TBD. Direction: sharp, clarifying, clean. Should convey cognitive readiness without being overtly athletic (no heavy menthol/camphor). Eucalyptus, rosemary, or citrus-forward profiles under evaluation.</p>
+
+  <h3>Delivery Format</h3>
+  <div class="two-col" style="margin-top:16px">
+    <div class="card">
+      <h4>Wick-based</h4>
+      <p>Cotton wick saturated with blended essential oils. Standard yadom delivery. Clean, consistent dosing. Primary format under evaluation.</p>
     </div>
-    <div class="compare-cols">
-      <div class="compare-col no">
-        <h3><span class="marker">✕</span> Not RIZE</h3>
-        <ul>
-          <li>Isn't something you plan ahead for.</li>
-          <li>Won't spike your heart rate or leave you crashing.</li>
-          <li>Isn't a supplement, a nootropic, or a wellness shot.</li>
-          <li>Doesn't go through your stomach, your bloodstream, or your liver.</li>
-          <li>Isn't something you have to dose, track, or cycle.</li>
-        </ul>
-      </div>
-      <div class="compare-col yes">
-        <h3><span class="marker">✓</span> RIZE</h3>
-        <ul>
-          <li>On for a breath. Off when you're done with it.</li>
-          <li>Botanical inhalation — no stimulants, no caffeine, no crash.</li>
-          <li>Pocket-sized. Fits a kit bag, a glovebox, a handbag, a back pocket.</li>
-          <li>Use it once a day or twelve times — no tolerance, no taper.</li>
-          <li>You'll know if it works the first time you flip the cap.</li>
-        </ul>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ===================== WAITLIST ===================== -->
-<section class="waitlist" id="waitlist">
-  <div class="bg-mark">RI<span class="slash">Z</span>E</div>
-  <div class="waitlist-inner">
-    <div class="waitlist-tag"><span class="dot"></span> EARLY ACCESS · LIMITED FIRST RUN</div>
-    <h2 class="waitlist-head">Get in <span class="skew">early.</span></h2>
-    <p class="waitlist-sub">First-run production is small and deliberate. Waitlist members get launch notification, pre-order priority, and founder pricing on the formulation they pick below.</p>
-
-    <div id="form-block">
-      <div class="waitlist-form">
-        <input type="email" id="email" placeholder="your@email.com" autocomplete="email" />
-        <button onclick="submitWaitlist()">Join <span class="arrow"></span></button>
-      </div>
-
-      <div class="waitlist-prefs">
-        <span class="pref-label">Most interested in (pick any):</span>
-        <button data-v="athletic" onclick="togglePref(this)">RIZE Athletic</button>
-        <button data-v="calm" onclick="togglePref(this)">RIZE Calm</button>
-        <button data-v="alert" onclick="togglePref(this)">RIZE Alert</button>
-      </div>
-
-      <div class="waitlist-count"><strong id="count">1,247</strong>already on the waitlist</div>
-    </div>
-
-    <div class="thanks" id="thanks">
-      <h3>You're on the list.</h3>
-      <p>We'll be in touch before launch with first-access pre-order details. No spam, no filler — just the launch notification and a heads-up on first-run availability.</p>
+    <div class="card">
+      <h4>Dry Crystal</h4>
+      <p>Menthol crystals directly in the diffuser chamber with a mesh insert. More raw sensory experience. Also under evaluation.</p>
     </div>
   </div>
 </section>
 
-<!-- ===================== FOOTER ===================== -->
-<footer>
-  <div class="footer-top">
+<!-- ════════════════════════════════════════════ 07 PACKAGING -->
+<section>
+  <div class="sec-label"><span class="bar"></span>07 · PRODUCT</div>
+  <h2 class="sec-title">Packaging &amp; <span class="skew">Form Factor</span></h2>
+
+  <h3>Form Factor A — Flip-Cap (Primary)</h3>
+  <p>The flip-cap is the primary form factor. It anchors the brand voice — <em>"flip cap," "one flip,"</em> and <em>"flip the cap"</em> appear throughout RIZE copy. The flip-and-inhale motion is the product moment.</p>
+
+  <div class="spec-row"><div class="spec-label">Form</div><div class="spec-value">Rectangular flip-top, Zippo-style proportions</div></div>
+  <div class="spec-row"><div class="spec-label">Dimensions</div><div class="spec-value">~42mm × 18mm × 92mm (W × D × H)</div></div>
+  <div class="spec-row"><div class="spec-label">Body</div><div class="spec-value">Matte black HDPE/PP plastic</div></div>
+  <div class="spec-row"><div class="spec-label">Cap</div><div class="spec-value">Flip-top, audible snap. Silicone inner gasket seal.</div></div>
+  <div class="spec-row"><div class="spec-label">Surface</div><div class="spec-value">Matte / velvet soft-touch. No gloss.</div></div>
+  <div class="spec-row"><div class="spec-label">Weight</div><div class="spec-value">35g (declared on packaging)</div></div>
+  <div class="spec-row"><div class="spec-label">Lifespan</div><div class="spec-value">60–90 uses per unit</div></div>
+
+  <h3>Form Factor B — Screw-Top (Alternative)</h3>
+  <p>A second form factor remains under evaluation, referenced from the Drunk Elephant D-Bronzi bottle. Rectangular body with squared-off corners (not cylindrical). The cap is rectangular and matte, screws closed in two turns and seats with a click. The mesh diffuser sits flush at the rim — the product is held beneath the nose with no face contact.</p>
+
+  <div class="spec-row"><div class="spec-label">Form</div><div class="spec-value">Rectangular screw-top, similar proportions to flip-cap</div></div>
+  <div class="spec-row"><div class="spec-label">Cap mechanism</div><div class="spec-value">Two-turn screw close, click-to-seat</div></div>
+  <div class="spec-row"><div class="spec-label">Cap finish</div><div class="spec-value">Matches body — same dark finish. No coloured caps in standard production.</div></div>
+  <div class="spec-row"><div class="spec-label">Opening</div><div class="spec-value">Mesh diffuser flush with rim. No nozzle. No nostril contact.</div></div>
+
+  <div class="delta-note">
+    <strong>Form Factor Status</strong>
+    Flip-cap is the lead. Screw-top is documented and remains an alternative under evaluation. All printed marketing materials, packaging copy, and website language should default to the flip-cap unless a specific screw-top decision is made.
+  </div>
+
+  <h3>Label Architecture</h3>
+  <p>Both form factors share the same label architecture, mirroring the website's bottle treatment. From top to bottom:</p>
+  <div class="spec-row"><div class="spec-label">Top strap</div><div class="spec-value">BREATHE · FOCUS · MOVE &nbsp; · &nbsp; Variant number (01 / 02 / 03)</div></div>
+  <div class="spec-row"><div class="spec-label">Wordmark</div><div class="spec-value">RIZE in Anton (web) or Impact (print). Electric Yellow skewed slash through the Z.</div></div>
+  <div class="spec-row"><div class="spec-label">Variant name</div><div class="spec-value">ATHLETIC / CALM / ALERT in variant accent colour</div></div>
+  <div class="spec-row"><div class="spec-label">Accent bar</div><div class="spec-value">Skewed −20°, 70% width, variant accent colour</div></div>
+  <div class="spec-row"><div class="spec-label">Bottom — front face</div><div class="spec-value">Athletic: INVIGORATING · Calm: CEDAR · CITRUS [WORKING] · Alert: STIMULANT-FREE</div></div>
+  <div class="spec-row"><div class="spec-label">Bottom — strap</div><div class="spec-value">Athletic/Calm: STIMULANT-FREE · 35g &nbsp;·&nbsp; Alert: CLARITY · 35g</div></div>
+
+  <h3>Black-On-Black Discipline</h3>
+  <p>All three SKUs use the same matte black body. The only variant elements are: the variant name colour, the accent slash bar, and the front-face copy text. This enables clean visual dissolves between SKUs in motion content — the bottle never changes, only the colour layer.</p>
+</section>
+
+<!-- ════════════════════════════════════════════ 08 FLIP-CAP MOCKUPS -->
+<section>
+  <div class="sec-label"><span class="bar"></span>08 · IDENTITY</div>
+  <h2 class="sec-title">Bottle Mockups — <span class="skew">Flip-Cap</span></h2>
+
+  <p>The three SKUs in the primary flip-cap form factor. Label structure as specified in Section 07.</p>
+
+  <div class="bottle-row">
+
+    <!-- ATHLETIC -->
     <div>
-      <div class="footer-logo">RI<span class="slash">Z</span>E</div>
-      <div class="footer-tag">A pocket breath tool. Three formulations. Zero stimulants. For the moment before the hard part.</div>
+      <div class="bottle athletic">
+        <div class="bottle-shadow"></div>
+        <div class="bottle-cap"></div>
+        <div class="bottle-body">
+          <div class="b-top-line"><span>BREATHE · FOCUS · MOVE</span><span>01</span></div>
+          <div>
+            <div class="b-name">RI<span class="slash">Z</span>E</div>
+            <div class="b-variant">ATHLETIC</div>
+            <div class="b-accent"></div>
+          </div>
+          <div class="b-bottom"><strong>INVIGORATING</strong>STIMULANT-FREE · 35g</div>
+        </div>
+      </div>
+      <div class="bottle-caption" style="color:var(--coral)">Athletic · 01</div>
     </div>
-    <div class="footer-col">
-      <h4>The Line</h4>
+
+    <!-- CALM -->
+    <div>
+      <div class="bottle calm">
+        <div class="bottle-shadow"></div>
+        <div class="bottle-cap"></div>
+        <div class="bottle-body">
+          <div class="b-top-line"><span>BREATHE · FOCUS · MOVE</span><span>02</span></div>
+          <div>
+            <div class="b-name">RI<span class="slash">Z</span>E</div>
+            <div class="b-variant">CALM</div>
+            <div class="b-accent"></div>
+          </div>
+          <div class="b-bottom"><strong>CEDAR · CITRUS</strong>STIMULANT-FREE · 35g</div>
+        </div>
+      </div>
+      <div class="bottle-caption" style="color:var(--sage)">Calm · 02</div>
+    </div>
+
+    <!-- ALERT -->
+    <div>
+      <div class="bottle alert">
+        <div class="bottle-shadow"></div>
+        <div class="bottle-cap"></div>
+        <div class="bottle-body">
+          <div class="b-top-line"><span>BREATHE · FOCUS · MOVE</span><span>03</span></div>
+          <div>
+            <div class="b-name">RI<span class="slash">Z</span>E</div>
+            <div class="b-variant">ALERT</div>
+            <div class="b-accent"></div>
+          </div>
+          <div class="b-bottom"><strong>STIMULANT-FREE</strong>CLARITY · 35g</div>
+        </div>
+      </div>
+      <div class="bottle-caption" style="color:var(--ice)">Alert · 03</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════ 09 COLOUR -->
+<section>
+  <div class="sec-label"><span class="bar"></span>09 · IDENTITY</div>
+  <h2 class="sec-title">Colour System</h2>
+
+  <h3>Foundation</h3>
+  <div class="swatch-grid">
+    <div class="swatch">
+      <div class="swatch-box" style="background:#0A0A0A"></div>
+      <div class="swatch-meta">
+        <div class="swatch-name">RIZE Black</div>
+        <div class="swatch-hex">#0A0A0A</div>
+        <div class="swatch-role">Primary background</div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-box" style="background:#0F0F0F"></div>
+      <div class="swatch-meta">
+        <div class="swatch-name">Deep Charcoal</div>
+        <div class="swatch-hex">#0F0F0F</div>
+        <div class="swatch-role">Section background</div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-box" style="background:#F4EE35"></div>
+      <div class="swatch-meta">
+        <div class="swatch-name">Electric Yellow</div>
+        <div class="swatch-hex">#F4EE35</div>
+        <div class="swatch-role">Brand mark · primary accent</div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-box" style="background:#F0F0F0"></div>
+      <div class="swatch-meta">
+        <div class="swatch-name">RIZE White</div>
+        <div class="swatch-hex">#F0F0F0</div>
+        <div class="swatch-role">Primary text on dark</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>SKU Accents</h3>
+  <div class="swatch-grid">
+    <div class="swatch">
+      <div class="swatch-box" style="background:#FF5F3A"></div>
+      <div class="swatch-meta">
+        <div class="swatch-name">Hot Coral</div>
+        <div class="swatch-hex">#FF5F3A</div>
+        <div class="swatch-role">RIZE Athletic only</div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-box" style="background:#6BBF8A"></div>
+      <div class="swatch-meta">
+        <div class="swatch-name">Cedar Sage</div>
+        <div class="swatch-hex">#6BBF8A</div>
+        <div class="swatch-role">RIZE Calm only</div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-box" style="background:#3AAFFF"></div>
+      <div class="swatch-meta">
+        <div class="swatch-name">Electric Ice</div>
+        <div class="swatch-hex">#3AAFFF</div>
+        <div class="swatch-role">RIZE Alert only</div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-box" style="background:#C4952A"></div>
+      <div class="swatch-meta">
+        <div class="swatch-name">Reserve Gold</div>
+        <div class="swatch-hex">#C4952A</div>
+        <div class="swatch-role">Premium / Limited only</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="delta-note">
+    <strong>Gold Demoted to Reserve</strong>
+    Gold (#C4952A) was the primary brand mark in v1.0 and earlier v2.0 drafts. It has been demoted to a reserve colour used only for premium SKUs, limited editions, and collaboration releases. Electric Yellow is now the primary brand accent across all standard production. This protects gold's meaning — when it appears, it signals something special.
+  </div>
+
+  <h3>Usage Rules</h3>
+  <div class="four-col">
+    <div class="card">
+      <h4>Black Dominates</h4>
+      <p>~65% visual weight. Every composition starts with black.</p>
+    </div>
+    <div class="card">
+      <h4>Yellow Is The Mark</h4>
+      <p>Electric Yellow is reserved for the slash through Z and primary accents. Never as a background fill or large block.</p>
+    </div>
+    <div class="card">
+      <h4>Accents Are SKU-Locked</h4>
+      <p>Coral / Sage / Ice apply only to the SKU they identify. Never used interchangeably.</p>
+    </div>
+    <div class="card">
+      <h4>Gold Is Reserve Only</h4>
+      <p>Gold appears only on premium / limited / collaboration releases. Never on standard production. This keeps it meaningful when it surfaces.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════ 10 TYPOGRAPHY -->
+<section>
+  <div class="sec-label"><span class="bar"></span>10 · IDENTITY</div>
+  <h2 class="sec-title">Typography</h2>
+
+  <div class="delta-note">
+    <strong>Print vs Web</strong>
+    Print and packaging remain on Impact + Arial Black + Arial per v1.0. Web rendering uses Anton (Google Fonts) as a close sibling to Impact for consistent browser display, with Inter Tight for body and JetBrains Mono for accent/label/stat text. Print and web typography are intentionally aligned in visual weight and proportion.
+  </div>
+
+  <h3>Print / Packaging Stack</h3>
+  <div class="type-demo">
+    <div class="type-meta">Display<br>Wordmark<br>Headings</div>
+    <div class="type-anton">RI<span class="slash">Z</span>E</div>
+    <div class="type-meta">Impact<br>Uppercase<br>Tracking 0.02em</div>
+  </div>
+  <div class="type-demo">
+    <div class="type-meta">Header<br>Sections · Labels</div>
+    <div style="font-family:'Arial Black',sans-serif;font-size:20px;color:var(--ink);letter-spacing:0.1em;text-transform:uppercase">THE BREATH TOOL</div>
+    <div class="type-meta">Arial Black<br>Uppercase preferred</div>
+  </div>
+  <div class="type-demo">
+    <div class="type-meta">Body<br>All running copy</div>
+    <div style="font-family:Arial,sans-serif;font-size:14px;color:#B5B5B5">A pocket breath tool for the moment before the hard part.</div>
+    <div class="type-meta">Arial<br>Regular / italic</div>
+  </div>
+
+  <h3>Web Stack</h3>
+  <div class="type-demo">
+    <div class="type-meta">Display<br>Hero · Wordmark · H1</div>
+    <div class="type-anton">RI<span class="slash">Z</span>E</div>
+    <div class="type-meta">Anton<br>Google Fonts<br>Letter-spacing 0.02em</div>
+  </div>
+  <div class="type-demo">
+    <div class="type-meta">Body<br>All running copy</div>
+    <div class="type-inter-tight-body">A pocket breath tool for the moment before the hard part.</div>
+    <div class="type-meta">Inter Tight<br>300 / 400 / 500 / 600</div>
+  </div>
+  <div class="type-demo">
+    <div class="type-meta">Mono<br>Labels · Stats · Eyebrows</div>
+    <div class="type-jetbrains">BEFORE THE LIFT · 02 · STIMULANT-FREE</div>
+    <div class="type-meta">JetBrains Mono<br>Letter-spacing 0.18–0.3em<br>Uppercase</div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════ 11 BRAND VOICE -->
+<section>
+  <div class="sec-label"><span class="bar"></span>11 · VOICE</div>
+  <h2 class="sec-title">Brand Voice</h2>
+
+  <div class="two-col">
+    <div>
+      <h3>Core Principles</h3>
+      <div class="card" style="margin-bottom:14px">
+        <h4>Lead With Function</h4>
+        <p>Start with what the product does. Emotion follows from truth, not from describing the emotion directly.</p>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <h4>Short Sentences Win</h4>
+        <p>RIZE copy is compressed. Every word must earn its place.</p>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <h4>Name The Moment</h4>
+        <p>Always anchor copy to a specific moment, not a persona or a vibe. The before-moment is the brand.</p>
+      </div>
+      <div class="card">
+        <h4>No Hype Language</h4>
+        <p>If a sentence sounds like ad copy — rewrite it. RIZE doesn't try. It delivers.</p>
+      </div>
+    </div>
+
+    <div>
+      <h3>Voice in Practice</h3>
+      <div class="voice-pair">
+        <div class="voice-do">For the moment before the hard part.</div>
+        <div class="voice-dont">Discover the RIZE difference.</div>
+      </div>
+      <div class="voice-pair">
+        <div class="voice-do">One flip from a botanical hit.</div>
+        <div class="voice-dont">Experience the power of nature in your pocket.</div>
+      </div>
+      <div class="voice-pair">
+        <div class="voice-do">The one you bring with you. Out of the kit bag mid-game.</div>
+        <div class="voice-dont">Take RIZE everywhere you go for peak performance!</div>
+      </div>
+      <div class="voice-pair">
+        <div class="voice-do">On for a breath. Off when you're done with it.</div>
+        <div class="voice-dont">Fast-acting formula provides immediate energy boost.</div>
+      </div>
+      <div class="voice-pair">
+        <div class="voice-do">You'll know if it works the first time you flip the cap.</div>
+        <div class="voice-dont">Clinically proven to enhance focus and alertness.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════ 12 VOCABULARY -->
+<section>
+  <div class="sec-label"><span class="bar"></span>12 · VOICE</div>
+  <h2 class="sec-title">Vocabulary — Use &amp; <span class="accent">Avoid</span></h2>
+
+  <h3>Use</h3>
+  <div class="vocab-grid">
+    <span class="vocab-tag vocab-use">breath tool</span>
+    <span class="vocab-tag vocab-use">botanical hit</span>
+    <span class="vocab-tag vocab-use">botanical lift</span>
+    <span class="vocab-tag vocab-use">flip cap</span>
+    <span class="vocab-tag vocab-use">flip</span>
+    <span class="vocab-tag vocab-use">inhale</span>
+    <span class="vocab-tag vocab-use">the moment before</span>
+    <span class="vocab-tag vocab-use">pocket-sized</span>
+    <span class="vocab-tag vocab-use">stimulant-free</span>
+    <span class="vocab-tag vocab-use">invigorating</span>
+    <span class="vocab-tag vocab-use">forest in your pocket</span>
+    <span class="vocab-tag vocab-use">bring it</span>
+    <span class="vocab-tag vocab-use">lock in</span>
+    <span class="vocab-tag vocab-use">ritual</span>
+    <span class="vocab-tag vocab-use">focus</span>
+    <span class="vocab-tag vocab-use">deliberate</span>
+    <span class="vocab-tag vocab-use">earned</span>
+    <span class="vocab-tag vocab-use">snap</span>
+    <span class="vocab-tag vocab-use">hit</span>
+  </div>
+
+  <h3>Avoid — Regulatory</h3>
+  <p>These create regulatory exposure (Health Canada NHP, UK/EU medical device classification). The noun "inhaler" carries asthma / medical / poppers associations — the verb "inhale" is fine. Quantified physiological claims of any kind read as fabrication and create exposure:</p>
+  <div class="vocab-grid">
+    <span class="vocab-tag vocab-never">inhaler</span>
+    <span class="vocab-tag vocab-never">pocket inhaler</span>
+    <span class="vocab-tag vocab-never">2-second onset</span>
+    <span class="vocab-tag vocab-never">90% effective</span>
+    <span class="vocab-tag vocab-never">works in two breaths</span>
+    <span class="vocab-tag vocab-never">20 minutes to kick in</span>
+  </div>
+
+  <div class="delta-note">
+    <strong>The Inhaler Ban</strong>
+    "Inhaler" as a noun is removed from all public-facing copy. The verb "inhale" remains acceptable. "Pocket inhaler" is replaced everywhere with "pocket breath tool."
+  </div>
+
+  <h3>Avoid — Wellness / Spa</h3>
+  <p>These pull the brand toward aromatherapy and spa territory, which is off-brand. "Meditative" is banned outright — including on Calm:</p>
+  <div class="vocab-grid">
+    <span class="vocab-tag vocab-never">aroma</span>
+    <span class="vocab-tag vocab-never">aromatherapy</span>
+    <span class="vocab-tag vocab-never">meditative</span>
+  </div>
+
+  <h3>Avoid — Hype</h3>
+  <div class="vocab-grid">
+    <span class="vocab-tag vocab-never">revolutionary</span>
+    <span class="vocab-tag vocab-never">elite</span>
+    <span class="vocab-tag vocab-never">game-changing</span>
+    <span class="vocab-tag vocab-never">next level</span>
+    <span class="vocab-tag vocab-never">unlock</span>
+    <span class="vocab-tag vocab-never">science-backed</span>
+    <span class="vocab-tag vocab-never">biohack</span>
+    <span class="vocab-tag vocab-never">stack</span>
+    <span class="vocab-tag vocab-never">superfood</span>
+    <span class="vocab-tag vocab-never">pre-workout</span>
+    <span class="vocab-tag vocab-never">energise</span>
+    <span class="vocab-tag vocab-never">maximize</span>
+    <span class="vocab-tag vocab-never">hustle</span>
+    <span class="vocab-tag vocab-never">grind</span>
+    <span class="vocab-tag vocab-never">beast mode</span>
+    <span class="vocab-tag vocab-never">crush it</span>
+    <span class="vocab-tag vocab-never">gains</span>
+  </div>
+
+  <h3>Avoid — Tube / Object Language</h3>
+  <p>"Tube" reads clinical / toothpaste-y. "Pocket calm" collides with the RIZE Calm SKU name:</p>
+  <div class="vocab-grid">
+    <span class="vocab-tag vocab-never">tube</span>
+    <span class="vocab-tag vocab-never">pocket calm</span>
+  </div>
+
+  <h3>Outside the Current Vocabulary</h3>
+  <p>These phrases were explored during brand development and sit outside the current vocabulary set. They aren't part of the brand voice today — don't reintroduce them as alternatives.</p>
+  <div class="vocab-grid">
+    <span class="vocab-tag vocab-never">pocket diffuser</span>
+    <span class="vocab-tag vocab-never">pocket vessel</span>
+    <span class="vocab-tag vocab-never">scent stick</span>
+    <span class="vocab-tag vocab-never">two-breath ritual</span>
+    <span class="vocab-tag vocab-never">a black case</span>
+    <span class="vocab-tag vocab-never">botanical compass</span>
+    <span class="vocab-tag vocab-never">scent-shift</span>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════ 13 PHOTOGRAPHY -->
+<section>
+  <div class="sec-label"><span class="bar"></span>13 · IDENTITY</div>
+  <h2 class="sec-title">Photography &amp; <span class="skew">Imagery</span></h2>
+
+  <div class="delta-note">
+    <strong>Audience Expansion</strong>
+    v1.0 photography direction was gym-centric (Product Hero / Athlete in Action / Instructor or Class). v2.0 expands this significantly. The audience is multi-sport plus everyday-carry. Imagery must reflect that breadth.
+  </div>
+
+  <h3>Approved Contexts</h3>
+  <div class="three-col">
+    <div class="card accent-top">
+      <h4>Product Hero</h4>
+      <p>Dark studio. Single key light, 30–45° offset. Product only — no hands, no context. Used for packaging shots, hero banners, and PDP main images.</p>
+    </div>
+    <div class="card accent-top">
+      <h4>Athlete In Action</h4>
+      <p><strong>Broadly defined.</strong> Hockey bench, baseball dugout, tennis change-over, basketball sideline, mountain bike climb, gym floor, parkrun start line. Sweat, breath, focus — the moment between effort. Not just lifting.</p>
+    </div>
+    <div class="card accent-top">
+      <h4>Everyday Carry</h4>
+      <p>School pickup line, car commute, kitchen at 6pm, train, plane, handbag pull-out. The product as daily ritual, not just pre-workout. This context did not exist in v1.0.</p>
+    </div>
+  </div>
+
+  <h3>Visual Language</h3>
+  <div class="two-col" style="margin-top:16px">
+    <div class="card">
+      <h4>Shoot</h4>
+      <p>Dark backgrounds. Product and subject emerge from shadow. Dramatic single-source directional lighting. Neutral to cool colour grading, slight desaturation. 35mm or 85mm lens equivalents. Raw, editorial feel.</p>
+    </div>
+    <div class="card" style="border-color:#3a1f1f">
+      <h4 style="color:#b08080">Never Shoot</h4>
+      <p>Bright white backgrounds. Stock commercial fitness aesthetic. Obvious product placement poses. Competing brand logos. Warm orange-filtered gym imagery (except Barry's specifically). AI-generated imagery with incorrect product scale.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════ 14 SOCIAL -->
+<section>
+  <div class="sec-label"><span class="bar"></span>14 · VOICE</div>
+  <h2 class="sec-title">Social &amp; <span class="skew">Digital</span></h2>
+
+  <div class="two-col">
+    <div class="card">
+      <h4>TikTok · Instagram Reels</h4>
+      <p><strong>Format:</strong> 9:16 vertical · 6–15 sec</p>
+      <p><strong>Tone:</strong> Raw. Unproduced. Authentic.</p>
+      <p><strong>Hook:</strong> The reaction. The flip. The moment.</p>
+      <p><strong>Rule:</strong> No voiceover on product content. Let the flip and inhale speak.</p>
+    </div>
+    <div class="card">
+      <h4>Instagram Feed</h4>
+      <p><strong>Format:</strong> 1:1 square · static or carousel</p>
+      <p><strong>Tone:</strong> Editorial. Minimal. Precise.</p>
+      <p><strong>Hook:</strong> Product flatlay or moment-anchored hero shot.</p>
+      <p><strong>Rule:</strong> One element per frame. Never busy. RIZE wordmark readable at thumb size.</p>
+    </div>
+    <div class="card">
+      <h4>YouTube Shorts</h4>
+      <p><strong>Format:</strong> 9:16 vertical · 15–60 sec</p>
+      <p><strong>Tone:</strong> Slightly longer narrative.</p>
+      <p><strong>Hook:</strong> Show the moment in full — hockey shift change, school run, the climb. The product appears as part of the flow.</p>
+      <p><strong>Rule:</strong> Subtitle for silent viewing. No music bed unless sparse.</p>
+    </div>
+    <div class="card">
+      <h4>Amazon · DTC</h4>
+      <p><strong>Format:</strong> 1:1 product gallery + lifestyle</p>
+      <p><strong>Tone:</strong> Functional. Credible. Comparative.</p>
+      <p><strong>Hero:</strong> Product alone on black. Lifestyle: subject in a named moment.</p>
+      <p><strong>Rule:</strong> No medical claims. No therapeutic language. External use only.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════ 15 RULES -->
+<section>
+  <div class="sec-label"><span class="bar"></span>15 · IDENTITY</div>
+  <h2 class="sec-title">Brand Rules</h2>
+
+  <div class="compare-grid">
+    <div class="compare-card compare-is">
+      <h4>ALWAYS</h4>
       <ul>
-        <li><a href="#athletic">RIZE Athletic</a></li>
-        <li><a href="#calm">RIZE Calm</a></li>
-        <li><a href="#alert">RIZE Alert</a></li>
+        <li>Anchor copy to a specific moment, not a vibe</li>
+        <li>Use the electric-yellow-slashed Z as the brand mark</li>
+        <li>Use Anton (web) or Impact (print) for the wordmark</li>
+        <li>Place "BREATHE · FOCUS · MOVE" as the top strap on packaging</li>
+        <li>Apply variant accent colour to variant name + accent bar only</li>
+        <li>Keep "STIMULANT-FREE" understated on packaging, never as headline</li>
+        <li>Lead the form-factor language with "flip cap"</li>
+        <li>Use "breath tool" as the category descriptor</li>
+        <li>Keep all packaging matte black across SKUs</li>
       </ul>
     </div>
-    <div class="footer-col">
-      <h4>Brand</h4>
+    <div class="compare-card compare-not">
+      <h4>NEVER</h4>
       <ul>
-        <li><a href="#what-is-it">What It Is</a></li>
-        <li><a href="#">Ingredients</a></li>
-        <li><a href="#">Story</a></li>
-      </ul>
-    </div>
-    <div class="footer-col">
-      <h4>Contact</h4>
-      <ul>
-        <li><a href="#waitlist">Waitlist</a></li>
-        <li><a href="#">Press</a></li>
-        <li><a href="#">Wholesale</a></li>
+        <li>Use the word "inhaler" in public copy</li>
+        <li>Use aromatherapy or wellness vocabulary</li>
+        <li>Reference Thai cultural origin in consumer-facing copy</li>
+        <li>Add a fourth hero stat without factual basis</li>
+        <li>Make quantified physiological claims (e.g. "2-second onset")</li>
+        <li>Revive the retired chalk / belt / "mouthguard is a ritual" lines (fully retired — too gym-specific)</li>
+        <li>Use the Pillars or Breathe/Focus/Move as a public callout</li>
+        <li>Apply SKU accent colours to anything other than that SKU</li>
+        <li>Distort, skew, or recolour the RIZE wordmark</li>
+        <li>Show product at water-bottle or jar scale in imagery</li>
       </ul>
     </div>
   </div>
-  <div class="footer-bottom">
-    <div>© 2026 RIZE · ALL RIGHTS RESERVED</div>
-    <div class="gold">FLIP · INHALE · PERFORM</div>
+</section>
+
+<!-- ════════════════════════════════════════════ 16 MARKETS / SOURCING -->
+<section>
+  <div class="sec-label"><span class="bar"></span>16 · OPERATIONS</div>
+  <h2 class="sec-title">Markets &amp; <span class="skew">Sourcing</span></h2>
+
+  <h3>Target Markets</h3>
+  <p>United States · Canada · United Kingdom · Australia · Western Europe. All five treated as primary positioning markets — there is no domestic Thai market strategy.</p>
+
+  <h3>Ingredient Sourcing — Canada (Preferred)</h3>
+  <p>Canadian sourcing is the target for all three formulations where possible. Simplifies NHP site licence compliance and reduces import complexity. Several Canadian suppliers carry the required ingredients — supplier selection pending price, MOQ, and quality evaluation.</p>
+  <div class="spec-row"><div class="spec-label">Supplier</div><div class="spec-value">Canadian essential oil / ingredient supplier — TBD</div></div>
+  <div class="spec-row"><div class="spec-label">Ingredients</div><div class="spec-value">Menthol crystals · camphor · borneol · peppermint EO · cedar EOs · sweet orange EO</div></div>
+  <div class="spec-row"><div class="spec-label">One reference</div><div class="spec-value">New Directions Aromatics (Mississauga, ON) — one of several options under review</div></div>
+
+  <h3>Packaging Sourcing — Canada (Preferred)</h3>
+  <div class="spec-row"><div class="spec-label">Container</div><div class="spec-value">Canadian plastics manufacturer — HDPE/PP matte black. Supplier TBD.</div></div>
+  <div class="spec-row"><div class="spec-label">Label / print</div><div class="spec-value">Canadian print supplier. Bilingual (EN/FR) required for NHP compliance.</div></div>
+  <div class="spec-row"><div class="spec-label">Mesh insert</div><div class="spec-value">Food-grade mesh — sourcing TBD</div></div>
+  <div class="spec-row"><div class="spec-label">Cap / collar detail</div><div class="spec-value">Hinge collar (flip-cap) or screw cap (alternative). Both match the body — same dark finish, no coloured caps in standard production. Premium / limited editions may differ — sourcing TBD.</div></div>
+</section>
+
+<!-- ════════════════════════════════════════════ APPENDIX A -->
+<section>
+  <div class="sec-label"><span class="bar"></span>APPENDIX A · REGULATORY</div>
+  <h2 class="sec-title">Health Canada — <span class="skew">NHP Path</span></h2>
+
+  <p>This appendix covers the regulatory steps required to legally sell the Athletic SKU (menthol/camphor formula) in Canada. High-level only — the goal is to understand the shape of the process, not to pre-commit to any specific timeline or spend.</p>
+
+  <h3>Why This Is Needed</h3>
+  <p>In Canada, products administered by inhalation are not classified as cosmetics. A product containing menthol and camphor intended to be inhaled requires a <strong>Natural Product Number (NPN)</strong> from Health Canada before it can be legally sold. Pre-market approval — you cannot sell first and apply later.</p>
+  <p>Calm and Alert may or may not require the same path depending on their final formulations.</p>
+
+  <h3>Step 1 — Determine Application Class</h3>
+  <p>Health Canada groups NHP applications into three classes based on how well the product matches existing pre-approved monographs. Menthol and camphor inhalation products have an existing monograph — which likely puts the Athletic SKU in Class I or Class II.</p>
+  <div class="spec-row"><div class="spec-label">Class I</div><div class="spec-value">Formula matches a single monograph exactly. Review: ~30–60 days.</div></div>
+  <div class="spec-row"><div class="spec-label">Class II</div><div class="spec-value">Spans multiple monographs, or minor deviations. Review: ~90 days.</div></div>
+  <div class="spec-row"><div class="spec-label">Class III</div><div class="spec-value">No supporting monograph. Review: 180–210+ days. Unlikely to apply here.</div></div>
+
+  <h3>Step 2 — Prepare the Application</h3>
+  <div class="three-col" style="margin-top:16px">
+    <div class="card">
+      <h4>Product Licence (PLA)</h4>
+      <p>Submitted via Health Canada online portal. Requires full ingredient list with INCI names, concentrations, dosage form, route of administration, recommended use, and risk info.</p>
+    </div>
+    <div class="card">
+      <h4>Site Licence</h4>
+      <p>Any Canadian site that manufactures, labels, packages, or imports the product needs a site licence confirming GMP compliance.</p>
+    </div>
+    <div class="card">
+      <h4>Labelling</h4>
+      <p>NHP labels must be bilingual (English / French). NPN must appear on the label once issued. Label drafts reviewed as part of the application.</p>
+    </div>
   </div>
-</footer>
 
-<script>
-  function togglePref(btn){ btn.classList.toggle('on'); }
+  <h3>Who To Talk To</h3>
+  <div class="two-col">
+    <div class="card">
+      <h4>Regulatory Consultants — Toronto</h4>
+      <p><strong>Dicentra</strong> · dicentra.com — NHP and cosmetic regulatory specialists.</p>
+      <p><strong>Quality Smart Solutions</strong> · qualitysmartsolutions.com — broad Health Canada compliance practice.</p>
+      <p>Both offer initial consultations. Worth a call to each before committing.</p>
+    </div>
+    <div class="card">
+      <h4>Health Canada Directly</h4>
+      <p>Health Canada's NNHPD accepts general inquiries and can confirm product classification before a formal submission. Free and can save significant time.</p>
+    </div>
+  </div>
 
-  function submitWaitlist(){
-    const email = document.getElementById('email').value.trim();
-    if(!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
-      const form = document.querySelector('.waitlist-form');
-      form.style.borderColor = '#FF5F3A';
-      setTimeout(()=>{ form.style.borderColor = ''; }, 1500);
-      return;
-    }
-    document.getElementById('form-block').style.display = 'none';
-    document.getElementById('thanks').classList.add('show');
-  }
+  <h3>Rough Timeline</h3>
+  <div class="spec-row"><div class="spec-label">Classification</div><div class="spec-value">Days to a week — consultant or direct call</div></div>
+  <div class="spec-row"><div class="spec-label">Application prep</div><div class="spec-value">A few weeks once formula is finalised</div></div>
+  <div class="spec-row"><div class="spec-label">Review (Class I/II)</div><div class="spec-value">30–90 days from submission</div></div>
+  <div class="spec-row"><div class="spec-label">Total</div><div class="spec-value">A few months from start to NPN in hand</div></div>
 
-  const countEl = document.getElementById('count');
-  let baseCount = 1247;
-  setInterval(()=>{
-    if(Math.random() > 0.7){
-      baseCount += 1;
-      countEl.textContent = baseCount.toLocaleString();
-    }
-  }, 5000);
+  <p style="margin-top:24px">Application fees are currently zero for NHP product licences. The most useful first step is a single call to confirm whether the Athletic formula qualifies as Class I or II.</p>
+</section>
 
-  document.getElementById('email').addEventListener('keydown', (e)=>{
-    if(e.key === 'Enter') submitWaitlist();
-  });
+<!-- ════════════════════════════════════════════ APPENDIX B -->
+<section>
+  <div class="sec-label"><span class="bar"></span>APPENDIX B · STATUS</div>
+  <h2 class="sec-title">Items Still <span class="accent">Open</span></h2>
 
-  // ===== HERO VARIANT DISSOLVE =====
-  // Lifecycle per variant:
-  //   1. VISIBLE — text shown perfectly clean, no mask, for VISIBLE_MS.
-  //   2. DISSOLVE OUT — noise mask kicks in, text scatters into specks
-  //      and fades. DISSOLVE_MS.
-  //   3. BLACK HOLD — everything at opacity 0, no specks, briefly.
-  //   4. SWAP — variant content + colour swapped while invisible.
-  //   5. RESOLVE IN — opacity returns to 1 with NO mask, so the new text
-  //      appears cleanly (no leftover specks). RESOLVE_MS.
-  (function(){
-    const variants = [
-      { v:'athletic', i:'01', name:'ATHLETIC', strong:'INVIGORATING',  strap:'STIMULANT-FREE · 35g', color:'#FF5F3A', orbit1:'SHARP ·',    orbit2:'· INVIGORATING', label:'/ 01 · Athletic' },
-      { v:'calm',     i:'02', name:'CALM',     strong:'CEDAR · CITRUS',strap:'STIMULANT-FREE · 35g', color:'#6BBF8A', orbit1:'GROUNDED ·', orbit2:'· CEDAR',        label:'/ 02 · Calm' },
-      { v:'alert',    i:'03', name:'ALERT',    strong:'STIMULANT-FREE',strap:'CLARITY · 35g',        color:'#3AAFFF', orbit1:'CLEAR ·',    orbit2:'· CRISP',        label:'/ 03 · Alert' }
-    ];
+  <p>Flagged as unresolved at v2.0. Each requires a decision before launch.</p>
 
-    const zone        = document.getElementById('variantZone');
-    const nameEl      = document.getElementById('variantName');
-    const strongEl    = document.getElementById('variantStrong');
-    const strapEl     = document.getElementById('variantStrap');
-    const numEl       = document.getElementById('variantNum');
-    const labelEl     = document.getElementById('skuLabel');
-    const labelTextEl = labelEl.querySelector('.label-text');
-    const orbit1      = document.getElementById('orbit1');
-    const orbit2      = document.getElementById('orbit2');
-    const dots        = document.querySelectorAll('#heroDots button');
+  <div class="open-flag">
+    <strong>Open · Product</strong>
+    RIZE Calm front-face packaging copy. "CEDAR · CITRUS" is the working placeholder. Final direction may be to omit a category descriptor entirely and let "RIZE CALM" carry the meaning.
+  </div>
 
-    // Timing — tuned so the text is readable for a full beat before dissolving
-    const VISIBLE_MS    = 2800;   // pristine text shown for ~3s — you can actually read it
-    const DISSOLVE_MS   = 400;    // fast scatter outward
-    const BLACK_HOLD_MS = 350;    // brief pause in black between variants
-    const RESOLVE_MS    = 350;    // clean fade-in (no mask, so no residual specks)
+  <div class="open-flag">
+    <strong>Open · Product</strong>
+    RIZE Alert final formula. Direction set (sharp, clarifying, clean) — specific ingredients TBD.
+  </div>
 
-    let idx = 0;
-    let timer;
+  <div class="open-flag">
+    <strong>Open · Form Factor</strong>
+    Final choice between flip-cap and screw-top. Flip-cap is the current lead and the language assumes it; screw-top remains documented.
+  </div>
 
-    function setVariant(targetIdx){
-      const target = variants[targetIdx];
+  <div class="open-flag">
+    <strong>Open · Photography</strong>
+    Real product photography and lifestyle imagery still pending across the broader audience contexts. Website currently uses CSS-built renders as placeholders.
+  </div>
 
-      // PHASE 1: Scatter out (mask kicks in via .dissolving class)
-      zone.classList.add('dissolving');
-      labelEl.classList.add('dissolving');
-      orbit1.classList.add('dissolving');
-      orbit2.classList.add('dissolving');
+  <div class="open-flag">
+    <strong>Open · Imagery Guidelines</strong>
+    Photography section in this v2.0 is directional. Detailed shot lists for hockey bench, dugout, school pickup, etc., need to be built.
+  </div>
+</section>
 
-      // PHASE 2: After dissolve + black hold, swap content while invisible
-      setTimeout(() => {
-        zone.style.setProperty('--variant-color', target.color);
-        nameEl.textContent      = target.name;
-        strongEl.textContent    = target.strong;
-        strapEl.textContent     = target.strap;
-        numEl.textContent       = target.i;
-        labelTextEl.textContent = target.label;
-        orbit1.textContent      = target.orbit1;
-        orbit2.textContent      = target.orbit2;
-        dots.forEach((d,i) => d.classList.toggle('on', i === targetIdx));
-
-        // PHASE 3: Remove .dissolving — this drops the mask AND brings
-        // opacity back to 1. Because the mask is now gone, the text
-        // appears perfectly clean as it fades in. No residual specks.
-        zone.classList.remove('dissolving');
-        labelEl.classList.remove('dissolving');
-        orbit1.classList.remove('dissolving');
-        orbit2.classList.remove('dissolving');
-        idx = targetIdx;
-      }, DISSOLVE_MS + BLACK_HOLD_MS);
-    }
-
-    function tick(){ setVariant((idx + 1) % variants.length); }
-
-    function start(){
-      stop();
-      timer = setInterval(tick, VISIBLE_MS + DISSOLVE_MS + BLACK_HOLD_MS + RESOLVE_MS);
-    }
-    function stop(){ if(timer){ clearInterval(timer); timer = null; } }
-
-    // Dot clicks jump straight to a variant
-    dots.forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const i = parseInt(btn.dataset.i, 10);
-        if(i === idx) return;
-        setVariant(i);
-        start();
-      });
-    });
-
-    // Pause on hover, resume on leave
-    zone.addEventListener('mouseenter', stop);
-    zone.addEventListener('mouseleave', start);
-
-    // Respect reduced-motion
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
-    if(!reduce.matches){ start(); }
-    reduce.addEventListener('change', e => { e.matches ? stop() : start(); });
-  })();
-</script>
+<!-- ════════════════════════════════════════════ FOOTER -->
+<div class="doc-footer">
+  <div>
+    <p><strong>RIZE Brand Master · Version 2.1</strong></p>
+    <p>Painkiller Labs · Confidential</p>
+    <p style="margin-top:8px;color:#333">Supersedes v1.0 (April 2026) and Delta (May 2026).</p>
+  </div>
+  <div class="footer-mark">RI<span class="slash">Z</span>E</div>
+</div>
 
 </body>
 </html>
