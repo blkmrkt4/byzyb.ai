@@ -567,7 +567,7 @@
     <a href="#alert">Alert</a>
     <a href="#what-is-it">What It Is</a>
   </div>
-  <a href="#waitlist" class="nav-cta">Join Waitlist</a>
+  <a href="#waitlist" class="nav-cta">Like the Concept?</a>
 </nav>
 
 <!-- ===================== HERO ===================== -->
@@ -583,7 +583,7 @@
     </h1>
     <p class="hero-body">RIZE is a pocket-sized breath tool engineered for the seconds that matter — on the sideline, at the start line, in the school pickup lane, before the call you've been dreading. A botanical hit that shifts state in two breaths. <em>Zero stimulants. Three formulations.</em></p>
     <div class="hero-ctas">
-      <a href="#waitlist" class="btn btn-primary">Join the Waitlist <span class="arrow"></span></a>
+      <a href="#waitlist" class="btn btn-primary">Like the Concept? <span class="arrow"></span></a>
       <a href="#what-is-it" class="btn btn-ghost">What is it? <span class="arrow"></span></a>
     </div>
     <div class="hero-strip">
@@ -797,7 +797,7 @@
         <span class="sku-chip">Sharp · Cool</span>
         <span class="sku-chip">Stimulant-Free</span>
       </div>
-      <a href="#waitlist" class="btn btn-ghost">Notify me first <span class="arrow"></span></a>
+      <a href="#waitlist" class="btn btn-ghost">Like the Concept? <span class="arrow"></span></a>
 
       <div class="sku-pullquote">
         <div class="q"><span class="coral">Sharpened breath.</span> Ready for the effort.</div>
@@ -868,7 +868,7 @@
         <span class="sku-chip">Grounded · Green</span>
         <span class="sku-chip">Stimulant-Free</span>
       </div>
-      <a href="#waitlist" class="btn btn-ghost">Notify me first <span class="arrow"></span></a>
+      <a href="#waitlist" class="btn btn-ghost">Like the Concept? <span class="arrow"></span></a>
     </div>
 
     <div class="sku-visual">
@@ -934,7 +934,7 @@
         <span class="sku-chip">Pleasant</span>
         <span class="sku-chip">Stimulant-Free</span>
       </div>
-      <a href="#waitlist" class="btn btn-ghost">Notify me first <span class="arrow"></span></a>
+      <a href="#waitlist" class="btn btn-ghost">Like the Concept? <span class="arrow"></span></a>
     </div>
 
     <div class="sku-visual">
@@ -995,9 +995,9 @@
 <section class="waitlist" id="waitlist">
   <div class="bg-mark">RI<span class="slash">Z</span>E</div>
   <div class="waitlist-inner">
-    <div class="waitlist-tag"><span class="dot"></span> EARLY ACCESS · LIMITED FIRST RUN</div>
-    <h2 class="waitlist-head">Get in <span class="skew">early.</span></h2>
-    <p class="waitlist-sub">First-run production is small and deliberate. Waitlist members get launch notification, pre-order priority, and founder pricing on the formulation they pick below.</p>
+    <div class="waitlist-tag"><span class="dot"></span> CONCEPT STAGE · GAUGING INTEREST</div>
+    <h2 class="waitlist-head">Like the <span class="skew">concept?</span></h2>
+    <p class="waitlist-sub">RIZE is still a concept. If this resonates, drop your email and tell us which direction interests you — it helps shape what gets built first.</p>
 
     <div id="form-block">
       <div class="waitlist-prefs">
@@ -1010,13 +1010,13 @@
 
       <div class="waitlist-form">
         <input type="email" id="email" placeholder="your@email.com" autocomplete="email" />
-        <button onclick="submitWaitlist()">Join <span class="arrow"></span></button>
+        <button onclick="submitWaitlist()">I'm interested <span class="arrow"></span></button>
       </div>
     </div>
 
     <div class="thanks" id="thanks">
-      <h3>You're on the list.</h3>
-      <p>We'll be in touch before launch with first-access pre-order details. No spam, no filler — just the launch notification and a heads-up on first-run availability.</p>
+      <h3>Thanks for the signal.</h3>
+      <p>We'll be in touch if RIZE moves forward. No spam, no filler — just updates on what happens next.</p>
     </div>
   </div>
 </section>
@@ -1047,7 +1047,7 @@
     <div class="footer-col">
       <h4>Contact</h4>
       <ul>
-        <li><a href="#waitlist">Waitlist</a></li>
+        <li><a href="#waitlist">Interested?</a></li>
         <li><a href="#">Press</a></li>
         <li><a href="#">Wholesale</a></li>
       </ul>
@@ -1061,6 +1061,23 @@
 
 <script>
   function togglePref(btn){ btn.classList.toggle('on'); }
+
+  // Silent interest signal — fires once when user reaches the form section
+  let interestLogged = false;
+  function logInterest(){
+    if(interestLogged) return;
+    interestLogged = true;
+    const formUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSc4RY8ygoseztA1lire-OLFsEGTA0QX4aYf-zYm9GKGm2qefA/formResponse';
+    const data = new URLSearchParams();
+    data.append('entry.89150447', 'anonymous');
+    data.append('entry.962110272', 'The overall concept');
+    fetch(formUrl, { method: 'POST', mode: 'no-cors', body: data });
+  }
+
+  // Log interest when any "Like the Concept?" link is clicked
+  document.querySelectorAll('a[href="#waitlist"]').forEach(link => {
+    link.addEventListener('click', logInterest);
+  });
 
   function submitWaitlist(){
     const email = document.getElementById('email').value.trim();
