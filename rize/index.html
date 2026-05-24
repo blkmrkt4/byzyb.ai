@@ -492,10 +492,16 @@
   .waitlist-head{font-family:'Anton',sans-serif;font-size:clamp(56px,9vw,140px);line-height:.9;letter-spacing:-.02em;text-transform:uppercase;margin-bottom:24px}
   .waitlist-head .skew{display:inline-block;transform:skewX(-10deg);color:var(--gold);margin:0 .02em}
   .waitlist-sub{font-size:17px;line-height:1.6;color:#B0B0B0;max-width:520px;margin:0 auto 48px;font-weight:300}
-  .waitlist-form{display:flex;gap:0;max-width:520px;margin:0 auto;border:1px solid var(--line);background:var(--bg);transition:border-color .3s ease}
-  .waitlist-form:focus-within{border-color:var(--gold)}
+  .waitlist-form{display:flex;gap:0;max-width:520px;margin:0 auto;border:2px solid var(--gold);background:var(--bg);transition:border-color .3s ease;animation:form-glow 4s ease-in-out infinite}
+  @keyframes form-glow{
+    0%,100%{border-color:var(--gold);box-shadow:0 0 12px rgba(244,238,53,.25)}
+    25%{border-color:var(--coral);box-shadow:0 0 12px rgba(255,95,58,.25)}
+    50%{border-color:var(--ice);box-shadow:0 0 12px rgba(58,175,255,.25)}
+    75%{border-color:var(--sage);box-shadow:0 0 12px rgba(107,191,138,.25)}
+  }
+  .waitlist-form:focus-within{animation:none;border-color:var(--gold);box-shadow:0 0 16px rgba(244,238,53,.35)}
   .waitlist-form input{flex:1;padding:20px 24px;background:transparent;border:none;outline:none;color:var(--ink);font-size:15px;letter-spacing:.02em}
-  .waitlist-form input::placeholder{color:#555}
+  .waitlist-form input::placeholder{color:#888}
   .waitlist-form button{padding:0 28px;background:var(--gold);color:var(--bg);font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase;transition:background .3s ease;display:flex;align-items:center;gap:12px}
   .waitlist-form button:hover{background:#d8a534}
   .waitlist-form button .arrow{display:inline-block;width:24px;height:1px;background:currentColor;position:relative}
