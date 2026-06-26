@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ByZyB.ai | Robin Hutchinson - Business Builder, CTO, AI & Security</title>
-    
+    <title>ByZyB.ai | Robin Hutchinson - Business Builder, CTO, AI &amp; Security</title>
+    <meta name="description" content="Business builder, CTO, and AI obsessive. Security and AI at the intersection of enterprise strategy.">
+
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="favicons/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="favicons/favicon-32x32.png">
@@ -12,7 +13,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="favicons/favicon-180x180.png">
     <link rel="icon" type="image/png" sizes="192x192" href="favicons/favicon-192x192.png">
     <link rel="icon" type="image/png" sizes="512x512" href="favicons/favicon-512x512.png">
-    
+
     <!-- Open Graph / Social -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://byzyb.ai/">
@@ -21,857 +22,187 @@
     <meta property="og:image" content="https://byzyb.ai/byzyb-og-image.png">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:image" content="https://byzyb.ai/byzyb-twitter-card.png">
-    
-    <!-- Fonts - Modern geometric sans-serif -->
+
+    <!-- Fonts: headings = Cormorant Garamond (serif), body = Inter, labels = IBM Plex Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Compiled design-token / Tailwind stylesheet (from Ploy build) -->
+    <link rel="stylesheet" href="ploy-styles.css">
+
     <style>
-        :root {
-            /* Dark Jewel Tones */
-            --emerald: #155441;
-            --plum: #493449;
-            --wine: #5A1D2B;
-            --navy: #252A3F;
-            --amber: #AC753C;
-            
-            /* Logo Gold */
-            --gold: #D0934A;
-            --gold-light: #E8B870;
-            --gold-glow: rgba(208, 147, 74, 0.3);
-            
-            /* Neutrals */
-            --black: #0A0A0A;
-            --charcoal: #141414;
-            --gray-dark: #1E1E1E;
-            --gray: #2A2A2A;
-            --gray-light: #888888;
-            --white: #F5F5F5;
-            --white-muted: #CCCCCC;
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        html {
-            scroll-behavior: smooth;
-        }
-        
-        body {
-            font-family: 'DM Sans', sans-serif;
-            background: var(--black);
-            color: var(--white);
-            line-height: 1.6;
-            overflow-x: hidden;
-        }
-        
-        /* Noise texture overlay */
-        body::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-            opacity: 0.03;
-            pointer-events: none;
-            z-index: 1000;
-        }
-        
-        /* Typography - Syne for headings (geometric, modern) */
-        h1, h2, h3 {
-            font-family: 'Syne', sans-serif;
-            font-weight: 600;
-            letter-spacing: -0.02em;
-        }
-        
-        /* Header */
-        header {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 100;
-            padding: 1.5rem 3rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: linear-gradient(to bottom, rgba(10,10,10,0.9) 0%, transparent 100%);
-        }
-        
-        .logo-link {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            text-decoration: none;
-        }
-        
-        .logo {
-            height: 55px;
-            width: auto;
-            transition: transform 0.3s ease, filter 0.3s ease;
-        }
-
-        .logo:hover {
-            transform: scale(1.05);
-            filter: drop-shadow(0 0 20px var(--gold-glow));
-        }
-        
-        nav {
-            display: flex;
-            gap: 2.5rem;
-        }
-        
-        nav a {
-            color: var(--white-muted);
-            text-decoration: none;
-            font-size: 0.875rem;
-            font-weight: 500;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            transition: color 0.3s ease;
-            position: relative;
-        }
-        
-        nav a::after {
-            content: '';
-            position: absolute;
-            bottom: -4px;
-            left: 0;
-            width: 0;
-            height: 2px;
-            background: var(--gold);
-            transition: width 0.3s ease;
-        }
-        
-        nav a:hover {
-            color: var(--gold);
-        }
-        
-        nav a:hover::after {
-            width: 100%;
-        }
-        
-        /* Hero Section */
-        .hero {
-            min-height: 50vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            padding: 6rem 2rem 1.5rem;
-            position: relative;
-            background: 
-                radial-gradient(ellipse at 20% 80%, var(--wine) 0%, transparent 40%),
-                radial-gradient(ellipse at 80% 20%, var(--navy) 0%, transparent 40%),
-                radial-gradient(ellipse at 60% 60%, var(--plum) 0%, transparent 35%),
-                radial-gradient(ellipse at 50% 50%, var(--charcoal) 0%, var(--black) 70%);
-        }
-        
-        .hero-logo {
-            width: min(250px, 60vw);
-            margin-bottom: 1.5rem;
-            animation: fadeInUp 1s ease-out;
-            filter: drop-shadow(0 10px 30px rgba(0,0,0,0.5));
-        }
-        
-        .hero-tagline {
-            font-family: 'Syne', sans-serif;
-            font-size: clamp(1.5rem, 3vw, 2rem);
-            font-weight: 600;
-            margin-bottom: 1rem;
-            animation: fadeInUp 1s ease-out 0.2s both;
-            color: var(--white);
-        }
-        
-        .hero-tagline .gold {
-            color: var(--gold);
-            font-style: italic;
-        }
-        
-        .hero-subtitle {
-            font-size: clamp(1rem, 2vw, 1.125rem);
-            color: var(--white-muted);
-            max-width: 550px;
-            margin-bottom: 3rem;
-            animation: fadeInUp 1s ease-out 0.35s both;
-            font-weight: 400;
-        }
-        
-        .scroll-indicator {
-            position: absolute;
-            bottom: 3rem;
-            left: 50%;
-            transform: translateX(-50%);
-            animation: bounce 2s infinite;
-        }
-        
-        .scroll-indicator svg {
-            width: 24px;
-            height: 24px;
-            stroke: var(--gold);
-            opacity: 0.6;
-        }
-        
-        @keyframes bounce {
-            0%, 100% { transform: translateX(-50%) translateY(0); }
-            50% { transform: translateX(-50%) translateY(10px); }
-        }
-        
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        /* Section Styling */
-        section {
-            padding: 6rem 2rem;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        
-        .section-title {
-            font-size: clamp(2rem, 4vw, 3rem);
-            margin-bottom: 1rem;
-            position: relative;
-            display: inline-block;
-        }
-        
-        .section-title::after {
-            content: '';
-            position: absolute;
-            bottom: -8px;
-            left: 0;
-            width: 60px;
-            height: 3px;
-            background: linear-gradient(90deg, var(--gold), var(--amber));
-            border-radius: 2px;
-        }
-        
-        .section-intro {
-            color: var(--white-muted);
-            font-size: 1.125rem;
-            max-width: 700px;
-            margin-bottom: 3rem;
-            font-weight: 400;
-        }
-        
-        /* About Section */
-        #about {
-            background: linear-gradient(135deg, var(--charcoal) 0%, var(--black) 100%);
-            border-radius: 2px;
-            position: relative;
-            overflow: hidden;
-            padding-bottom: 3rem;
-        }
-        
-        #about::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 50%;
-            height: 100%;
-            background: radial-gradient(ellipse at 100% 50%, var(--plum) 0%, transparent 60%);
-            opacity: 0.3;
-        }
-        
-        .about-content {
-            position: relative;
-            z-index: 1;
-        }
-        
-        .about-text p {
-            margin-bottom: 1.5rem;
-            font-weight: 400;
-            line-height: 1.8;
-        }
-        
-        .about-text .highlight {
-            color: var(--gold);
-            font-weight: 600;
-        }
-        
-        /* Career Timeline */
-        .career-timeline {
-            margin-top: 3rem;
-        }
-        
-        .career-timeline h3 {
-            font-size: 1.5rem;
-            margin-bottom: 2rem;
-            color: var(--gold);
-        }
-        
-        .timeline-item {
-            position: relative;
-            padding-left: 2rem;
-            padding-bottom: 2rem;
-            border-left: 2px solid var(--gray);
-        }
-        
-        .timeline-item:last-child {
-            padding-bottom: 0;
-        }
-        
-        .timeline-item::before {
-            content: '';
-            position: absolute;
-            left: -6px;
-            top: 0;
-            width: 10px;
-            height: 10px;
-            background: var(--gold);
-            border-radius: 50%;
-        }
-        
-        .timeline-item .role {
-            font-family: 'Syne', sans-serif;
-            font-weight: 600;
-            font-size: 1.05rem;
-            color: var(--white);
-            margin-bottom: 0.25rem;
-        }
-        
-        .timeline-item .company {
-            color: var(--gold);
-            font-size: 0.95rem;
-            font-weight: 500;
-            margin-bottom: 0.25rem;
-        }
-        
-        .timeline-item .period {
-            color: var(--gray-light);
-            font-size: 0.85rem;
-            margin-bottom: 0.5rem;
-        }
-        
-        .timeline-item .description {
-            color: var(--white-muted);
-            font-size: 0.95rem;
-            font-weight: 400;
-            line-height: 1.7;
-        }
-        
-        /* Products Section */
-        #products {
-            background: var(--black);
-            padding-top: 2rem;
-        }
-        
-        .products-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 2rem;
-        }
-        
-        .product-card {
-            background: linear-gradient(145deg, var(--charcoal), var(--gray-dark));
-            border-radius: 8px;
-            padding: 2.5rem;
-            border: 1px solid var(--gray);
-            transition: all 0.4s ease;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .product-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, var(--gold), var(--amber));
-            transform: scaleX(0);
-            transform-origin: left;
-            transition: transform 0.4s ease;
-        }
-        
-        .product-card:hover {
-            transform: translateY(-8px);
-            border-color: var(--gold);
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-        }
-        
-        .product-card:hover::before {
-            transform: scaleX(1);
-        }
-        
-        .product-header {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            margin-bottom: 0.75rem;
-        }
-
-        .product-icon {
-            width: 50px;
-            height: 50px;
-            flex-shrink: 0;
-        }
-
-        .product-icon img {
-            width: 100%;
-            height: 100%;
+        /* Product logos preserved from the original site */
+        .product-logo {
+            width: 48px;
+            height: 48px;
             object-fit: contain;
-            border-radius: 8px;
-        }
-        
-        .product-card h3 {
-            font-size: 1.5rem;
-            margin-bottom: 0;
-            color: var(--white);
-        }
-        
-        .product-card .status {
-            display: inline-block;
-            font-size: 0.7rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            padding: 0.35rem 0.85rem;
-            border-radius: 3px;
-            margin-bottom: 1rem;
-            font-weight: 600;
-        }
-        
-        .status.development {
-            background: var(--wine);
-            color: var(--white);
-        }
-        
-        .status.active {
-            background: var(--emerald);
-            color: var(--white);
-        }
-        
-        .status.planning {
-            background: var(--navy);
-            color: var(--white);
-        }
-
-        .status.near-launch {
-            background: var(--amber);
-            color: var(--white);
-        }
-
-        .status.internal {
-            background: var(--plum);
-            color: var(--white);
-        }
-
-        .status.experiment {
-            background: var(--navy);
-            color: var(--white);
-        }
-
-        .badge-row {
-            display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-            margin-bottom: 1rem;
-        }
-
-        .badge-row .status {
-            margin-bottom: 0;
-        }
-
-        .deployment-badge {
-            display: inline-block;
-            font-size: 0.7rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            padding: 0.35rem 0.85rem;
-            border-radius: 3px;
-            font-weight: 600;
-        }
-
-        .deployment-badge.ios {
-            background: linear-gradient(135deg, #3478F6, #5AC8FA);
-            color: var(--white);
-        }
-
-        .deployment-badge.desktop {
-            background: linear-gradient(135deg, #8E44AD, #C39BD3);
-            color: var(--white);
-        }
-
-        .deployment-badge.saas {
-            background: linear-gradient(135deg, var(--gold), var(--amber));
-            color: var(--black);
-        }
-
-        .deployment-badge.physical {
-            background: linear-gradient(135deg, var(--emerald), #1a7a5a);
-            color: var(--white);
-        }
-
-        .product-card p {
-            color: var(--white-muted);
-            font-weight: 400;
-            line-height: 1.7;
-        }
-        
-        /* Education Section */
-        #education {
-            background: linear-gradient(135deg, var(--black) 0%, var(--charcoal) 100%);
-        }
-        
-        .education-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 1.5rem;
-        }
-        
-        .education-item {
-            padding: 1.5rem;
-            background: var(--gray-dark);
-            border: 1px solid var(--gray);
-            border-radius: 8px;
-            transition: border-color 0.3s ease;
-        }
-        
-        .education-item:hover {
-            border-color: var(--gold);
-        }
-        
-        .education-item h4 {
-            font-family: 'Syne', sans-serif;
-            color: var(--white);
-            font-weight: 600;
+            border-radius: 10px;
             margin-bottom: 0.25rem;
-        }
-        
-        .education-item .degree {
-            color: var(--gold);
-            font-size: 0.9rem;
-            font-weight: 500;
-        }
-        
-        .education-item .years {
-            color: var(--gray-light);
-            font-size: 0.85rem;
-        }
-        
-        /* Contact Section */
-        #contact {
-            text-align: center;
-            background:
-                radial-gradient(ellipse at 50% 100%, var(--navy) 0%, transparent 50%),
-                var(--black);
-            padding-top: 2rem;
-            padding-bottom: 4rem;
-        }
-        
-        .contact-links {
-            display: flex;
-            justify-content: center;
-            gap: 2rem;
-            flex-wrap: wrap;
-            margin-top: 2rem;
-        }
-        
-        .contact-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 1rem 2rem;
-            background: var(--charcoal);
-            border: 1px solid var(--gray);
-            border-radius: 6px;
-            color: var(--white);
-            text-decoration: none;
-            font-weight: 500;
-            transition: all 0.3s ease;
-        }
-        
-        .contact-link:hover {
-            border-color: var(--gold);
-            background: var(--gray-dark);
-            transform: translateY(-3px);
-        }
-        
-        .contact-link svg {
-            width: 20px;
-            height: 20px;
-            stroke: var(--gold);
-        }
-        
-        /* Footer */
-        footer {
-            text-align: center;
-            padding: 2rem;
-            border-top: 1px solid var(--gray);
-            color: var(--gray-light);
-            font-size: 0.875rem;
-        }
-        
-        footer .gold {
-            color: var(--gold);
-        }
-        
-        /* Responsive */
-        @media (max-width: 768px) {
-            header {
-                padding: 1rem 1.5rem;
-            }
-
-            .logo {
-                height: 40px;
-            }
-
-            nav {
-                display: none;
-            }
-            
-            .products-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            section {
-                padding: 4rem 1.5rem;
-            }
         }
     </style>
 </head>
-<body>
-    <header>
-        <a href="#" class="logo-link">
-            <img src="byzyb-full-transparent-400.png" alt="ByZyB.ai" class="logo">
-        </a>
-        <nav>
-            <a href="#about">About</a>
-            <a href="#products">Products</a>
-            <a href="resume.html#resume">Resume</a>
-            <a href="resume.html#story">My Story</a>
-            <a href="Robin_Hutchinson_CV.pdf" download>Download CV</a>
-            <a href="#contact">Contact</a>
-        </nav>
-    </header>
-    
-    <main>
-        <section class="hero">
-            <img src="byzyb-full-transparent-400.png" alt="ByZyB.ai - Robin Hutchinson" class="hero-logo">
-            <p class="hero-tagline">Boardroom. Engine Room. <span class="gold">AI Obsessive.</span></p>
-        </section>
+<body class="bg-ploy-background-primary text-ploy-text-primary antialiased overflow-x-hidden m-0" style="font-family: 'Inter', system-ui, sans-serif">
 
-        <section id="about">
-            <h2 class="section-title">About</h2>
-            <div class="about-content">
-                <div class="about-text">
-                    <p>
-                        I build and operate businesses at the intersection of AI and security — two domains
-                        that increasingly define how enterprises manage risk, protect data, and scale technology.
-                        Self-confessed AI obsessive.
-                    </p>
-                    <p>
-                        For the past 27 years I've been a partner at EY, where I've served as CTO and led the
-                        commercialisation of the firm's global technology portfolio — platforms, AI, and digital products.
-                        I also built and ran the global enterprise risk management program, conducting extensive
-                        risk assessments and mitigation planning across the organization. Before EY, I founded and
-                        sold a security software company, and earlier still helped build firewall technologies through
-                        a startup that was acquired.
-                    </p>
-                    <p>
-                        I studied AI at the University of Texas back in 1991 — long before the current wave — so the
-                        technology side of this work isn't abstract to me. I've been hands-on with it for over three decades.
-                    </p>
-                    <p>
-                        Based between Toronto and London.
-                        <a href="resume.html#story" style="color: var(--gold); text-decoration: none; border-bottom: 1px solid var(--gold);">The story &rarr;</a>
-                    </p>
-                    <p style="margin-top: 0.5rem; font-weight: 500;">
-                        — <span class="highlight">Robin Hutchinson</span>
-                    </p>
+    <header class="fixed inset-x-0 top-0 z-[100] bg-gradient-to-b from-ploy-background-primary via-ploy-background-primary/70 to-transparent">
+        <div class="mx-auto flex max-w-[82rem] items-center justify-between px-6 py-5 md:px-12 md:py-6">
+            <a href="#" class="flex items-center" aria-label="ByZyB.ai">
+                <img src="byzyb-full-transparent-400.png" alt="ByZyB.ai" class="h-9 w-auto md:h-11"/>
+            </a>
+            <nav class="hidden items-center gap-9 md:flex">
+                <a href="#about" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">About</a>
+                <a href="#products" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Products</a>
+                <a href="resume.html#resume" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Resume</a>
+                <a href="resume.html#story" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">My Story</a>
+            </nav>
+            <a href="#contact" class="rounded-full border border-ploy-button-primary-border bg-ploy-button-primary-background px-5 py-2 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-button-primary-text transition-opacity duration-300 hover:opacity-90">Get in touch</a>
+        </div>
+    </header>
+
+    <main class="min-w-0">
+        <section class="relative flex min-h-[100svh] items-center overflow-hidden">
+            <div class="absolute inset-0">
+                <img src="hero-desk.webp" alt="A low-lit desk with a notebook of AI and security systems notes" class="h-full w-full object-cover object-right"/>
+                <div class="absolute inset-0" style="background-image:linear-gradient(90deg, var(--ploy-background-primary) 0%, color-mix(in srgb, var(--ploy-background-primary) 88%, transparent) 38%, transparent 78%)"></div>
+                <div class="absolute inset-x-0 bottom-0 h-40" style="background-image:linear-gradient(to bottom, transparent, var(--ploy-background-primary))"></div>
+            </div>
+            <div class="relative z-10 mx-auto w-full max-w-[82rem] px-6 pt-28 pb-20 md:px-12">
+                <div class="max-w-2xl">
+                    <h1 class="font-heading text-[clamp(3.25rem,8vw,7rem)] font-medium leading-[0.98] tracking-[-0.01em] text-ploy-text-primary text-balance">Building and advising at the<br/><span class="italic text-ploy-text-secondary">intersection of AI and domain expertise.</span></h1>
+                    <p class="mt-7 max-w-xl text-lg leading-relaxed text-ploy-text-secondary">I'm Robin Hutchinson — operator, CTO, and self-confessed AI obsessive. For 27 years I've paired AI with hard-won domain expertise — software development, commercialization, risk management, offshoring, and building global businesses — to turn complex problems into products that ship.</p>
+                    <div class="mt-10 flex flex-wrap items-center gap-7">
+                        <a href="#products" class="rounded-full bg-ploy-button-primary-background px-7 py-3.5 font-mono text-[0.72rem] uppercase tracking-[0.16em] text-ploy-button-primary-text transition-opacity duration-300 hover:opacity-90">See the work</a>
+                        <a href="resume.html#story" class="group inline-flex items-center gap-2 font-mono text-[0.72rem] uppercase tracking-[0.16em] text-ploy-text-primary">The story<span class="transition-transform duration-300 group-hover:translate-x-1">→</span></a>
+                    </div>
                 </div>
             </div>
         </section>
 
-        <section id="products">
-            <h2 class="section-title">Products</h2>
-            <p class="section-intro">
-                Businesses in motion.
-            </p>
-            <div class="products-grid">
-                <a href="https://language-match.com" target="_blank" style="text-decoration: none; color: inherit;">
-                <article class="product-card">
-                    <div class="product-header">
-                        <div class="product-icon"><img src="language-match-icon.png" alt="Language Match"></div>
-                        <h3>Language Match</h3>
-                    </div>
-                    <div class="badge-row">
-                        <span class="status active">On the App Store</span>
-                        <span class="deployment-badge ios">iOS App</span>
-                    </div>
-                    <p>
-                        A native iOS app that connects language learners through swipe-based matching—like dating apps,
-                        but for finding conversation partners. Real-time chat with an innovative message interface: swipe
-                        right on any message to reveal its translation, swipe left for grammar suggestions and alternative
-                        expressions. AI-powered contextual learning that adapts to your proficiency level, with vocabulary
-                        tracking and text-to-speech pronunciation guidance.
-                    </p>
-                </article>
-                </a>
-
-                <a href="https://liquid-relay.com" target="_blank" style="text-decoration: none; color: inherit;">
-                <article class="product-card">
-                    <div class="product-header">
-                        <div class="product-icon"><img src="liquid-relay-icon.png" alt="Liquid Relay"></div>
-                        <h3>Liquid Relay</h3>
-                    </div>
-                    <div class="badge-row">
-                        <span class="status active">Available for Mac & Windows</span>
-                        <span class="deployment-badge desktop">Desktop App</span>
-                    </div>
-                    <p>
-                        A desktop application for Mac and Windows that moves files, clipboard content, and screenshots
-                        instantly between machines—no cables, no cloud uploads, no NAS drives. Built for people who
-                        work across multiple computers: cross-platform developers compiling on one OS and testing on
-                        another, music producers running multi-machine studios, video editors bouncing projects between
-                        Mac and PC, designers toggling between AutoCAD on Windows and creative tools on Mac, and
-                        corporate professionals bridging locked-down work machines with personal ones.
-                    </p>
-                </article>
-                </a>
+        <section id="about" class="border-t border-ploy-border-primary/60">
+            <div class="mx-auto max-w-[82rem] px-6 md:px-12">
+                <ul class="grid grid-cols-2 divide-x divide-ploy-border-primary/40 border-b border-ploy-border-primary/40 md:grid-cols-4">
+                    <li class="py-7 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary pr-5 md:pl-0">27 years at EY</li>
+                    <li class="py-7 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary px-5">Chief Technology Officer</li>
+                    <li class="py-7 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary px-5">Security founder &amp; exit</li>
+                    <li class="py-7 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary px-5">Studying AI since 1991</li>
+                </ul>
             </div>
-
-            <div class="products-grid" style="margin-top: 2rem;">
-                <article class="product-card">
-                    <div class="product-header">
-                        <div class="product-icon"><img src="pencilbee.jpg" alt="Ezsay"></div>
-                        <h3>Ezsay</h3>
+            <div class="mx-auto grid max-w-[82rem] gap-12 px-6 py-24 md:grid-cols-[0.9fr_1.1fr] md:gap-20 md:px-12 md:py-32">
+                <div>
+                    <h2 class="font-heading text-[clamp(2.5rem,5vw,4rem)] font-medium leading-[1.02] tracking-[-0.01em] text-ploy-text-primary text-balance">Boardroom fluency.<br/><span class="italic text-ploy-text-secondary">Engine-room hands.</span></h2>
+                </div>
+                <div>
+                    <div class="max-w-xl">
+                        <p class="mb-6 text-[1.05rem] leading-[1.8] text-ploy-text-secondary">I build and operate businesses at the intersection of AI and security — two domains that increasingly define how enterprises manage risk, protect data, and scale technology. Self-confessed AI obsessive.</p>
+                        <p class="mb-6 text-[1.05rem] leading-[1.8] text-ploy-text-secondary">For the past 27 years I've been a partner at EY, where I've served as CTO and led the commercialisation of the firm's global technology portfolio — platforms, AI, and digital products. I also built and ran the global enterprise risk management program, conducting extensive risk assessments and mitigation planning across the organization. Before EY, I founded and sold a security software company, and earlier still helped build firewall technologies through a startup that was acquired.</p>
+                        <p class="mb-6 text-[1.05rem] leading-[1.8] text-ploy-text-secondary">I studied AI at the University of Texas back in 1991 — long before the current wave — so the technology side of this work isn't abstract to me. I've been hands-on with it for over three decades.</p>
+                        <p class="mb-8 text-[1.05rem] leading-[1.8] text-ploy-text-secondary">Based between Toronto and London. <a href="resume.html#story" class="inline-flex items-center gap-1 border-b border-ploy-text-primary/40 text-ploy-text-primary transition-colors hover:border-ploy-text-primary">The story →</a></p>
+                        <p class="font-heading text-2xl italic text-ploy-text-primary">— Robin Hutchinson</p>
                     </div>
-                    <div class="badge-row">
-                        <span class="status near-launch">Near Launch</span>
-                        <span class="deployment-badge saas">SaaS</span>
-                    </div>
-                    <p>
-                        Makes your writing sound like you wrote it — not a chatbot. Instead of rewriting your document
-                        behind a black box, it analyzes your draft across six dimensions — AI detectability, AI artifacts,
-                        writing quality, plagiarism, citations, and tone — and flags every issue in one unified queue for
-                        you to accept, reject, or edit yourself. Every flag comes with a "why this matters" explanation,
-                        so you don't just fix the draft, you learn to stop writing in AI patterns altogether. It even
-                        extracts your citations, verifies the sources exist, and converts between eight academic styles,
-                        from APA to Bluebook. Built for students and professionals who want a polished, defensible
-                        document — and full control over every word in it.
-                    </p>
-                </article>
-
-                <article class="product-card">
-                    <div class="product-header">
-                        <div class="product-icon"><img src="pencilbee.jpg" alt="Soul System"></div>
-                        <h3>Soul System</h3>
-                    </div>
-                    <div class="badge-row">
-                        <span class="status internal">Internal Tool</span>
-                        <span class="deployment-badge saas">SaaS</span>
-                    </div>
-                    <p>
-                        Turns a fuzzy "make me a design system" idea into a prompt Claude Desktop can actually build from.
-                        A Brief Collector walks you through a 13-step wizard — vibe, color, modes, rules, components — then
-                        outputs a structured prompt that generates a complete design system bundle: CLAUDE.md, DESIGN.md,
-                        tokens, per-component specs, and a light/dark mood board. Save components once to a reusable library
-                        and pull them into any future project, so each new design system takes 10–15 minutes instead of a day
-                        of decisions.
-                    </p>
-                </article>
-            </div>
-
-            <div class="products-grid" style="margin-top: 2rem;">
-                <article class="product-card">
-                    <div class="product-header">
-                        <div class="product-icon"><img src="pencilbee.jpg" alt="Photo Seeder"></div>
-                        <h3>Photo Seeder</h3>
-                    </div>
-                    <div class="badge-row">
-                        <span class="status internal">Internal Tool</span>
-                        <span class="deployment-badge saas">SaaS</span>
-                    </div>
-                    <p>
-                        A local-first tool that turns one reference photo into 36 identity-consistent lifestyle
-                        shots of the same person—wine bar, hiking trail, gym, beach, dinner party, café morning—using
-                        any image model on OpenRouter. Built to seed profile-driven apps with realistic, varied imagery
-                        instead of stock photos or a single stiff headshot, which makes a product feel dead on arrival.
-                        Drop in a face, pick a model, and walk away: results stream live into the browser and land
-                        directly in your filesystem. Open source and model-agnostic—bring your own OpenRouter key and
-                        swap between Gemini, GPT-Image, and Flux without touching a config file.
-                    </p>
-                </article>
-
-                <article class="product-card">
-                    <div class="product-header">
-                        <div class="product-icon"><img src="pencilbee.jpg" alt="Project ARC"></div>
-                        <h3>Project ARC</h3>
-                    </div>
-                    <div class="badge-row">
-                        <span class="status experiment">Experiment</span>
-                        <span class="deployment-badge saas">SaaS</span>
-                    </div>
-                    <p>
-                        Keeps enterprise risk and compliance from sprawling across spreadsheets, inboxes, and disconnected
-                        trackers. Centralizes legal, privacy, and security regulations into one platform, routing each
-                        requirement to the right risk stakeholders across every jurisdiction you operate in. Instead of
-                        chasing down who owns what obligation in which region, your compliance team sees the whole map —
-                        regulations, owners, and status — in a single source of truth. Built on Next.js, TypeScript, and
-                        Prisma for multinational organizations that need regulatory visibility across overlapping frameworks.
-                    </p>
-                </article>
-            </div>
-
-            <div class="products-grid" style="margin-top: 2rem;">
-                <a href="https://byzyb.ai/rize" target="_blank" style="text-decoration: none; color: inherit;">
-                <article class="product-card">
-                    <div class="product-header">
-                        <div class="product-icon"><img src="pencilbee.jpg" alt="RIZE"></div>
-                        <h3>RIZE</h3>
-                    </div>
-                    <div class="badge-row">
-                        <span class="status planning">Concept</span>
-                        <span class="deployment-badge physical">Physical Product</span>
-                    </div>
-                    <p>
-                        A pocket-sized inhalation device engineered for the seconds that matter. Two breaths deliver
-                        a rapid sensory and physiological shift — no caffeine, no stimulants, no digestion lag. Three
-                        formulations target different moments: athletic performance, calm transitions, and sharp focus.
-                        Effects clear within minutes without elevating heart rate or creating dependency. Not a supplement,
-                        not a drink — a state-shift tool designed for athletes, professionals, and anyone navigating
-                        high-pressure transitions throughout their day.
-                    </p>
-                </article>
-                </a>
+                </div>
             </div>
         </section>
 
-        <section id="contact">
-            <h2 class="section-title">Get in Touch</h2>
-            <p class="section-intro" style="margin-left: auto; margin-right: auto;">
-                Interested in collaborating or learning more about any of these projects?
-            </p>
-            <div class="contact-links">
-                <a href="mailto:robin@byzyb.ai" class="contact-link">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-                    </svg>
-                    robin@byzyb.ai
-                </a>
+        <section id="products" class="border-t border-ploy-border-primary/60 bg-ploy-background-primary">
+            <div class="mx-auto max-w-[82rem] px-6 py-24 md:px-12 md:py-32">
+                <div>
+                    <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                        <h2 class="font-heading text-[clamp(2.5rem,5vw,4rem)] font-medium leading-[1.02] tracking-[-0.01em] text-ploy-text-primary">Work in motion.</h2>
+                        <p class="max-w-sm text-ploy-text-secondary">A portfolio of products spanning AI, security, and the tools I wished existed.</p>
+                    </div>
+                </div>
+
+                <div>
+                    <a href="#contact" class="group mt-14 block">
+                        <article class="grid gap-8 border border-ploy-border-primary/60 bg-ploy-neutral-secondary/40 p-9 transition-colors duration-300 hover:border-ploy-text-primary/30 md:grid-cols-[0.85fr_1.15fr] md:gap-14 md:p-14">
+                            <div class="flex flex-col gap-5">
+                                <div class="flex items-center gap-2.5 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary"><span class="h-1.5 w-1.5 rounded-full bg-ploy-accent-primary"></span>SaaS · Near launch</div>
+                                <h3 class="font-heading text-[clamp(2.5rem,4vw,3.5rem)] font-medium leading-[1] tracking-[-0.01em] text-ploy-text-primary">Ezsay</h3>
+                                <span class="inline-flex items-center gap-2 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-primary">Get early access<span class="transition-transform duration-300 group-hover:translate-x-1">→</span></span>
+                            </div>
+                            <p class="text-[1.05rem] leading-[1.85] text-ploy-text-secondary">Makes your writing sound like you wrote it — not a chatbot. Instead of rewriting your document behind a black box, it analyzes your draft across six dimensions — AI detectability, AI artifacts, writing quality, plagiarism, citations, and tone — and flags every issue in one unified queue for you to accept, reject, or edit yourself. Every flag comes with a "why this matters" explanation, so you don't just fix the draft, you learn to stop writing in AI patterns altogether. It even extracts your citations, verifies the sources exist, and converts between eight academic styles, from APA to Bluebook.</p>
+                        </article>
+                    </a>
+                </div>
+
+                <div class="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+                    <div>
+                        <a href="https://language-match.com" target="_blank" rel="noreferrer" class="block h-full">
+                            <article class="group flex h-full flex-col gap-4 border border-ploy-border-primary/50 bg-ploy-neutral-secondary/30 p-8 transition-colors duration-300 hover:border-ploy-text-primary/30 md:p-10">
+                                <img src="language-match-icon.png" alt="Language Match" class="product-logo"/>
+                                <div class="flex items-center gap-2.5 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary"><span class="h-1.5 w-1.5 rounded-full bg-ploy-accent-primary"></span>iOS App · Live</div>
+                                <h3 class="font-heading text-3xl font-medium tracking-[-0.01em] text-ploy-text-primary">Language Match</h3>
+                                <p class="text-[0.95rem] leading-[1.75] text-ploy-text-secondary">A native iOS app that connects language learners through swipe-based matching—like dating apps, but for finding conversation partners. Real-time chat with an innovative message interface: swipe right on any message to reveal its translation, swipe left for grammar suggestions and alternative expressions. AI-powered contextual learning that adapts to your proficiency level, with vocabulary tracking and text-to-speech pronunciation guidance.</p>
+                                <span class="mt-auto inline-flex items-center gap-2 pt-3 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-primary">Visit<span class="transition-transform duration-300 group-hover:translate-x-1">→</span></span>
+                            </article>
+                        </a>
+                    </div>
+                    <div>
+                        <a href="https://liquid-relay.com" target="_blank" rel="noreferrer" class="block h-full">
+                            <article class="group flex h-full flex-col gap-4 border border-ploy-border-primary/50 bg-ploy-neutral-secondary/30 p-8 transition-colors duration-300 hover:border-ploy-text-primary/30 md:p-10">
+                                <img src="liquid-relay-icon.png" alt="Liquid Relay" class="product-logo"/>
+                                <div class="flex items-center gap-2.5 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary"><span class="h-1.5 w-1.5 rounded-full bg-ploy-accent-primary"></span>Desktop App · Live</div>
+                                <h3 class="font-heading text-3xl font-medium tracking-[-0.01em] text-ploy-text-primary">Liquid Relay</h3>
+                                <p class="text-[0.95rem] leading-[1.75] text-ploy-text-secondary">A desktop application for Mac and Windows that moves files, clipboard content, and screenshots instantly between machines—no cables, no cloud uploads, no NAS drives. Built for people who work across multiple computers: cross-platform developers compiling on one OS and testing on another, music producers running multi-machine studios, video editors bouncing projects between Mac and PC, and corporate professionals bridging locked-down work machines with personal ones.</p>
+                                <span class="mt-auto inline-flex items-center gap-2 pt-3 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-primary">Visit<span class="transition-transform duration-300 group-hover:translate-x-1">→</span></span>
+                            </article>
+                        </a>
+                    </div>
+                    <div>
+                        <article class="group flex h-full flex-col gap-4 border border-ploy-border-primary/50 bg-ploy-neutral-secondary/30 p-8 transition-colors duration-300 hover:border-ploy-text-primary/30 md:p-10">
+                            <div class="flex items-center gap-2.5 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary">SaaS · Experiment</div>
+                            <h3 class="font-heading text-3xl font-medium tracking-[-0.01em] text-ploy-text-primary">Project ARC</h3>
+                            <p class="text-[0.95rem] leading-[1.75] text-ploy-text-secondary">Keeps enterprise risk and compliance from sprawling across spreadsheets, inboxes, and disconnected trackers. Centralizes legal, privacy, and security regulations into one platform, routing each requirement to the right risk stakeholders across every jurisdiction you operate in. Instead of chasing down who owns what obligation in which region, your compliance team sees the whole map — regulations, owners, and status — in a single source of truth. Built on Next.js, TypeScript, and Prisma for multinational organizations.</p>
+                        </article>
+                    </div>
+                    <div>
+                        <article class="group flex h-full flex-col gap-4 border border-ploy-border-primary/50 bg-ploy-neutral-secondary/30 p-8 transition-colors duration-300 hover:border-ploy-text-primary/30 md:p-10">
+                            <div class="flex items-center gap-2.5 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary">SaaS · Internal tool</div>
+                            <h3 class="font-heading text-3xl font-medium tracking-[-0.01em] text-ploy-text-primary">Soul System</h3>
+                            <p class="text-[0.95rem] leading-[1.75] text-ploy-text-secondary">Turns a fuzzy "make me a design system" idea into a prompt Claude Desktop can actually build from. A Brief Collector walks you through a 13-step wizard — vibe, color, modes, rules, components — then outputs a structured prompt that generates a complete design system bundle: CLAUDE.md, DESIGN.md, tokens, per-component specs, and a light/dark mood board. Save components once to a reusable library and pull them into any future project, so each new design system takes 10–15 minutes instead of a day of decisions.</p>
+                        </article>
+                    </div>
+                    <div>
+                        <article class="group flex h-full flex-col gap-4 border border-ploy-border-primary/50 bg-ploy-neutral-secondary/30 p-8 transition-colors duration-300 hover:border-ploy-text-primary/30 md:p-10">
+                            <div class="flex items-center gap-2.5 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary">SaaS · Internal tool</div>
+                            <h3 class="font-heading text-3xl font-medium tracking-[-0.01em] text-ploy-text-primary">Photo Seeder</h3>
+                            <p class="text-[0.95rem] leading-[1.75] text-ploy-text-secondary">A local-first tool that turns one reference photo into 36 identity-consistent lifestyle shots of the same person—wine bar, hiking trail, gym, beach, dinner party, café morning—using any image model on OpenRouter. Built to seed profile-driven apps with realistic, varied imagery instead of stock photos or a single stiff headshot. Drop in a face, pick a model, and walk away: results stream live into the browser and land directly in your filesystem. Open source and model-agnostic.</p>
+                        </article>
+                    </div>
+                    <div>
+                        <a href="rize/" target="_blank" rel="noreferrer" class="block h-full">
+                            <article class="group flex h-full flex-col gap-4 border border-ploy-border-primary/50 bg-ploy-neutral-secondary/30 p-8 transition-colors duration-300 hover:border-ploy-text-primary/30 md:p-10">
+                                <div class="flex items-center gap-2.5 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary">Physical Product · Concept</div>
+                                <h3 class="font-heading text-3xl font-medium tracking-[-0.01em] text-ploy-text-primary">RIZE</h3>
+                                <p class="text-[0.95rem] leading-[1.75] text-ploy-text-secondary">A pocket-sized inhalation device engineered for the seconds that matter. Two breaths deliver a rapid sensory and physiological shift — no caffeine, no stimulants, no digestion lag. Three formulations target different moments: athletic performance, calm transitions, and sharp focus. Effects clear within minutes without elevating heart rate or creating dependency. Not a supplement, not a drink — a state-shift tool for athletes, professionals, and anyone navigating high-pressure transitions.</p>
+                                <span class="mt-auto inline-flex items-center gap-2 pt-3 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-primary">Visit<span class="transition-transform duration-300 group-hover:translate-x-1">→</span></span>
+                            </article>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="contact" class="border-t border-ploy-border-primary/60 bg-ploy-background-primary">
+            <div class="mx-auto max-w-[60rem] px-6 py-28 text-center md:px-12 md:py-40">
+                <div>
+                    <h2 class="font-heading text-[clamp(3rem,7vw,6rem)] font-medium leading-[1] tracking-[-0.01em] text-ploy-text-primary text-balance">Let's build something.</h2>
+                    <p class="mx-auto mt-7 max-w-md text-lg leading-relaxed text-ploy-text-secondary">Interested in collaborating, or curious about any of these projects? I'm always glad to talk.</p>
+                    <a href="mailto:robin@byzyb.ai" class="mt-10 inline-flex items-center gap-3 rounded-full bg-ploy-button-primary-background px-8 py-4 font-mono text-[0.72rem] uppercase tracking-[0.16em] text-ploy-button-primary-text transition-opacity duration-300 hover:opacity-90">robin@byzyb.ai</a>
+                </div>
             </div>
         </section>
     </main>
-    
-    <footer>
-        <p>© 2025 <span class="gold">ByZyB.ai</span> — Robin Hutchinson. All rights reserved.</p>
+
+    <footer class="border-t border-ploy-border-primary/60">
+        <div class="mx-auto flex max-w-[82rem] flex-col gap-6 px-6 py-12 md:flex-row md:items-center md:justify-between md:px-12">
+            <p class="font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary">© 2025 ByZyB.ai — Robin Hutchinson</p>
+            <nav class="flex flex-wrap gap-7">
+                <a href="resume.html#story" class="font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">My Story</a>
+                <a href="Robin_Hutchinson_CV.pdf" class="font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Download CV</a>
+                <a href="mailto:robin@byzyb.ai" class="font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Contact</a>
+            </nav>
+        </div>
     </footer>
 </body>
 </html>
