@@ -42,6 +42,9 @@
             margin: 0 auto;
             padding: 11rem 1.5rem 8rem;
         }
+        /* Header shares the prose column and left-aligns within it, so it
+           lines up with the body while the wider diagram stays centred. */
+        .article-head { max-width: 60ch; margin: 0 auto; }
         .back-link {
             font-family: 'IBM Plex Mono', monospace;
             font-size: 0.7rem;
@@ -62,7 +65,7 @@
             text-transform: uppercase;
             color: var(--ploy-accent-primary);
             margin: 2.5rem 0 0;
-            text-align: center;
+            text-align: left;
         }
         .article-title {
             font-family: var(--font-heading);
@@ -71,10 +74,10 @@
             line-height: 1.05;
             letter-spacing: -0.01em;
             color: var(--ploy-text-primary);
-            max-width: 20ch;
+            max-width: 24ch;
             text-wrap: balance;
-            margin: 1.4rem auto 0;
-            text-align: center;
+            margin: 1.4rem 0 0;
+            text-align: left;
         }
 
         .prose {
@@ -220,11 +223,13 @@
     <main class="min-w-0">
         <article class="article-wrap">
 
-            <a href="index.html" class="back-link">← Back</a>
+            <div class="article-head">
+                <a href="index.html" class="back-link">← Back</a>
 
-            <p class="eyebrow">A field note · What it actually takes</p>
+                <p class="eyebrow">A field note · What it actually takes</p>
 
-            <h1 class="article-title">Excelling at AI takes two kinds of judgment that rarely live in one head.</h1>
+                <h1 class="article-title">Excelling at AI takes two kinds of judgment that rarely live in one head.</h1>
+            </div>
 
             <div class="prose">
                 <p>In my experience, the hard part of AI isn't just the technology - though that's moving faster than anything I've watched before. It's having deep domain expertise, real access to data, a killer hypothesis, and the engineering skill to chase it down.</p>
