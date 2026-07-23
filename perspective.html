@@ -38,7 +38,7 @@
            pages already use. Colours, fonts and spacing all reference the tokens,
            so this page stays visually locked to index.html / resume.html. */
         .article-wrap {
-            max-width: 52rem;
+            max-width: 56rem;
             margin: 0 auto;
             padding: 11rem 1.5rem 8rem;
         }
@@ -62,6 +62,7 @@
             text-transform: uppercase;
             color: var(--ploy-accent-primary);
             margin: 2.5rem 0 0;
+            text-align: center;
         }
         .article-title {
             font-family: var(--font-heading);
@@ -70,14 +71,15 @@
             line-height: 1.05;
             letter-spacing: -0.01em;
             color: var(--ploy-text-primary);
-            max-width: 18ch;
+            max-width: 20ch;
             text-wrap: balance;
-            margin: 1.4rem 0 0;
+            margin: 1.4rem auto 0;
+            text-align: center;
         }
 
         .prose {
             max-width: 60ch;
-            margin: 3rem 0 0;
+            margin: 3rem auto 0;
         }
         .prose p {
             font-size: 1.075rem;
@@ -97,9 +99,9 @@
         /* Chart. Data colours carry meaning, so they stay:
            orange = forces that make you move, blue = forces that make moving costly.
            Structural marks adopt the site palette. */
-        .chart { margin: 4rem 0 0; max-width: 60ch; }
+        .chart { margin: 4rem auto 0; max-width: 100%; }
         .chart-lead {
-            max-width: 100%;
+            max-width: 40rem;
             margin: 0 auto 2.75rem;
             text-align: center;
             font-size: 1.05rem;
@@ -140,7 +142,7 @@
         }
 
         .punch {
-            margin: 3rem 0 0;
+            margin: 3rem auto 0;
             max-width: 37.9rem;
             text-align: center;
             font-size: clamp(1.05rem, 1.7vw, 1.25rem);
