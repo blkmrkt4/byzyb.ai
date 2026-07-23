@@ -40,6 +40,29 @@
             border-radius: 10px;
             margin-bottom: 0.25rem;
         }
+
+        /* Compact "two kinds of judgment" diagram teased in the Perspective card */
+        .mini-diagram svg { width: 100%; height: auto; display: block; }
+        .mini-diagram .col-head {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 17px; font-weight: 500;
+            letter-spacing: 0.14em; text-transform: uppercase;
+            fill: var(--ploy-text-primary);
+        }
+        .mini-diagram .item {
+            font-family: 'Inter', sans-serif;
+            font-size: 24px; font-weight: 500;
+            fill: var(--ploy-text-primary);
+        }
+        .mini-diagram .node-label {
+            font-family: 'IBM Plex Mono', monospace;
+            font-weight: 500; letter-spacing: 0.10em;
+            fill: var(--ploy-accent-primary);
+        }
+        .mini-diagram .connector {
+            stroke: var(--ploy-text-primary);
+            stroke-opacity: 0.22; stroke-width: 1;
+        }
     </style>
 </head>
 <body class="bg-ploy-background-primary text-ploy-text-primary antialiased overflow-x-hidden m-0" style="font-family: 'Inter', system-ui, sans-serif">
@@ -111,9 +134,44 @@
                         <div class="flex flex-col gap-5">
                             <div class="flex items-center gap-2.5 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary"><span class="h-1.5 w-1.5 rounded-full bg-ploy-accent-primary"></span>Perspective · A field note</div>
                             <h2 class="font-heading text-[clamp(2.5rem,4vw,3.5rem)] font-medium leading-[1] tracking-[-0.01em] text-ploy-text-primary text-balance">Excelling at AI takes two kinds of judgment that rarely live in one head.</h2>
+                            <p class="text-[1.05rem] leading-[1.85] text-ploy-text-secondary">Boardroom judgment and engine-room judgment - and why real return from AI needs both at once.</p>
                             <span class="inline-flex items-center gap-2 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-primary">Read the field note<span class="transition-transform duration-300 group-hover:translate-x-1">→</span></span>
                         </div>
-                        <p class="text-[1.05rem] leading-[1.85] text-ploy-text-secondary">The hard part of AI was never just the technology. It's reading the market forces that make you move - disintermediation, regulation - against the ones that make moving costly - vendor drag, model repricing - and then engineering something the business can actually run on. Reading those pressures is a boardroom call. Building to survive them is an engineering call. I keep my hands in the code precisely so I can make both.</p>
+                        <div class="mini-diagram flex items-center justify-center">
+                            <svg viewBox="0 180 1000 375" role="img" aria-label="Diagram: boardroom skills and engine-room skills converging on AI ROI">
+                                <g class="connector">
+                                    <line x1="392" y1="255" x2="500" y2="385"/>
+                                    <line x1="392" y1="305" x2="500" y2="385"/>
+                                    <line x1="392" y1="355" x2="500" y2="385"/>
+                                    <line x1="392" y1="405" x2="500" y2="385"/>
+                                    <line x1="392" y1="455" x2="500" y2="385"/>
+                                    <line x1="392" y1="505" x2="500" y2="385"/>
+                                    <line x1="608" y1="255" x2="500" y2="385"/>
+                                    <line x1="608" y1="305" x2="500" y2="385"/>
+                                    <line x1="608" y1="355" x2="500" y2="385"/>
+                                    <line x1="608" y1="405" x2="500" y2="385"/>
+                                    <line x1="608" y1="455" x2="500" y2="385"/>
+                                    <line x1="608" y1="505" x2="500" y2="385"/>
+                                </g>
+                                <text class="col-head" x="370" y="200" text-anchor="end">The boardroom</text>
+                                <text class="col-head" x="630" y="200" text-anchor="start">The engine room</text>
+                                <text class="item" x="370" y="262" text-anchor="end">strategy</text>
+                                <text class="item" x="370" y="312" text-anchor="end">risk</text>
+                                <text class="item" x="370" y="362" text-anchor="end">governance</text>
+                                <text class="item" x="370" y="412" text-anchor="end">economics</text>
+                                <text class="item" x="370" y="462" text-anchor="end">adoption</text>
+                                <text class="item" x="370" y="512" text-anchor="end">timing</text>
+                                <text class="item" x="630" y="262" text-anchor="start">code</text>
+                                <text class="item" x="630" y="312" text-anchor="start">architecture</text>
+                                <text class="item" x="630" y="362" text-anchor="start">models</text>
+                                <text class="item" x="630" y="412" text-anchor="start">data</text>
+                                <text class="item" x="630" y="462" text-anchor="start">pipelines</text>
+                                <text class="item" x="630" y="512" text-anchor="start">evals</text>
+                                <ellipse cx="500" cy="385" rx="92" ry="58" fill="var(--ploy-background-primary)" stroke="var(--ploy-accent-primary)" stroke-width="2"/>
+                                <text class="node-label" x="500" y="378" text-anchor="middle" font-size="13">AI</text>
+                                <text class="node-label" x="500" y="404" text-anchor="middle" font-size="21">ROI</text>
+                            </svg>
+                        </div>
                     </article>
                 </a>
             </div>

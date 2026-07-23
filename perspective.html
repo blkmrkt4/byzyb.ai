@@ -108,6 +108,38 @@
         }
         .chart-lead strong { color: var(--ploy-text-primary); font-weight: 600; }
         .chart svg { width: 100%; height: auto; display: block; }
+
+        /* Compact core - same coordinates as the full diagram, forces cropped off.
+           Used as the visual hook high in the article. */
+        .chart-compact { margin: 3.25rem auto 0; max-width: 37rem; }
+        .chart-compact svg { width: 100%; height: auto; display: block; }
+        .chart-compact .col-head {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 17px; font-weight: 500;
+            letter-spacing: 0.14em; text-transform: uppercase;
+            fill: var(--ploy-text-primary);
+        }
+        .chart-compact .item {
+            font-family: 'Inter', sans-serif;
+            font-size: 22px; font-weight: 500;
+            fill: var(--ploy-text-primary);
+        }
+        .chart-compact .node-label {
+            font-family: 'IBM Plex Mono', monospace;
+            font-weight: 500; letter-spacing: 0.10em;
+            fill: var(--ploy-accent-primary);
+        }
+        .chart-compact .connector {
+            stroke: var(--ploy-text-primary);
+            stroke-opacity: 0.22; stroke-width: 1;
+        }
+        .chart-compact-cap {
+            margin: 1.35rem 0 0; text-align: center;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.72rem; letter-spacing: 0.16em;
+            text-transform: uppercase; color: var(--ploy-text-secondary);
+        }
+
         .chart .col-head {
             font-family: 'IBM Plex Mono', monospace;
             font-size: 17px; font-weight: 500;
@@ -223,6 +255,43 @@
             <p class="eyebrow">A field note · What it actually takes</p>
 
             <h1 class="article-title">Excelling at AI takes two kinds of judgment that rarely live in one head.</h1>
+
+            <div class="chart-compact">
+                <svg viewBox="0 180 1000 375" role="img" aria-label="Diagram: boardroom skills and engine-room skills converging on AI ROI">
+                    <g class="connector">
+                        <line x1="392" y1="255" x2="500" y2="385"/>
+                        <line x1="392" y1="305" x2="500" y2="385"/>
+                        <line x1="392" y1="355" x2="500" y2="385"/>
+                        <line x1="392" y1="405" x2="500" y2="385"/>
+                        <line x1="392" y1="455" x2="500" y2="385"/>
+                        <line x1="392" y1="505" x2="500" y2="385"/>
+                        <line x1="608" y1="255" x2="500" y2="385"/>
+                        <line x1="608" y1="305" x2="500" y2="385"/>
+                        <line x1="608" y1="355" x2="500" y2="385"/>
+                        <line x1="608" y1="405" x2="500" y2="385"/>
+                        <line x1="608" y1="455" x2="500" y2="385"/>
+                        <line x1="608" y1="505" x2="500" y2="385"/>
+                    </g>
+                    <text class="col-head" x="370" y="200" text-anchor="end">The boardroom</text>
+                    <text class="col-head" x="630" y="200" text-anchor="start">The engine room</text>
+                    <text class="item" x="370" y="262" text-anchor="end">strategy</text>
+                    <text class="item" x="370" y="312" text-anchor="end">risk</text>
+                    <text class="item" x="370" y="362" text-anchor="end">governance</text>
+                    <text class="item" x="370" y="412" text-anchor="end">economics</text>
+                    <text class="item" x="370" y="462" text-anchor="end">adoption</text>
+                    <text class="item" x="370" y="512" text-anchor="end">timing</text>
+                    <text class="item" x="630" y="262" text-anchor="start">code</text>
+                    <text class="item" x="630" y="312" text-anchor="start">architecture</text>
+                    <text class="item" x="630" y="362" text-anchor="start">models</text>
+                    <text class="item" x="630" y="412" text-anchor="start">data</text>
+                    <text class="item" x="630" y="462" text-anchor="start">pipelines</text>
+                    <text class="item" x="630" y="512" text-anchor="start">evals</text>
+                    <ellipse cx="500" cy="385" rx="92" ry="58" fill="var(--ploy-background-primary)" stroke="var(--ploy-accent-primary)" stroke-width="2"/>
+                    <text class="node-label" x="500" y="378" text-anchor="middle" font-size="13">AI</text>
+                    <text class="node-label" x="500" y="404" text-anchor="middle" font-size="21">ROI</text>
+                </svg>
+                <p class="chart-compact-cap">Two kinds of judgment. One return.</p>
+            </div>
 
             <div class="prose">
                 <p>In my experience, the hard part of AI isn't just the technology - though that's moving faster than anything I've watched before. It's having deep domain expertise, real access to data, a killer hypothesis, and the engineering skill to chase it down.</p>
