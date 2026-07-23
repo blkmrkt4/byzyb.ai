@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en" class="dark" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Two kinds of judgment | Robin Hutchinson — ByZyB.ai</title>
+    <meta name="description" content="Excelling at AI takes two kinds of judgment that rarely live in one head: boardroom fluency and engine-room hands. A field note from Robin Hutchinson.">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="favicons/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicons/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="favicons/favicon-180x180.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="favicons/favicon-192x192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="favicons/favicon-512x512.png">
+
+    <!-- Open Graph / Social -->
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://byzyb.ai/perspective.html">
+    <meta property="og:title" content="Two kinds of judgment — Robin Hutchinson">
+    <meta property="og:description" content="Excelling at AI takes two kinds of judgment that rarely live in one head: boardroom fluency and engine-room hands.">
+    <meta property="og:image" content="https://byzyb.ai/byzyb-og-image.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="https://byzyb.ai/byzyb-twitter-card.png">
+
+    <!-- Fonts: headings = Cormorant Garamond (serif), body = Inter, labels = IBM Plex Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Compiled design-token / Tailwind stylesheet (from Ploy build) -->
+    <link rel="stylesheet" href="ploy-styles.css">
+
+    <style>
+        /* The article body is self-styled with the Ploy design tokens (CSS custom
+           properties from ploy-styles.css) rather than Tailwind utilities, because
+           the compiled stylesheet only contains the exact classes the original
+           pages already use. Colours, fonts and spacing all reference the tokens,
+           so this page stays visually locked to index.html / resume.html. */
+        .article-wrap {
+            max-width: 52rem;
+            margin: 0 auto;
+            padding: 11rem 1.5rem 8rem;
+        }
+        .back-link {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.7rem;
+            font-weight: 500;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--ploy-text-secondary);
+            text-decoration: none;
+            transition: color .3s;
+        }
+        .back-link:hover { color: var(--ploy-text-primary); }
+
+        .eyebrow {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.72rem;
+            font-weight: 500;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--ploy-accent-primary);
+            margin: 2.5rem 0 0;
+        }
+        .article-title {
+            font-family: var(--font-heading);
+            font-size: clamp(2.4rem, 5vw, 3.8rem);
+            font-weight: 500;
+            line-height: 1.05;
+            letter-spacing: -0.01em;
+            color: var(--ploy-text-primary);
+            max-width: 18ch;
+            text-wrap: balance;
+            margin: 1.4rem 0 0;
+        }
+
+        .prose {
+            max-width: 60ch;
+            margin: 3rem 0 0;
+        }
+        .prose p {
+            font-size: 1.075rem;
+            line-height: 1.85;
+            color: var(--ploy-text-secondary);
+        }
+        .prose p + p { margin-top: 1.55rem; }
+        .prose p:last-child {
+            color: var(--ploy-text-primary);
+            font-weight: 500;
+        }
+        .prose strong {
+            color: var(--ploy-text-primary);
+            font-weight: 600;
+        }
+
+        /* Chart. Data colours carry meaning, so they stay:
+           orange = forces that make you move, blue = forces that make moving costly.
+           Structural marks adopt the site palette. */
+        .chart { margin: 4rem 0 0; }
+        .chart svg { width: 100%; height: auto; display: block; }
+        .chart .col-head {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 17px; font-weight: 500;
+            letter-spacing: 0.14em; text-transform: uppercase;
+            fill: var(--ploy-text-primary);
+        }
+        .chart .item {
+            font-family: 'Inter', sans-serif;
+            font-size: 22px; font-weight: 500;
+            fill: var(--ploy-text-primary);
+        }
+        .chart .node-label {
+            font-family: 'IBM Plex Mono', monospace;
+            font-weight: 500; letter-spacing: 0.10em;
+            fill: var(--ploy-accent-primary);
+        }
+        .chart .force-head {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 17px; font-weight: 500;
+            letter-spacing: 0.14em; text-transform: uppercase;
+        }
+        .chart .force-item {
+            font-family: 'Inter', sans-serif;
+            font-size: 20px; font-weight: 500;
+        }
+        .chart .connector {
+            stroke: var(--ploy-text-primary);
+            stroke-opacity: 0.22;
+            stroke-width: 1;
+        }
+
+        .punch {
+            margin: 3rem auto 0;
+            max-width: 44ch;
+            text-align: center;
+            font-size: clamp(1.05rem, 1.7vw, 1.25rem);
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            color: var(--ploy-text-primary);
+        }
+        .punch .mark {
+            background: var(--ploy-accent-primary);
+            color: var(--ploy-background-primary);
+            padding: 1px 7px; border-radius: 2px;
+            box-decoration-break: clone;
+            -webkit-box-decoration-break: clone;
+        }
+
+        .byline {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            margin-top: 4rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--ploy-border-primary);
+        }
+        .byline-name {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--ploy-text-secondary);
+        }
+        .byline-name b { color: var(--ploy-text-primary); font-weight: 500; }
+        .byline-link {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--ploy-text-primary);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .byline-link .arw { transition: transform .3s; }
+        .byline-link:hover .arw { transform: translateX(4px); }
+
+        @media (min-width: 768px) {
+            .article-wrap { padding: 12rem 2rem 9rem; }
+            .byline { flex-direction: row; align-items: center; justify-content: space-between; }
+        }
+        @media (max-width: 560px) {
+            .article-wrap { padding: 8rem 1.4rem 5rem; }
+            .chart .item { font-size: 18px; }
+            .chart .col-head { font-size: 13px; }
+        }
+    </style>
+</head>
+<body class="bg-ploy-background-primary text-ploy-text-primary antialiased overflow-x-hidden m-0" style="font-family: 'Inter', system-ui, sans-serif">
+
+    <header class="fixed inset-x-0 top-0 z-[100] bg-gradient-to-b from-ploy-background-primary via-ploy-background-primary/70 to-transparent">
+        <div class="mx-auto flex max-w-[82rem] items-center justify-between px-6 py-5 md:px-12 md:py-6">
+            <a href="index.html" class="flex items-center" aria-label="ByZyB.ai">
+                <img src="byzyb-full-transparent-400.png" alt="ByZyB.ai" class="h-9 w-auto md:h-11"/>
+            </a>
+            <nav class="hidden items-center gap-9 md:flex">
+                <a href="index.html#about" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">About</a>
+                <a href="index.html#products" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Products</a>
+                <a href="perspective.html" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-primary transition-colors duration-300 hover:text-ploy-text-primary" aria-current="page">Perspective</a>
+                <a href="resume.html#resume" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Resume</a>
+                <a href="resume.html#story" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">My Story</a>
+            </nav>
+            <a href="index.html#contact" class="rounded-full border border-ploy-button-primary-border bg-ploy-button-primary-background px-5 py-2 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-button-primary-text transition-opacity duration-300 hover:opacity-90">Get in touch</a>
+        </div>
+    </header>
+
+    <main class="min-w-0">
+        <article class="article-wrap">
+
+            <a href="index.html" class="back-link">← Back</a>
+
+            <p class="eyebrow">A field note · What it actually takes</p>
+
+            <h1 class="article-title">Excelling at AI takes two kinds of judgment that rarely live in one head.</h1>
+
+            <div class="prose">
+                <p>In my experience, the hard part of AI isn't just the technology &mdash; though that's moving faster than anything I've watched before. It's having deep domain expertise, real access to data, a killer hypothesis, and the engineering skill to chase it down.</p>
+                <p>You'll hear a lot right now about <strong>vibe coding</strong>, vibe engineering, vibe design, vibe marketing, prompt engineering, and whatever the term has become by the time you read this. Underneath all of it is the same idea: that you can describe what you want and have the working thing come out the other end. Something real is happening there, and it has genuinely collapsed the cost and the time of getting to a demo. What it hasn't collapsed is the distance between a demo and a system the business can actually run on. That distance is where the return lives, and crossing it still takes people who know the domain cold and can engineer properly. I've watched a lot of impressive pilots die in that gap.</p>
+                <p>There's also a tension most boards and executive teams haven't named. On one side, the <strong>token-maxers</strong>: run everything at the frontier, use the best model available, sort the bill out later. I don't think they're wrong. They tend to be founders or engineers with capital and no legacy to protect, and exploiting the early envelope of a new capability is exactly the right bet when you're rebuilding from scratch something that was designed decades ago. What it isn't is transferable. An enterprise has to experiment too &mdash; moving at this speed, I'd call that non-negotiable &mdash; but it experiments with a live business underneath it, which is a different exercise entirely. On the other side sit the people so wary of what frontier models cost that they won't touch them even when they're clearly the right tool, and that one I do think is a mistake. The discipline is matching the investment to the actual threat &mdash; being clear-eyed about which parts of the business can be disintermediated, and spending to defend them in proportion to how real that risk is.</p>
+                <p>Then there's the pressure nobody put in the business case. Most large companies are carrying vendors and outsourced functions they chose in a different era &mdash; panels of approved suppliers, most of them offshore, priced on an arbitrage that has quietly stopped working. Those vendors are competing for exactly the same scarce people you are, at rates they agreed to years ago. There's no margin in it for them, so the quality goes. Meanwhile their own business models are being rewritten at the same time as yours, and every one of them arrives with something they've built that they'd like you to buy. What used to be leverage is now weight.</p>
+                <p>The same shape applies to the models themselves. Providers aren't charging the full cost of what they're serving today. Embed one deep in a workflow, run it at capacity, build a real dependency on it &mdash; and the price is theirs to set, not yours to negotiate. You'll be stuck with it for a while. That's not a reason to stay out. It's a reason to know exactly what you'd do if the number doubled.</p>
+                <p>And this isn't only a board conversation. Directors set the appetite and ask the hard question once a quarter. It's the executive team that has to live inside the answer &mdash; choose the vendors, redesign the workflow, defend the number when it moves. Both groups need enough of both columns to know what to ask of the other, and to recognize a good answer when they hear one.</p>
+                <p>Reading those pressures is a boardroom call. Building so you can survive them is an engineering call. I keep my hands in the code precisely so I can make both.</p>
+            </div>
+
+            <div class="chart">
+                <svg viewBox="0 0 1000 760" role="img" aria-label="Diagram: boardroom and engine room judgment converging on AI ROI, under pressure from market forces above and dependency risks below">
+                    <defs>
+                        <marker id="arrowDown" markerWidth="9" markerHeight="9" refX="4.5" refY="7.5" orient="auto">
+                            <path d="M0.5 1 L4.5 7.5 L8.5 1" fill="none" stroke="#E8A33D" stroke-width="1.4"/>
+                        </marker>
+                        <marker id="arrowUp" markerWidth="9" markerHeight="9" refX="4.5" refY="1.5" orient="auto">
+                            <path d="M0.5 8 L4.5 1.5 L8.5 8" fill="none" stroke="#7B9FD4" stroke-width="1.4"/>
+                        </marker>
+                    </defs>
+
+                    <!-- ===== pressure from above ===== -->
+                    <text class="force-head" x="500" y="34" text-anchor="middle" fill="#E8A33D">Market forces that make you move</text>
+                    <text class="force-item" x="415" y="92" text-anchor="middle" fill="#E8A33D">disintermediation</text>
+                    <text class="force-item" x="618" y="92" text-anchor="middle" fill="#E8A33D">regulation</text>
+                    <g stroke="#E8A33D" stroke-width="1.1" opacity="0.55">
+                        <line x1="425" y1="110" x2="462" y2="300" marker-end="url(#arrowDown)"/>
+                        <line x1="608" y1="110" x2="551" y2="300" marker-end="url(#arrowDown)"/>
+                    </g>
+
+                    <!-- ===== pressure from below ===== -->
+                    <text class="force-item" x="392" y="676" text-anchor="middle" fill="#7B9FD4">vendor drag</text>
+                    <text class="force-item" x="594" y="676" text-anchor="middle" fill="#7B9FD4">model repricing</text>
+                    <text class="force-head" x="500" y="736" text-anchor="middle" fill="#7B9FD4">Market forces that make moving costly</text>
+                    <g stroke="#7B9FD4" stroke-width="1.1" opacity="0.55">
+                        <line x1="405" y1="654" x2="458" y2="470" marker-end="url(#arrowUp)"/>
+                        <line x1="588" y1="654" x2="546" y2="470" marker-end="url(#arrowUp)"/>
+                    </g>
+
+                    <!-- ===== horizontal connectors ===== -->
+                    <g class="connector">
+                        <line x1="392" y1="255" x2="500" y2="385"/>
+                        <line x1="392" y1="305" x2="500" y2="385"/>
+                        <line x1="392" y1="355" x2="500" y2="385"/>
+                        <line x1="392" y1="405" x2="500" y2="385"/>
+                        <line x1="392" y1="455" x2="500" y2="385"/>
+                        <line x1="392" y1="505" x2="500" y2="385"/>
+                        <line x1="608" y1="255" x2="500" y2="385"/>
+                        <line x1="608" y1="305" x2="500" y2="385"/>
+                        <line x1="608" y1="355" x2="500" y2="385"/>
+                        <line x1="608" y1="405" x2="500" y2="385"/>
+                        <line x1="608" y1="455" x2="500" y2="385"/>
+                        <line x1="608" y1="505" x2="500" y2="385"/>
+                    </g>
+
+                    <text class="col-head" x="370" y="200" text-anchor="end">The boardroom</text>
+                    <text class="col-head" x="630" y="200" text-anchor="start">The engine room</text>
+
+                    <text class="item" x="370" y="262" text-anchor="end">strategy</text>
+                    <text class="item" x="370" y="312" text-anchor="end">risk</text>
+                    <text class="item" x="370" y="362" text-anchor="end">governance</text>
+                    <text class="item" x="370" y="412" text-anchor="end">economics</text>
+                    <text class="item" x="370" y="462" text-anchor="end">adoption</text>
+                    <text class="item" x="370" y="512" text-anchor="end">timing</text>
+
+                    <text class="item" x="630" y="262" text-anchor="start">code</text>
+                    <text class="item" x="630" y="312" text-anchor="start">architecture</text>
+                    <text class="item" x="630" y="362" text-anchor="start">models</text>
+                    <text class="item" x="630" y="412" text-anchor="start">data</text>
+                    <text class="item" x="630" y="462" text-anchor="start">pipelines</text>
+                    <text class="item" x="630" y="512" text-anchor="start">evals</text>
+
+                    <!-- ===== the node under load ===== -->
+                    <ellipse cx="500" cy="385" rx="92" ry="58" fill="var(--ploy-background-primary)" stroke="var(--ploy-accent-primary)" stroke-width="2"/>
+                    <text class="node-label" x="500" y="378" text-anchor="middle" font-size="13">AI</text>
+                    <text class="node-label" x="500" y="404" text-anchor="middle" font-size="21">ROI</text>
+                </svg>
+            </div>
+
+            <p class="punch">Miss either column, and <span class="mark">the investment doesn't return</span>.</p>
+
+            <div class="byline">
+                <p class="byline-name">Robin Hutchinson · <b>boardroom fluency, engine-room hands</b></p>
+                <a href="resume.html#story" class="byline-link">Read the story<span class="arw">→</span></a>
+            </div>
+        </article>
+    </main>
+
+    <footer class="border-t border-ploy-border-primary/60">
+        <div class="mx-auto flex max-w-[82rem] flex-col gap-6 px-6 py-12 md:flex-row md:items-center md:justify-between md:px-12">
+            <p class="font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary">© 2025 ByZyB.ai — Robin Hutchinson</p>
+            <nav class="flex flex-wrap gap-7">
+                <a href="index.html" class="font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Portfolio</a>
+                <a href="resume.html#story" class="font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">My Story</a>
+                <a href="Robin_Hutchinson_CV.pdf" class="font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Download CV</a>
+                <a href="mailto:rh@pklabs.ca" class="font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Contact</a>
+            </nav>
+        </div>
+    </footer>
+</body>
+</html>
