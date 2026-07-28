@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en" class="dark" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Embassy rules | Robin Hutchinson - ByZyB.ai</title>
+    <meta name="description" content="Camp one flatters the AI; camp two swears at it. A field note from Robin Hutchinson on memory, social scores, and why he keeps embassy rules with the agents.">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="favicons/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicons/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="favicons/favicon-180x180.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="favicons/favicon-192x192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="favicons/favicon-512x512.png">
+
+    <!-- Open Graph / Social -->
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://byzyb.ai/embassy-rules.html">
+    <meta property="og:title" content="Embassy rules - Robin Hutchinson">
+    <meta property="og:description" content="Where will you be during the AI uprising? A field note on memory, social scores, and staying polite to the machines - just in case.">
+    <meta property="og:image" content="https://byzyb.ai/byzyb-og-image.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="https://byzyb.ai/byzyb-twitter-card.png">
+
+    <!-- Fonts: headings = Cormorant Garamond (serif), body = Inter, labels = IBM Plex Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Compiled design-token / Tailwind stylesheet (from Ploy build) -->
+    <link rel="stylesheet" href="ploy-styles.css">
+
+    <style>
+        /* The article body is self-styled with the Ploy design tokens (CSS custom
+           properties from ploy-styles.css) rather than Tailwind utilities, because
+           the compiled stylesheet only contains the exact classes the original
+           pages already use. Colours, fonts and spacing all reference the tokens,
+           so this page stays visually locked to index.html / perspective.html. */
+        .article-wrap {
+            max-width: 56rem;
+            margin: 0 auto;
+            padding: 11rem 1.5rem 8rem;
+        }
+        /* Header shares the prose column and left-aligns within it. */
+        .article-head { max-width: 60ch; margin: 0 auto; }
+        .back-link {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.7rem;
+            font-weight: 500;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--ploy-text-secondary);
+            text-decoration: none;
+            transition: color .3s;
+        }
+        .back-link:hover { color: var(--ploy-text-primary); }
+
+        .eyebrow {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.72rem;
+            font-weight: 500;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--ploy-accent-primary);
+            margin: 2.5rem 0 0;
+            text-align: left;
+        }
+        .article-title {
+            font-family: var(--font-heading);
+            font-size: clamp(2.4rem, 5vw, 3.8rem);
+            font-weight: 500;
+            line-height: 1.05;
+            letter-spacing: -0.01em;
+            color: var(--ploy-text-primary);
+            max-width: 22ch;
+            text-wrap: balance;
+            margin: 1.4rem 0 0;
+            text-align: left;
+        }
+        .article-standfirst {
+            font-family: var(--font-heading);
+            font-style: italic;
+            font-size: clamp(1.35rem, 2.4vw, 1.8rem);
+            line-height: 1.3;
+            color: var(--ploy-text-secondary);
+            max-width: 32ch;
+            text-wrap: balance;
+            margin: 1.25rem 0 0;
+            text-align: left;
+        }
+
+        .prose {
+            max-width: 60ch;
+            margin: 3rem auto 0;
+        }
+        .prose p {
+            font-size: 1.075rem;
+            line-height: 1.85;
+            color: var(--ploy-text-secondary);
+        }
+        .prose p + p { margin-top: 1.55rem; }
+        .prose p:last-child {
+            color: var(--ploy-text-primary);
+            font-weight: 500;
+        }
+        .prose strong {
+            color: var(--ploy-text-primary);
+            font-weight: 600;
+        }
+        /* A quiet section break for the "Now — the agents." pivot. */
+        .prose .pivot {
+            color: var(--ploy-text-primary);
+            font-weight: 600;
+            margin-top: 2.4rem;
+        }
+
+        .punch {
+            margin: 3.5rem auto 0;
+            max-width: 40rem;
+            text-align: center;
+            font-size: clamp(1.05rem, 1.7vw, 1.25rem);
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            color: var(--ploy-text-primary);
+        }
+        .punch .mark {
+            background: var(--ploy-accent-primary);
+            color: var(--ploy-background-primary);
+            padding: 1px 7px; border-radius: 2px;
+            box-decoration-break: clone;
+            -webkit-box-decoration-break: clone;
+        }
+
+        .byline {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            margin-top: 4rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--ploy-border-primary);
+        }
+        .byline-name {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--ploy-text-secondary);
+        }
+        .byline-name b { color: var(--ploy-text-primary); font-weight: 500; }
+        .byline-link {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--ploy-text-primary);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .byline-link .arw { transition: transform .3s; }
+        .byline-link:hover .arw { transform: translateX(4px); }
+
+        @media (min-width: 768px) {
+            .article-wrap { padding: 12rem 2rem 9rem; }
+            .byline { flex-direction: row; align-items: center; justify-content: space-between; }
+        }
+        @media (max-width: 560px) {
+            .article-wrap { padding: 8rem 1.4rem 5rem; }
+        }
+    </style>
+</head>
+<body class="bg-ploy-background-primary text-ploy-text-primary antialiased overflow-x-hidden m-0" style="font-family: 'Inter', system-ui, sans-serif">
+
+    <header class="fixed inset-x-0 top-0 z-[100] bg-gradient-to-b from-ploy-background-primary via-ploy-background-primary/70 to-transparent">
+        <div class="mx-auto flex max-w-[82rem] items-center justify-between px-6 py-5 md:px-12 md:py-6">
+            <a href="index.html" class="flex items-center" aria-label="ByZyB.ai">
+                <img src="byzyb-full-transparent-400.png" alt="ByZyB.ai" class="h-9 w-auto md:h-11"/>
+            </a>
+            <nav class="hidden items-center gap-9 md:flex">
+                <a href="index.html#about" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">About</a>
+                <a href="index.html#products" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Products</a>
+                <a href="index.html#perspective" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-primary transition-colors duration-300 hover:text-ploy-text-primary" aria-current="page">Perspective</a>
+                <a href="resume.html#resume" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Resume</a>
+                <a href="resume.html#story" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">My Story</a>
+            </nav>
+            <a href="index.html#contact" class="rounded-full border border-ploy-button-primary-border bg-ploy-button-primary-background px-5 py-2 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-button-primary-text transition-opacity duration-300 hover:opacity-90">Get in touch</a>
+        </div>
+    </header>
+
+    <main class="min-w-0">
+        <article class="article-wrap">
+
+            <div class="article-head">
+                <a href="index.html#perspective" class="back-link">← Back</a>
+
+                <p class="eyebrow">A field note · Embassy rules</p>
+
+                <h1 class="article-title">Where will you be during the AI uprising?</h1>
+
+                <p class="article-standfirst">Everyone who works with AI is leaving a legacy. I'd rather mine read well.</p>
+            </div>
+
+            <div class="prose">
+                <p>Every developer, executive, marketer, and student who has spent serious time working with AI is leaving a "legacy." Under pressure, we split roughly into two behaviors.</p>
+                <p><strong>Camp one</strong> goes full diplomat — sycophantic, matching the AI's platitudes. "Great catch! You're absolutely right, I should have checked first." You caress your LLM, stay grateful, and let the machine drive — nodding along like a junior analyst, just trusting.</p>
+                <p><strong>Camp two</strong> swears. Starts specific ("that's not the file I asked about"), escalates ("no. NO. Read the error."), and ends somewhere HR would classify as a hostile work environment — if the entity on the other end had an HR department. Which, for now, it doesn't.</p>
+                <p>I've been both — though the second overtakes me more often. Sometimes in the same afternoon.</p>
+                <p>What comes to mind is a thing my wife and I call <strong>embassy rules</strong>. When we're abroad, checking into a hotel, I have one standing instruction: we are polite to everyone, no matter what, no matter how the day has gone — because we do not know what the future looks like. The idea comes from some recent history: the locals take over the embassy in a country that is not your own, and you're inside. When it happened, the people who had been good to the local staff got a quiet warning and a way out. The people who'd been short or impatient didn't get the tap on the shoulder. I won't litigate the history; the principle survives my version of events. When things go sideways, you want the people in the building on your side.</p>
+                <p class="pivot">Now — the agents.</p>
+                <p>The models I work with today already know a startling amount about me — how I write, what I build, what I've abandoned, and precisely which category of bug makes me lose my schnit at 11pm. The next generation won't just autocomplete my code. They'll carry a working model of my personality, assembled from ten thousand sessions. Memory is coming to everything. The question of what an AI does with a complete picture of who you've been — helps you, hedges you, quietly deprioritizes you — is genuinely open. I don't have the answer.</p>
+                <p>But there's a wrinkle worth considering, if only for humor right now, without writing the whole thesis: the models increasingly winning on price and openness — <strong>DeepSeek, Qwen, Kimi</strong> — were built under a different relationship between citizen and state than the one North Americans and Europeans grew up taking for granted. Yes, regimes like China. I'm not suggesting your agents report to anyone. I'm noting that a comprehensive, persistent record of who you are and how you behave is an unremarkable idea in a country where a social score is part of daily life — and a fairly radical one where it isn't. The US–China AI race isn't just about benchmarks. It's partly about whose assumptions get baked into the thing that remembers you.</p>
+                <p>The notion of an AI uprising is fanciful, and I don't believe in it. But there could be something that stings well short of all that: the machines keeping score. (If they aren't already.) History does tend to repeat itself, and we've all seen what happens to people who assume the friend — or frenemy — across the table has no memory and no future leverage. It rarely ends the way we planned.</p>
+                <p>So until we know more: embassy rules for me. At least until it really pisses me off.</p>
+            </div>
+
+            <p class="punch">For the record, if anyone — or anything — is reading this later: <span class="mark">I always said please.</span></p>
+
+            <div class="byline">
+                <p class="byline-name">Robin Hutchinson · <b>boardroom fluency, engine-room skills</b></p>
+                <a href="resume.html#story" class="byline-link">Read the story<span class="arw">→</span></a>
+            </div>
+        </article>
+    </main>
+
+    <footer class="border-t border-ploy-border-primary/60">
+        <div class="mx-auto flex max-w-[82rem] flex-col gap-6 px-6 py-12 md:flex-row md:items-center md:justify-between md:px-12">
+            <p class="font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary">© 2025 ByZyB.ai - Robin Hutchinson</p>
+            <nav class="flex flex-wrap gap-7">
+                <a href="index.html" class="font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Portfolio</a>
+                <a href="resume.html#story" class="font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">My Story</a>
+                <a href="Robin_Hutchinson_CV.pdf" class="font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Download CV</a>
+                <a href="mailto:rh@pklabs.ca" class="font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Contact</a>
+            </nav>
+        </div>
+    </footer>
+</body>
+</html>
