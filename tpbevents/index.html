@@ -192,14 +192,14 @@
   .venue-grid{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center}
   @media(max-width:820px){.venue-grid{grid-template-columns:1fr}}
   .venue-copy p{margin-bottom:16px;color:var(--ink-soft)}
+  .venue-cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:480px){.venue-cards{grid-template-columns:1fr}}
   .venue-card{
-    background:var(--ink);color:var(--floe);padding:40px 36px;border-radius:2px;
-    background-image:radial-gradient(600px 300px at 100% 0%, rgba(46,159,216,.25), transparent 65%);
+    background:var(--ink);color:var(--floe);padding:24px 22px;border-radius:2px;
+    background-image:radial-gradient(400px 200px at 100% 0%, rgba(46,159,216,.25), transparent 65%);
   }
-  .venue-card h3{font-size:30px;margin-bottom:16px}
-  .venue-card p{color:#A9C6D9;font-size:15.5px;margin-bottom:18px}
-  .venue-meta{font-family:var(--mono);font-size:12px;letter-spacing:.1em;line-height:2;color:#C7DCEA}
-  .venue-more{font-family:var(--mono);font-size:11px;letter-spacing:.04em;line-height:1.8;color:#8FB3C9;margin-top:18px;padding-top:16px;border-top:1px solid rgba(199,220,234,.2)}
+  .venue-card h3{font-size:19px;margin-bottom:8px}
+  .venue-meta{font-family:var(--mono);font-size:11px;letter-spacing:.1em;line-height:1.8;color:#C7DCEA}
 
   /* ---------- CTA ---------- */
   .cta{background:var(--ink);color:var(--floe);text-align:center}
@@ -395,18 +395,34 @@
     <div class="venue-copy">
       <span class="eyebrow">The venue</span>
       <h2 style="font-size:clamp(32px,4.5vw,50px);margin-bottom:18px">World-class courts, across the GTA</h2>
-      <p>We host at padel facilities across the Greater Toronto Area — starting with our home venue Blue Cat Padel, plus partner courts at CourtX in Oakville, Fairgrounds in Hamilton and Leaside, District Padel, and The PAD in Toronto's Lower Don Lands, with more added every season.</p>
+      <p>All venues are state of the art. We host at padel facilities across the Greater Toronto Area — starting with our home venue Blue Cat Padel — with more added every season.</p>
       <p>Dedicated courts and lounge space for every event, with full venue privacy available. We'll match the venue to your group size and neighbourhood.</p>
     </div>
-    <div class="venue-card">
-      <h3>Blue Cat Padel</h3>
-      <p>State-of-the-art courts, Blue Cat Espresso, gear shop, and club lounge — a flagship venue.</p>
-      <div class="venue-meta">
-        1510 Birchmount Rd, Suite 120<br>
-        Toronto, ON M1P 2G6<br>
-        bluecatpadel.com
+    <div class="venue-cards">
+      <div class="venue-card">
+        <h3>Blue Cat Padel</h3>
+        <div class="venue-meta">Home venue &middot; Scarborough</div>
       </div>
-      <div class="venue-more">Also available: CourtX (Oakville) &middot; Fairgrounds (Hamilton &amp; Leaside) &middot; District Padel &middot; The PAD (Toronto, Lower Don Lands) &middot; and more</div>
+      <div class="venue-card">
+        <h3>CourtX</h3>
+        <div class="venue-meta">Oakville</div>
+      </div>
+      <div class="venue-card">
+        <h3>Fairgrounds</h3>
+        <div class="venue-meta">Hamilton &amp; Leaside</div>
+      </div>
+      <div class="venue-card">
+        <h3>District Padel</h3>
+        <div class="venue-meta">Toronto</div>
+      </div>
+      <div class="venue-card">
+        <h3>The PAD</h3>
+        <div class="venue-meta">Lower Don Lands</div>
+      </div>
+      <div class="venue-card">
+        <h3>More every season</h3>
+        <div class="venue-meta">Across the GTA</div>
+      </div>
     </div>
   </div>
 </section>
