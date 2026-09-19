@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ByZyB — Two kinds of judgment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --black:#000000;
+    --yellow:#F4EE35;
+    --white:#F0F0F0;
+    --gray:#8A8A8A;
+    --line: rgba(244,238,53,0.30);
+    --force:#E8A33D;
+    --drag:#7B9FD4;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:var(--black);
+    color:var(--white);
+    font-family:'Inter',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    line-height:1.5;
+  }
+  .wrap{
+    max-width:1040px;
+    margin:0 auto;
+    padding:96px 32px 112px;
+  }
+  .eyebrow{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    font-weight:600;
+    letter-spacing:0.22em;
+    text-transform:uppercase;
+    color:var(--yellow);
+    margin-bottom:26px;
+  }
+  h1{
+    font-size:clamp(30px,4.4vw,52px);
+    font-weight:700;
+    letter-spacing:-0.02em;
+    line-height:1.08;
+    max-width:16ch;
+    margin-bottom:40px;
+  }
+  h1 .mark{
+    color:var(--yellow);
+  }
+  .lede{
+    max-width:60ch;
+    display:flex;
+    flex-direction:column;
+    gap:22px;
+  }
+  .lede p{
+    font-size:clamp(16px,1.5vw,18.5px);
+    color:#CFCFCF;
+  }
+  .lede p:last-child{
+    color:var(--white);
+    font-weight:500;
+  }
+  .lede strong{
+    color:var(--white);
+    font-weight:600;
+  }
+  /* diagram */
+  .diagram{
+    margin:64px 0 0;
+    padding:8px 0 0;
+  }
+  svg{width:100%;height:auto;display:block}
+  .col-head{
+    font-family:'JetBrains Mono',monospace;
+    font-size:17px;
+    font-weight:600;
+    letter-spacing:0.15em;
+    text-transform:uppercase;
+    fill:var(--white);
+  }
+  .item{
+    font-family:'Inter',sans-serif;
+    font-size:22px;
+    font-weight:500;
+    fill:var(--white);
+  }
+  .node-label{
+    font-family:'JetBrains Mono',monospace;
+    font-weight:600;
+    letter-spacing:0.10em;
+    fill:var(--yellow);
+  }
+  .force-head{
+    font-family:'JetBrains Mono',monospace;
+    font-size:17px;
+    font-weight:600;
+    letter-spacing:0.15em;
+    text-transform:uppercase;
+  }
+  .force-item{
+    font-family:'Inter',sans-serif;
+    font-size:20px;
+    font-weight:500;
+  }
+  .connector{stroke:var(--line);stroke-width:1;}
+  .punch{
+    margin:44px auto 0;
+    text-align:center;
+    max-width:44ch;
+    font-size:clamp(17px,1.7vw,20px);
+    font-weight:600;
+    letter-spacing:-0.01em;
+    color:var(--white);
+  }
+  .punch .mark{
+    background:var(--yellow);
+    color:var(--black);
+    padding:1px 6px;
+    border-radius:2px;
+    box-decoration-break:clone;
+    -webkit-box-decoration-break:clone;
+  }
+  .sig{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    letter-spacing:0.16em;
+    text-transform:uppercase;
+    color:var(--gray);
+    margin-top:56px;
+    padding-top:22px;
+    border-top:1px solid rgba(255,255,255,0.10);
+  }
+  .sig b{color:var(--yellow);font-weight:600}
+
+  /* entrance */
+  @media (prefers-reduced-motion: no-preference){
+    .fade{opacity:0;transform:translateY(14px);animation:rise .7s cubic-bezier(.2,.7,.2,1) forwards}
+    .fade.d1{animation-delay:.05s}
+    .fade.d2{animation-delay:.15s}
+    .fade.d3{animation-delay:.28s}
+    @keyframes rise{to{opacity:1;transform:none}}
+  }
+  @media (max-width:560px){
+    .wrap{padding:64px 22px 80px}
+    .item{font-size:18px}
+    .col-head{font-size:13px}
+  }
+</style>
+</head>
+<body>
+  <section class="wrap">
+    <div class="eyebrow fade d1">What it actually takes</div>
+    <h1 class="fade d1">Excelling at AI takes two kinds of judgment that rarely live in <span class="mark">one head</span>.</h1>
+
+    <div class="lede fade d2">
+      <p>In my experience, the hard part of AI isn't just the technology &mdash; though that's moving faster than anything I've watched before. It's having deep domain expertise, real access to data, a killer hypothesis, and the engineering skill to chase it down.</p>
+      <p>You'll hear a lot right now about <strong>vibe coding</strong>, vibe engineering, vibe design, vibe marketing, prompt engineering, and whatever the term has become by the time you read this. Underneath all of it is the same idea: that you can describe what you want and have the working thing come out the other end. Something real is happening there, and it has genuinely collapsed the cost and the time of getting to a demo. What it hasn't collapsed is the distance between a demo and a system the business can actually run on. That distance is where the return lives, and crossing it still takes people who know the domain cold and can engineer properly. I've watched a lot of impressive pilots die in that gap.</p>
+      <p>There's also a tension most boards and executive teams haven't named. On one side, the <strong>token-maxers</strong>: run everything at the frontier, use the best model available, sort the bill out later. I don't think they're wrong. They tend to be founders or engineers with capital and no legacy to protect, and exploiting the early envelope of a new capability is exactly the right bet when you're rebuilding from scratch something that was designed decades ago. What it isn't is transferable. An enterprise has to experiment too &mdash; moving at this speed, I'd call that non-negotiable &mdash; but it experiments with a live business underneath it, which is a different exercise entirely. On the other side sit the people so wary of what frontier models cost that they won't touch them even when they're clearly the right tool, and that one I do think is a mistake. The discipline is matching the investment to the actual threat &mdash; being clear-eyed about which parts of the business can be disintermediated, and spending to defend them in proportion to how real that risk is.</p>
+      <p>Then there's the pressure nobody put in the business case. Most large companies are carrying vendors and outsourced functions they chose in a different era &mdash; panels of approved suppliers, most of them offshore, priced on an arbitrage that has quietly stopped working. Those vendors are competing for exactly the same scarce people you are, at rates they agreed to years ago. There's no margin in it for them, so the quality goes. Meanwhile their own business models are being rewritten at the same time as yours, and every one of them arrives with something they've built that they'd like you to buy. What used to be leverage is now weight.</p>
+      <p>The same shape applies to the models themselves. Providers aren't charging the full cost of what they're serving today. Embed one deep in a workflow, run it at capacity, build a real dependency on it &mdash; and the price is theirs to set, not yours to negotiate. You'll be stuck with it for a while. That's not a reason to stay out. It's a reason to know exactly what you'd do if the number doubled.</p>
+      <p>And this isn't only a board conversation. Directors set the appetite and ask the hard question once a quarter. It's the executive team that has to live inside the answer &mdash; choose the vendors, redesign the workflow, defend the number when it moves. Both groups need enough of both columns to know what to ask of the other, and to recognize a good answer when they hear one.</p>
+      <p>Reading those pressures is a boardroom call. Building so you can survive them is an engineering call. I keep my hands in the code precisely so I can make both.</p>
+    </div>
+
+    <div class="diagram fade d3">
+      <svg viewBox="0 0 1000 760" role="img" aria-label="Diagram: boardroom and engine room judgment converging on AI ROI, under pressure from market forces above and dependency risks below">
+        <defs>
+          <marker id="arrowDown" markerWidth="9" markerHeight="9" refX="4.5" refY="7.5" orient="auto">
+            <path d="M0.5 1 L4.5 7.5 L8.5 1" fill="none" stroke="#E8A33D" stroke-width="1.4"/>
+          </marker>
+          <marker id="arrowUp" markerWidth="9" markerHeight="9" refX="4.5" refY="1.5" orient="auto">
+            <path d="M0.5 8 L4.5 1.5 L8.5 8" fill="none" stroke="#7B9FD4" stroke-width="1.4"/>
+          </marker>
+        </defs>
+
+        <!-- ===== pressure from above ===== -->
+        <text class="force-head" x="500" y="34" text-anchor="middle" fill="#E8A33D">Market forces that make you move</text>
+        <text class="force-item" x="415" y="92" text-anchor="middle" fill="#E8A33D">disintermediation</text>
+        <text class="force-item" x="618" y="92" text-anchor="middle" fill="#E8A33D">regulation</text>
+        <g stroke="#E8A33D" stroke-width="1.1" opacity="0.55">
+          <line x1="425" y1="110" x2="462" y2="300" marker-end="url(#arrowDown)"/>
+          <line x1="608" y1="110" x2="551" y2="300" marker-end="url(#arrowDown)"/>
+        </g>
+
+        <!-- ===== pressure from below ===== -->
+        <text class="force-item" x="392" y="676" text-anchor="middle" fill="#7B9FD4">vendor drag</text>
+        <text class="force-item" x="594" y="676" text-anchor="middle" fill="#7B9FD4">model repricing</text>
+        <text class="force-head" x="500" y="736" text-anchor="middle" fill="#7B9FD4">Market forces that make moving costly</text>
+        <g stroke="#7B9FD4" stroke-width="1.1" opacity="0.55">
+          <line x1="405" y1="654" x2="458" y2="470" marker-end="url(#arrowUp)"/>
+          <line x1="588" y1="654" x2="546" y2="470" marker-end="url(#arrowUp)"/>
+        </g>
+
+        <!-- ===== horizontal connectors ===== -->
+        <g class="connector">
+          <line x1="392" y1="255" x2="500" y2="385"/>
+          <line x1="392" y1="305" x2="500" y2="385"/>
+          <line x1="392" y1="355" x2="500" y2="385"/>
+          <line x1="392" y1="405" x2="500" y2="385"/>
+          <line x1="392" y1="455" x2="500" y2="385"/>
+          <line x1="392" y1="505" x2="500" y2="385"/>
+          <line x1="608" y1="255" x2="500" y2="385"/>
+          <line x1="608" y1="305" x2="500" y2="385"/>
+          <line x1="608" y1="355" x2="500" y2="385"/>
+          <line x1="608" y1="405" x2="500" y2="385"/>
+          <line x1="608" y1="455" x2="500" y2="385"/>
+          <line x1="608" y1="505" x2="500" y2="385"/>
+        </g>
+
+        <text class="col-head" x="370" y="200" text-anchor="end">The boardroom</text>
+        <text class="col-head" x="630" y="200" text-anchor="start">The engine room</text>
+
+        <text class="item" x="370" y="262" text-anchor="end">strategy</text>
+        <text class="item" x="370" y="312" text-anchor="end">risk</text>
+        <text class="item" x="370" y="362" text-anchor="end">governance</text>
+        <text class="item" x="370" y="412" text-anchor="end">economics</text>
+        <text class="item" x="370" y="462" text-anchor="end">adoption</text>
+        <text class="item" x="370" y="512" text-anchor="end">timing</text>
+
+        <text class="item" x="630" y="262" text-anchor="start">code</text>
+        <text class="item" x="630" y="312" text-anchor="start">architecture</text>
+        <text class="item" x="630" y="362" text-anchor="start">models</text>
+        <text class="item" x="630" y="412" text-anchor="start">data</text>
+        <text class="item" x="630" y="462" text-anchor="start">pipelines</text>
+        <text class="item" x="630" y="512" text-anchor="start">evals</text>
+
+        <!-- ===== the node under load ===== -->
+        <ellipse cx="500" cy="385" rx="92" ry="58" fill="#000000" stroke="#F4EE35" stroke-width="2"/>
+        <text class="node-label" x="500" y="378" text-anchor="middle" font-size="13">AI</text>
+        <text class="node-label" x="500" y="404" text-anchor="middle" font-size="21">ROI</text>
+      </svg>
+    </div>
+
+    <p class="punch fade d3">Miss either column, and <span class="mark">the investment doesn't return</span>.</p>
+
+    <div class="sig">ByZyB.ai — Robin Hutchinson · <b>boardroom fluency, engine-room hands</b></div>
+  </section>
+</body>
+</html>

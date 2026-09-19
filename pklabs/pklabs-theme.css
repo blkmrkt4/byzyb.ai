@@ -1,0 +1,115 @@
+/* PainKiller Labs — the sibling skin.
+   byzyb.ai and pklabs.ca share one compiled design system (ploy-styles.css).
+   This file is the only thing that makes them look like different companies.
+   Load it AFTER ploy-styles.css. */
+
+.dark,
+:root {
+    --pk-accent: #FF6500;        /* the orange from the logo mark */
+    --pk-on-accent: #1B1A1F;     /* the near-black from the logo mark */
+    --pk-paper: #F4F1EB;         /* the off-white from the logo mark */
+
+    /* Re-point the shared system's accent at PainKiller orange. */
+    --ploy-accent-primary: #FF6500;
+}
+
+/* Utility classes the shared stylesheet doesn't ship, since it was compiled
+   for byzyb's palette. Kept deliberately small. */
+.bg-pk-accent { background-color: var(--pk-accent); }
+.text-pk-accent { color: var(--pk-accent); }
+.text-pk-on-accent { color: var(--pk-on-accent); }
+.border-pk-accent { border-color: var(--pk-accent); }
+
+.hover\:border-pk-accent\/60:hover { border-color: rgba(255, 101, 0, 0.6); }
+.hover\:text-pk-accent:hover { color: var(--pk-accent); }
+
+/* Long-form legal and support copy. */
+.prose-pk h2 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.85rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 2.75rem 0 0.85rem;
+    color: var(--ploy-text-primary);
+}
+.prose-pk h3 {
+    font-family: 'Inter', sans-serif;
+    font-size: 1.02rem;
+    font-weight: 600;
+    margin: 1.75rem 0 0.5rem;
+    color: var(--ploy-text-primary);
+}
+.prose-pk p,
+.prose-pk li {
+    font-size: 0.98rem;
+    line-height: 1.85;
+    color: var(--ploy-text-secondary);
+}
+.prose-pk p { margin: 0 0 1rem; }
+.prose-pk ul { margin: 0 0 1rem; padding-left: 1.15rem; list-style: disc; }
+.prose-pk li { margin-bottom: 0.4rem; }
+.prose-pk a { color: var(--pk-accent); text-decoration: underline; text-underline-offset: 3px; }
+.prose-pk strong { color: var(--ploy-text-primary); font-weight: 600; }
+
+/* ------------------------------------------------------------------
+   Utilities the shared stylesheet does not ship.
+
+   ploy-styles.css is a COMPILED Tailwind build — it only contains the
+   classes byzyb.ai happens to use. Any class used here but not there
+   silently does nothing. `node shared/build.mjs` warns when that happens;
+   when it does, add the class below.
+   ------------------------------------------------------------------ */
+
+/* spacing */
+.mt-2  { margin-top: 0.5rem; }
+.mt-5  { margin-top: 1.25rem; }
+.mt-6  { margin-top: 1.5rem; }
+.mt-9  { margin-top: 2.25rem; }
+.mt-11 { margin-top: 2.75rem; }
+.mt-12 { margin-top: 3rem; }
+.mt-16 { margin-top: 4rem; }
+.p-5   { padding: 1.25rem; }
+.p-7   { padding: 1.75rem; }
+.py-3  { padding-block: 0.75rem; }
+.pt-32 { padding-top: 8rem; }
+.pt-36 { padding-top: 9rem; }
+.pb-24 { padding-bottom: 6rem; }
+.gap-14 { gap: 3.5rem; }
+.gap-px { gap: 1px; }
+
+/* sizing */
+.h-7 { height: 1.75rem; }
+.max-w-4xl     { max-width: 56rem; }
+.max-w-\[48rem\] { max-width: 48rem; }
+.max-w-\[62rem\] { max-width: 62rem; }
+
+/* type */
+.text-\[0\.68rem\] { font-size: 0.68rem; }
+.text-\[0\.92rem\] { font-size: 0.92rem; }
+.text-\[1\.1rem\]  { font-size: 1.1rem; }
+.text-\[clamp\(1\.5rem\,3vw\,2\.25rem\)\]   { font-size: clamp(1.5rem, 3vw, 2.25rem); }
+.text-\[clamp\(2\.75rem\,6vw\,4\.5rem\)\]   { font-size: clamp(2.75rem, 6vw, 4.5rem); }
+.text-\[clamp\(3rem\,7vw\,5\.5rem\)\]       { font-size: clamp(3rem, 7vw, 5.5rem); }
+.leading-\[1\.25\] { line-height: 1.25; }
+.leading-\[1\.7\]  { line-height: 1.7; }
+.tracking-\[0\.2em\] { letter-spacing: 0.2em; }
+.underline-offset-4 { text-underline-offset: 4px; }
+
+/* colour with alpha */
+.bg-pk-accent\/10          { background-color: rgba(255, 101, 0, 0.1); }
+.border-pk-accent\/50      { border-color: rgba(255, 101, 0, 0.5); }
+.bg-ploy-border-primary\/50 { background-color: color-mix(in srgb, var(--ploy-border-primary) 50%, transparent); }
+
+/* responsive */
+@media (min-width: 640px) {
+    .sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sm\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 768px) {
+    .md\:h-8    { height: 2rem; }
+    .md\:pt-40  { padding-top: 10rem; }
+    .md\:pt-48  { padding-top: 12rem; }
+    .md\:pb-28  { padding-bottom: 7rem; }
+    .md\:pb-32  { padding-bottom: 8rem; }
+    .md\:grid-cols-\[1fr_1\.1fr\] { grid-template-columns: 1fr 1.1fr; }
+}

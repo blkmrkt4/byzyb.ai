@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Two Sites, One Rule</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    /* Light: the off-white from the PainKiller Labs mark. */
+    --ground:   #F4F1EB;
+    --surface:  #FFFFFF;
+    --sunken:   #EAE6DE;
+    --ink:      #1B1A1F;
+    --dim:      #6B6660;
+    --rule:     rgba(27, 26, 31, 0.14);
+    --byzyb:    #A85C68;
+    --byzyb-wash: rgba(168, 92, 104, 0.09);
+    --pklabs:   #C24E00;
+    --pklabs-wash: rgba(194, 78, 0, 0.09);
+    --stop:     #8A1F1F;
+    --shadow:   0 1px 2px rgba(27,26,31,.05), 0 8px 24px -12px rgba(27,26,31,.18);
+
+    --display: 'Cormorant Garamond', Georgia, serif;
+    --body: 'Inter', system-ui, -apple-system, sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:   #0E0D10;
+      --surface:  #17161A;
+      --sunken:   #121114;
+      --ink:      #F4F1EB;
+      --dim:      #98938D;
+      --rule:     rgba(244, 241, 235, 0.13);
+      --byzyb:    #C57E89;
+      --byzyb-wash: rgba(197, 126, 137, 0.10);
+      --pklabs:   #FF6500;
+      --pklabs-wash: rgba(255, 101, 0, 0.10);
+      --stop:     #E8736B;
+      --shadow:   0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:   #0E0D10;
+    --surface:  #17161A;
+    --sunken:   #121114;
+    --ink:      #F4F1EB;
+    --dim:      #98938D;
+    --rule:     rgba(244, 241, 235, 0.13);
+    --byzyb:    #C57E89;
+    --byzyb-wash: rgba(197, 126, 137, 0.10);
+    --pklabs:   #FF6500;
+    --pklabs-wash: rgba(255, 101, 0, 0.10);
+    --stop:     #E8736B;
+    --shadow:   0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 68rem;
+    margin: 0 auto;
+    padding-inline: 20px;
+    padding-block: 0;
+  }
+
+  .label {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.17em;
+    color: var(--dim);
+    margin: 0;
+  }
+
+  h1, h2, h3 { text-wrap: balance; margin: 0; }
+
+  /* ---------- masthead ---------- */
+
+  .masthead {
+    padding-block: clamp(3rem, 8vw, 5.5rem) clamp(2rem, 5vw, 3rem);
+    border-bottom: 1px solid var(--rule);
+  }
+  .masthead h1 {
+    font-family: var(--display);
+    font-size: clamp(2.75rem, 8vw, 5rem);
+    font-weight: 600;
+    line-height: 0.98;
+    letter-spacing: -0.015em;
+    margin-block: 0.7rem 0;
+  }
+  .masthead .sites {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.4rem;
+    margin-top: 1.6rem;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    letter-spacing: 0.02em;
+  }
+  .masthead .sites span { display: inline-flex; align-items: center; gap: 0.5rem; }
+  .masthead .sites span::before {
+    content: ""; width: 7px; height: 7px; border-radius: 50%; flex: none;
+  }
+  .site-b::before { background: var(--byzyb); }
+  .site-p::before { background: var(--pklabs); }
+
+  section { padding-block: clamp(3rem, 7vw, 5rem); border-bottom: 1px solid var(--rule); }
+  section:last-of-type { border-bottom: 0; }
+
+  .section-head { margin-bottom: 2.25rem; }
+  .section-head h2 {
+    font-family: var(--display);
+    font-size: clamp(1.9rem, 4.5vw, 2.9rem);
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    margin-top: 0.55rem;
+  }
+  .section-head p { color: var(--dim); margin: 0.7rem 0 0; max-width: 46ch; }
+
+  /* ---------- the one question ---------- */
+
+  .question {
+    font-family: var(--display);
+    font-size: clamp(2rem, 5.4vw, 3.4rem);
+    font-weight: 600;
+    line-height: 1.06;
+    letter-spacing: -0.012em;
+    max-width: 20ch;
+    margin-block: 0.6rem 2.5rem;
+  }
+
+  .answers { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+  @media (min-width: 720px) { .answers { grid-template-columns: 1fr 1fr; } }
+
+  .answer {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-top: 3px solid var(--accent);
+    padding: 1.6rem 1.5rem 1.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+  .answer.b { --accent: var(--byzyb); }
+  .answer.p { --accent: var(--pklabs); }
+  .answer .then {
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.17em;
+    color: var(--accent);
+  }
+  .answer .what {
+    font-size: 1.22rem;
+    font-weight: 500;
+    line-height: 1.4;
+    letter-spacing: -0.008em;
+  }
+  .answer .site {
+    font-family: var(--mono);
+    font-size: 1.02rem;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: -0.01em;
+  }
+  .answer .who { color: var(--dim); font-size: 0.9rem; margin: 0; }
+
+  /* ---------- ordered tiebreakers ---------- */
+
+  .steps { display: grid; gap: 0; counter-reset: step; }
+  .step {
+    display: grid;
+    grid-template-columns: 2.2rem 1fr;
+    gap: 0 1rem;
+    padding-block: 1.3rem;
+    border-top: 1px solid var(--rule);
+    align-items: start;
+  }
+  .step::before {
+    counter-increment: step;
+    content: counter(step);
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--dim);
+    padding-top: 0.28rem;
+  }
+  .step h3 { font-size: 1.04rem; font-weight: 600; letter-spacing: -0.005em; }
+  .step .routes { display: flex; flex-wrap: wrap; gap: 0.45rem 1.5rem; margin-top: 0.6rem; }
+  .route { display: flex; align-items: baseline; gap: 0.5rem; font-size: 0.93rem; color: var(--dim); }
+  .route b { font-weight: 600; font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.01em; }
+  .route.b b { color: var(--byzyb); }
+  .route.p b { color: var(--pklabs); }
+
+  /* ---------- the law ---------- */
+
+  .law {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    box-shadow: var(--shadow);
+    padding: clamp(1.5rem, 4vw, 2.6rem);
+  }
+  .law .headline {
+    font-family: var(--display);
+    font-size: clamp(2rem, 5vw, 3rem);
+    font-weight: 700;
+    line-height: 1.02;
+    letter-spacing: -0.015em;
+  }
+  .law > p { color: var(--dim); max-width: 56ch; margin: 1rem 0 0; }
+
+  .launch { display: grid; gap: 0.75rem; margin-top: 2rem; grid-template-columns: 1fr; }
+  @media (min-width: 780px) { .launch { grid-template-columns: 1fr 2.6rem 1fr; align-items: center; } }
+
+  .moment { border: 1px solid var(--rule); background: var(--sunken); padding: 1.15rem 1.15rem 1.25rem; }
+  .moment > .label { margin-bottom: 0.9rem; }
+  .arrow {
+    font-family: var(--mono);
+    color: var(--dim);
+    text-align: center;
+    font-size: 1.1rem;
+  }
+  @media (max-width: 779px) { .arrow { transform: rotate(90deg); padding-block: 0.15rem; } }
+
+  .mini { display: grid; gap: 0.55rem; }
+  .mini-row { display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem; flex-wrap: wrap; }
+  .tag {
+    font-family: var(--mono);
+    font-size: 0.64rem;
+    text-transform: uppercase;
+    letter-spacing: 0.13em;
+    padding: 0.2rem 0.5rem;
+    border: 1px solid var(--rule);
+    color: var(--dim);
+    white-space: nowrap;
+  }
+  .tag.live { color: var(--pklabs); border-color: var(--pklabs); }
+  .mini-row .name { font-weight: 600; }
+  .mini-row .home { font-family: var(--mono); font-size: 0.72rem; color: var(--dim); }
+  .mini-row .home.b { color: var(--byzyb); }
+  .mini-row .home.p { color: var(--pklabs); }
+  .none { color: var(--dim); font-style: italic; font-size: 0.85rem; }
+
+  .law .verdict {
+    margin-top: 1.8rem;
+    padding-top: 1.3rem;
+    border-top: 1px solid var(--rule);
+    font-size: 0.96rem;
+  }
+  .law .verdict b { font-weight: 600; }
+
+  /* ---------- lookup ---------- */
+
+  .finder {
+    display: flex; align-items: center; gap: 0.75rem;
+    border: 1px solid var(--rule);
+    background: var(--surface);
+    padding: 0.55rem 0.9rem;
+    margin-bottom: 1.25rem;
+    max-width: 30rem;
+  }
+  .finder label { font-family: var(--mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.15em; color: var(--dim); white-space: nowrap; }
+  .finder input {
+    flex: 1; min-width: 0;
+    border: 0; background: transparent; color: var(--ink);
+    font-family: var(--body); font-size: 0.95rem; padding: 0.25rem 0;
+  }
+  .finder input:focus { outline: 2px solid var(--byzyb); outline-offset: 4px; }
+  .finder input::placeholder { color: var(--dim); }
+
+  .table-scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 34rem; }
+  thead th {
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 0.64rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--dim);
+    font-weight: 500;
+    padding: 0 0.9rem 0.7rem 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  tbody td { padding: 0.85rem 0.9rem 0.85rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; font-size: 0.93rem; }
+  tbody td:first-child { font-weight: 500; }
+  tbody td:last-child { color: var(--dim); padding-right: 0; }
+  .dest {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+    letter-spacing: -0.005em;
+  }
+  .dest.b { color: var(--byzyb); }
+  .dest.p { color: var(--pklabs); }
+  .dest.both { color: var(--ink); }
+  .dest.other { color: var(--dim); }
+  .empty { color: var(--dim); font-size: 0.93rem; padding-block: 1.2rem; }
+
+  /* ---------- never ---------- */
+
+  .nevers { display: grid; gap: 0; }
+  .never {
+    display: grid;
+    grid-template-columns: 1.6rem 1fr;
+    gap: 0 0.8rem;
+    padding-block: 1.05rem;
+    border-top: 1px solid var(--rule);
+    align-items: start;
+  }
+  .never::before {
+    content: "✕";
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    color: var(--stop);
+    padding-top: 0.15rem;
+  }
+  .never .rule { font-weight: 500; font-size: 1rem; letter-spacing: -0.005em; }
+  .never .because { color: var(--dim); font-size: 0.9rem; margin-top: 0.22rem; }
+
+  /* ---------- recipes ---------- */
+
+  .recipes { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+  @media (min-width: 820px) { .recipes { grid-template-columns: 1fr 1fr; } }
+
+  .recipe { border: 1px solid var(--rule); background: var(--surface); padding: 1.35rem 1.3rem 1.4rem; }
+  .recipe h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.9rem; letter-spacing: -0.005em; }
+  .recipe ol { margin: 0; padding-left: 1.15rem; display: grid; gap: 0.5rem; }
+  .recipe li { font-size: 0.91rem; color: var(--dim); }
+  .recipe li strong { color: var(--ink); font-weight: 500; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.83em;
+    background: var(--sunken);
+    border: 1px solid var(--rule);
+    padding: 0.08em 0.38em;
+    white-space: nowrap;
+  }
+  pre {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    line-height: 1.75;
+    background: var(--sunken);
+    border: 1px solid var(--rule);
+    padding: 1.1rem 1.2rem;
+    overflow-x: auto;
+    margin: 0;
+    color: var(--ink);
+  }
+  pre .c { color: var(--dim); }
+  pre .b { color: var(--byzyb); }
+  pre .p { color: var(--pklabs); }
+
+  /* ---------- map ---------- */
+
+  .map-grid { display: grid; gap: 1.5rem; grid-template-columns: 1fr; }
+  @media (min-width: 880px) { .map-grid { grid-template-columns: 1.15fr 1fr; align-items: start; } }
+
+  .deploys { display: grid; gap: 0.75rem; }
+  .deploy { border: 1px solid var(--rule); border-left: 3px solid var(--accent); background: var(--surface); padding: 1.1rem 1.2rem; }
+  .deploy.b { --accent: var(--byzyb); }
+  .deploy.p { --accent: var(--pklabs); }
+  .deploy .host { font-family: var(--mono); font-weight: 600; font-size: 0.95rem; color: var(--accent); }
+  .deploy dl { margin: 0.75rem 0 0; display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 1rem; font-size: 0.85rem; }
+  .deploy dt { font-family: var(--mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.13em; color: var(--dim); padding-top: 0.22rem; }
+  .deploy dd { margin: 0; }
+
+  .warn {
+    margin-top: 1.5rem;
+    border: 1px solid var(--stop);
+    background: color-mix(in srgb, var(--stop) 8%, transparent);
+    padding: 1.15rem 1.25rem;
+  }
+  .warn .label { color: var(--stop); }
+  .warn p { margin: 0.55rem 0 0; font-size: 0.93rem; }
+
+  .checklist { display: grid; gap: 0; margin-top: 0.5rem; }
+  .check { display: grid; grid-template-columns: 1.5rem 1fr; gap: 0 0.7rem; padding-block: 0.85rem; border-top: 1px solid var(--rule); font-size: 0.93rem; align-items: start; }
+  .check::before { content: "☐"; font-family: var(--mono); color: var(--dim); padding-top: 0.05rem; }
+  .check span { color: var(--dim); }
+  .check b { font-weight: 500; color: var(--ink); }
+
+  footer { padding-block: 2.5rem 3.5rem; color: var(--dim); font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.06em; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="label">Operating manual · Last revised 19 September 2026</p>
+    <h1>Two sites,<br>one rule.</h1>
+    <div class="sites">
+      <span class="site-b">byzyb.ai — the person</span>
+      <span class="site-p">pklabs.ca — the company</span>
+    </div>
+  </header>
+
+  <section>
+    <p class="label">Start here</p>
+    <p class="question">When this page does its job, what does the reader do?</p>
+
+    <div class="answers">
+      <article class="answer b">
+        <p class="then">They…</p>
+        <p class="what">Form an opinion about <em>me</em>.</p>
+        <p class="site">→ byzyb.ai</p>
+        <p class="who">Recruiters, boards, co-founders, clients, anyone I hand a resume to.</p>
+      </article>
+      <article class="answer p">
+        <p class="then">They…</p>
+        <p class="what">Use, buy, or get help with <em>a product</em>.</p>
+        <p class="site">→ pklabs.ca</p>
+        <p class="who">Customers, App Store reviewers, Stripe, press, partners.</p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <p class="label">If that didn't settle it</p>
+      <h2>Three questions, in order.</h2>
+      <p>First one that gives an answer wins. Stop there.</p>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div>
+          <h3>Who signs it?</h3>
+          <div class="routes">
+            <span class="route b"><b>byzyb</b> "I" — my name, my voice</span>
+            <span class="route p"><b>pklabs</b> "We" — PainKiller Labs</span>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div>
+          <h3>Could someone hold me to it?</h3>
+          <div class="routes">
+            <span class="route p"><b>pklabs</b> A lawyer, an app reviewer or a customer could quote it</span>
+            <span class="route b"><b>byzyb</b> An opinion I'm allowed to revise or outgrow</span>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div>
+          <h3>Still true on both sides?</h3>
+          <div class="routes">
+            <span class="route b"><b>byzyb</b> It lives here — and pklabs.ca links to it</span>
+          </div>
+          <p class="never-inline" style="color:var(--dim);font-size:0.9rem;margin:0.55rem 0 0;">One home, one URL. The other site gets a link, never a copy.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="law">
+      <p class="label">The law</p>
+      <p class="headline">Nothing ever moves.</p>
+      <p>Content does not migrate when a product ships. The byzyb card is permanent — every product I've ever started keeps its card there forever, including the dead ones. Launching only <em>adds</em> a page on pklabs.ca and changes two fields.</p>
+
+      <div class="launch">
+        <div class="moment">
+          <p class="label">Before launch</p>
+          <div class="mini">
+            <div class="mini-row"><span class="tag">SaaS · Near launch</span><span class="name">WellKept</span></div>
+            <div class="mini-row"><span class="home b">byzyb.ai/#products</span><span class="tag">card, no link</span></div>
+            <div class="mini-row"><span class="none">nothing on pklabs.ca</span></div>
+          </div>
+        </div>
+
+        <div class="arrow">──▶</div>
+
+        <div class="moment">
+          <p class="label">After launch</p>
+          <div class="mini">
+            <div class="mini-row"><span class="tag live">SaaS · Live</span><span class="name">WellKept</span></div>
+            <div class="mini-row"><span class="home b">byzyb.ai/#products</span><span class="tag">same card, now links out</span></div>
+            <div class="mini-row"><span class="home p">pklabs.ca/products/wellkept</span></div>
+          </div>
+        </div>
+      </div>
+
+      <p class="verdict"><b>What actually changed:</b> two fields in <code>shared/products.json</code>. No page moved, no URL broke, and nobody had to decide anything.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <p class="label">Lookup</p>
+      <h2>I made a thing. Where does it go?</h2>
+    </div>
+
+    <div class="finder">
+      <label for="filter">Filter</label>
+      <input id="filter" type="text" placeholder="essay, privacy, changelog, pricing…" autocomplete="off">
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th style="width:38%">The thing</th><th style="width:22%">Goes to</th><th>Why</th></tr>
+        </thead>
+        <tbody id="rows">
+          <tr><td>Resume, CV, my story</td><td><span class="dest b">byzyb</span></td><td>I am the subject. Never on the company site.</td></tr>
+          <tr><td>An essay or opinion piece</td><td><span class="dest b">byzyb</span></td><td>First person, and I'm allowed to outgrow it.</td></tr>
+          <tr><td>A product still being built</td><td><span class="dest b">byzyb</span></td><td>Ten unshipped products read as prolific here, as vapour on a company site.</td></tr>
+          <tr><td>A dead or abandoned project</td><td><span class="dest b">byzyb</span></td><td>Keep the card, set the status to Retired. Evidence of range.</td></tr>
+          <tr><td>A talk, podcast or interview</td><td><span class="dest b">byzyb</span></td><td>Someone is forming an opinion about me.</td></tr>
+          <tr><td>Client or advisory work</td><td><span class="dest b">byzyb</span></td><td>That's my track record, not a PainKiller Labs product.</td></tr>
+          <tr><td>A product that just shipped</td><td><span class="dest both">both</span></td><td>New page on pklabs.ca; the byzyb card stays and starts linking to it.</td></tr>
+          <tr><td>Release notes / changelog entry</td><td><span class="dest p">pklabs</span></td><td>What the product did, not what I think.</td></tr>
+          <tr><td>"How we built X" engineering post</td><td><span class="dest p">pklabs</span></td><td>Signed "we", and it's about the product.</td></tr>
+          <tr><td>Terms, privacy policy, refunds</td><td><span class="dest p">pklabs</span></td><td>Issued by the registered entity. Never by a personal domain.</td></tr>
+          <tr><td>Pricing or plans</td><td><span class="dest p">pklabs</span></td><td>A customer can hold me to it.</td></tr>
+          <tr><td>Support instructions</td><td><span class="dest p">pklabs</span></td><td>The reader has a broken thing and wants it fixed.</td></tr>
+          <tr><td>Security disclosure policy</td><td><span class="dest p">pklabs</span></td><td>A durable commitment from the company.</td></tr>
+          <tr><td>Anything a lawyer could quote</td><td><span class="dest p">pklabs</span></td><td>Liability belongs with the registered business.</td></tr>
+          <tr><td>Toronto Polar Bears, TPB Events</td><td><span class="dest other">neither</span></td><td>A third thing. Host it from the repo if convenient, but don't let it pull either brand around.</td></tr>
+          <tr><td>RIZE</td><td><span class="dest b">byzyb</span></td><td>A concept, not a shipped product. Moves to pklabs.ca only if it becomes something people can buy.</td></tr>
+        </tbody>
+      </table>
+      <p class="empty" id="noresults" hidden>Nothing matches. Ask the one question at the top instead.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <p class="label">The don'ts</p>
+      <h2>Seven things that break it.</h2>
+      <p>Every one of these is easy to do by accident and annoying to undo.</p>
+    </div>
+
+    <div class="nevers">
+      <div class="never">
+        <div>
+          <p class="rule">Never publish the same words at two URLs.</p>
+          <p class="because">It doubles the maintenance and splits the search signal between the two domains. Link instead.</p>
+        </div>
+      </div>
+      <div class="never">
+        <div>
+          <p class="rule">Never move a page from one site to the other.</p>
+          <p class="because">That's what the law above exists to prevent. Moving breaks links and forces the decision again every launch.</p>
+        </div>
+      </div>
+      <div class="never">
+        <div>
+          <p class="rule">Never delete a product card from byzyb.</p>
+          <p class="because">Retired, abandoned and never-funded are all part of the record. Change the status, keep the card.</p>
+        </div>
+      </div>
+      <div class="never">
+        <div>
+          <p class="rule">Never put a personal essay on pklabs.ca.</p>
+          <p class="because">It dilutes the company site, and it entangles my writing with an asset I might one day sell or take a partner into.</p>
+        </div>
+      </div>
+      <div class="never">
+        <div>
+          <p class="rule">Never put terms, privacy or refunds on byzyb.ai.</p>
+          <p class="because">Those commitments have to be issued by the registered business, not by me personally.</p>
+        </div>
+      </div>
+      <div class="never">
+        <div>
+          <p class="rule">Never list an unshipped product on pklabs.ca.</p>
+          <p class="because">A company site full of things you can't buy reads as vapour. The build enforces this — only products with a <code>pklabs</code> block appear.</p>
+        </div>
+      </div>
+      <div class="never">
+        <div>
+          <p class="rule">Never hand-edit a product blurb inside a site's HTML.</p>
+          <p class="because">The product grids are generated. Edit <code>shared/products.json</code> and run the build, or the next build overwrites you.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <p class="label">Recipes</p>
+      <h2>The four things I'll actually do.</h2>
+    </div>
+
+    <div class="recipes">
+      <div class="recipe">
+        <h3>Change a product's copy</h3>
+        <ol>
+          <li>Edit its <strong>blurb</strong> in <code>shared/products.json</code>.</li>
+          <li>Run <code>node shared/build.mjs</code>.</li>
+          <li>Both sites now say the same thing. Commit and push.</li>
+        </ol>
+      </div>
+
+      <div class="recipe">
+        <h3>Launch a product</h3>
+        <ol>
+          <li>In <code>shared/products.json</code>, set <strong>status</strong> to <code>"Live"</code>.</li>
+          <li>Add a <strong>pklabs</strong> block: slug, tagline, platform, url.</li>
+          <li>Run the build. It writes <code>pklabs/products/&lt;slug&gt;.html</code> and relinks the byzyb card.</li>
+        </ol>
+      </div>
+
+      <div class="recipe">
+        <h3>Publish an essay</h3>
+        <ol>
+          <li>New HTML file in <code>byzyb/</code>, styled like the others.</li>
+          <li>Add a card to the Perspective section of <code>byzyb/index.html</code>.</li>
+          <li>If it's relevant to a product, add <strong>one link</strong> from pklabs.ca — not a copy.</li>
+        </ol>
+      </div>
+
+      <div class="recipe">
+        <h3>Record a release</h3>
+        <ol>
+          <li>Add an entry at the top of <code>pklabs/changelog.html</code>.</li>
+          <li>Product and version as the heading, the date, two or three lines.</li>
+          <li>Say what changed <strong>for the person using it</strong>. No "bug fixes and improvements".</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <p class="label">The map</p>
+      <h2>One repo, two deploys.</h2>
+      <p>Both sites are static HTML. Nothing builds on the server — the build runs on my machine and the output is committed.</p>
+    </div>
+
+    <div class="map-grid">
+      <div>
+        <pre><span class="c">byzyb.ai.git</span>
+├── <span class="b">byzyb/</span>            <span class="c">→ byzyb.ai</span>
+│   ├── index.html    <span class="c">product grid is generated</span>
+│   ├── resume.html
+│   ├── ploy-styles.css  <span class="c">copy — do not edit</span>
+│   └── rize/ tpb/ tpbevents/
+├── <span class="p">pklabs/</span>           <span class="c">→ pklabs.ca</span>
+│   ├── index.html
+│   ├── products/     <span class="c">generated, one per live product</span>
+│   ├── legal/        <span class="c">terms · privacy · refunds</span>
+│   ├── support.html  changelog.html
+│   ├── pklabs-theme.css <span class="c">the orange skin</span>
+│   └── ploy-styles.css  <span class="c">copy — do not edit</span>
+├── shared/           <span class="c">← the only source of truth</span>
+│   ├── products.json
+│   ├── ploy-styles.css  <span class="c">edit THIS one</span>
+│   └── build.mjs
+├── brand/            <span class="c">masters, not served</span>
+└── docs/manual.html  <span class="c">this page</span></pre>
+      </div>
+
+      <div class="deploys">
+        <div class="deploy b">
+          <p class="host">byzyb.ai</p>
+          <dl>
+            <dt>Host</dt><dd>Vercel</dd>
+            <dt>Root</dt><dd><code>byzyb</code></dd>
+            <dt>DNS</dt><dd>GoDaddy → Vercel</dd>
+            <dt>Build</dt><dd>none — static</dd>
+          </dl>
+        </div>
+        <div class="deploy p">
+          <p class="host">pklabs.ca</p>
+          <dl>
+            <dt>Host</dt><dd>Vercel (new project)</dd>
+            <dt>Root</dt><dd><code>pklabs</code></dd>
+            <dt>DNS</dt><dd>GoDaddy → repoint from parking</dd>
+            <dt>Build</dt><dd>none — static</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <div class="warn">
+      <p class="label">Do this before the next push</p>
+      <p>byzyb.ai's files moved into <code>byzyb/</code>. In the existing Vercel project, set <b>Settings → Build &amp; Deployment → Root Directory</b> to <code>byzyb</code>. Until that's set, a deploy serves an empty site.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <p class="label">Before pklabs.ca goes live</p>
+      <h2>Four things still open.</h2>
+    </div>
+
+    <div class="checklist">
+      <div class="check"><span><b>Review the legal drafts.</b> Terms, privacy and refunds are written and structured, but they describe how products <em>should</em> behave. Check them against what Ezsay, Language Match and Liquid Relay actually do, then delete the orange draft banner on each page.</span></div>
+      <div class="check"><span><b>Move Ezsay off byzyb.ai.</b> It's a commercial product of the registered business sitting on a personal subdomain. <code>ezsay.pklabs.ca</code>, with a redirect from the old address.</span></div>
+      <div class="check"><span><b>Point pklabs.ca at Vercel.</b> It's currently on GoDaddy's parking page. The registrar doesn't need to change — just the records.</span></div>
+      <div class="check"><span><b>Decide where TPB lives.</b> It's neither brand. Fine to keep hosting from the repo, but give it its own front door rather than leaving it unlinked under byzyb.ai.</span></div>
+    </div>
+  </section>
+
+  <footer>
+    byzyb.ai · pklabs.ca — when in doubt, ask the one question at the top.
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var input = document.getElementById('filter');
+    var rows = Array.prototype.slice.call(document.querySelectorAll('#rows tr'));
+    var empty = document.getElementById('noresults');
+    if (!input) return;
+
+    input.addEventListener('input', function () {
+      var q = input.value.trim().toLowerCase();
+      var shown = 0;
+      rows.forEach(function (row) {
+        var match = !q || row.textContent.toLowerCase().indexOf(q) !== -1;
+        row.hidden = !match;
+        if (match) shown++;
+      });
+      empty.hidden = shown !== 0;
+    });
+  })();
+</script>
+
+</body>
+</html>

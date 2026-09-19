@@ -4,3 +4,8 @@
 ._*
 .Spotlight-V100
 .Trashes
+
+# Brand exploration output (144 MB of variations, traces and zips).
+# The finals live in brand/pklabs-masters/ and pklabs/brand/ — archive this
+# folder somewhere off-repo rather than committing it.
+output/
