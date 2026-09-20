@@ -107,6 +107,17 @@
 /* layout */
 .pointer-events-none { pointer-events: none; }
 
+/* Shrink-wraps "The company." so the circular mark can centre over the
+   heading rather than over the whole column. */
+.pk-company-mark {
+    width: max-content;
+    max-width: 100%;
+}
+.pk-company-mark img {
+    display: block;
+    margin-inline: auto;
+}
+
 /* Portrait frame. A background-image rather than an <img> so that a missing
    file renders as an empty panel instead of a broken-image icon. */
 .pk-portrait {
