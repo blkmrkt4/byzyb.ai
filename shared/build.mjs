@@ -197,7 +197,7 @@ function pkHeader(depth) {
         <nav class="hidden items-center gap-9 md:flex">
             <a href="${up}index.html#products" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Products</a>
             <a href="${up}changelog.html" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Changelog</a>
-            <a href="${up}index.html#about" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">About</a>
+            <a href="${up}about.html" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">About</a>
             <a href="${up}support.html" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Support</a>
         </nav>
         <a href="mailto:rh@pklabs.ca" class="rounded-full bg-pk-accent px-5 py-2 font-mono text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-pk-on-accent transition-opacity duration-300 hover:opacity-90">Contact</a>
