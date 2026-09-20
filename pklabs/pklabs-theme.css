@@ -87,6 +87,7 @@
 .max-w-\[62rem\] { max-width: 62rem; }
 
 /* type */
+.font-semibold { font-weight: 600; }
 .text-\[0\.68rem\] { font-size: 0.68rem; }
 .text-\[0\.92rem\] { font-size: 0.92rem; }
 .text-\[0\.98rem\] { font-size: 0.98rem; }
@@ -105,6 +106,18 @@
 
 /* layout */
 .pointer-events-none { pointer-events: none; }
+
+/* Portrait frame. A background-image rather than an <img> so that a missing
+   file renders as an empty panel instead of a broken-image icon. */
+.pk-portrait {
+    width: 100%;
+    max-width: 22rem;
+    aspect-ratio: 4 / 5;
+    border: 1px solid var(--ploy-border-primary);
+    background-color: color-mix(in srgb, var(--ploy-text-primary) 5%, transparent);
+    background-size: cover;
+    background-position: center 22%;
+}
 
 /* The circular mark, sunk into the hero like a seal pressed into the page.
    Hidden on narrow screens, where it would only crowd the type. */

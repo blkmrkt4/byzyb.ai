@@ -23,7 +23,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700&family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700&family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="ploy-styles.css">
 <link rel="stylesheet" href="pklabs-theme.css">
 </head>
@@ -38,10 +38,10 @@
         <nav class="hidden items-center gap-9 md:flex">
             <a href="index.html#products" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Products</a>
             <a href="changelog.html" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Changelog</a>
-            <a href="index.html#company" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Company</a>
+            <a href="index.html#about" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">About</a>
             <a href="support.html" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Support</a>
         </nav>
-        <a href="mailto:rh@pklabs.ca" class="rounded-full bg-pk-accent px-5 py-2 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-pk-on-accent transition-opacity duration-300 hover:opacity-90">Contact</a>
+        <a href="mailto:rh@pklabs.ca" class="rounded-full bg-pk-accent px-5 py-2 font-mono text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-pk-on-accent transition-opacity duration-300 hover:opacity-90">Contact</a>
     </div>
 </header>
 <!-- header:end -->
@@ -61,8 +61,8 @@
             <h1 class="mt-14 max-w-4xl font-heading text-[clamp(2.1rem,4.6vw,3.6rem)] font-medium leading-[1.12] tracking-[-0.01em] text-ploy-text-primary text-balance">Most software asks for a little more of your day. Ours is built to hand some of it back.</h1>
             <p class="mt-8 max-w-2xl text-[1.1rem] leading-[1.85] text-ploy-text-secondary">Every way of working has a step people have quietly stopped complaining about — the file that will not cross between two machines, the draft nobody entirely trusts, the conversation you rehearse and never have. We pick one of those and remove it. A product starts when the problem fits in a sentence, and it ships when that sentence is no longer true.</p>
             <div class="mt-11 flex flex-wrap items-center gap-4">
-                <a href="#products" class="rounded-full bg-pk-accent px-7 py-3 font-mono text-[0.72rem] uppercase tracking-[0.16em] text-pk-on-accent transition-opacity hover:opacity-90">See what's shipping</a>
-                <a href="#company" class="rounded-full border border-ploy-border-primary px-7 py-3 font-mono text-[0.72rem] uppercase tracking-[0.16em] text-ploy-text-secondary transition-colors hover:text-ploy-text-primary">Who's behind it</a>
+                <a href="#products" class="rounded-full bg-pk-accent px-7 py-3 font-mono text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-pk-on-accent transition-opacity hover:opacity-90">See what's shipping</a>
+                <a href="support.html" class="rounded-full border border-ploy-border-primary px-7 py-3 font-mono text-[0.72rem] uppercase tracking-[0.16em] text-ploy-text-secondary transition-colors hover:text-ploy-text-primary">Support</a>
             </div>
         </div>
     </section>
@@ -134,6 +134,26 @@
         </div>
     </section>
 
+    <!-- About --------------------------------------------------------- -->
+    <section id="about" class="border-t border-ploy-border-primary/60">
+        <div class="mx-auto max-w-[82rem] px-6 py-24 md:px-12 md:py-32">
+            <div class="grid gap-14 md:grid-cols-[1fr_1.1fr]">
+                <div>
+                    <div class="pk-portrait" role="img" aria-label="Robin Hutchinson" style="background-image: url('brand/robin-hutchinson.jpg')"></div>
+                </div>
+                <div>
+                    <p class="font-mono text-[0.72rem] uppercase tracking-[0.2em] text-pk-accent">About</p>
+                    <h2 class="mt-5 font-heading text-[clamp(2.5rem,5vw,4rem)] font-medium leading-[1.02] tracking-[-0.01em] text-ploy-text-primary">Robin Hutchinson.</h2>
+                    <div class="mt-8 flex flex-col gap-6">
+                        <p class="text-[1.05rem] leading-[1.85] text-ploy-text-secondary">Robin spent 28 years at EY, most recently as Global CTO and AI Officer for Client Technology and as head of its Enterprise Risk practice, and left the partnership in 2026 to build full time.</p>
+                        <p class="text-[1.05rem] leading-[1.85] text-ploy-text-secondary">He studied AI at the University of Texas at Austin from 1988 to 1991 and later ran and sold a security software company — the two threads in this work, AI and security, have been running ever since.</p>
+                        <p class="text-[1.05rem] leading-[1.85] text-ploy-text-secondary">He still writes code every day, between Toronto and London, and PainKiller Labs is where what he builds goes once other people can rely on it.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Company -------------------------------------------------------- -->
     <section id="company" class="border-t border-ploy-border-primary/60">
         <div class="mx-auto max-w-[82rem] px-6 py-24 md:px-12 md:py-32">
@@ -144,7 +164,7 @@
                 </div>
                 <div class="flex flex-col gap-6">
                     <p class="text-[1.05rem] leading-[1.85] text-ploy-text-secondary">PainKiller Labs is a registered Canadian business and the publisher of every product on this site. It holds the contracts, the terms, the privacy commitments and the support obligations — the parts of software nobody notices until the day they matter.</p>
-                    <p class="text-[1.05rem] leading-[1.85] text-ploy-text-secondary">It is run by Robin Hutchinson, a CTO and business builder working across AI, security and enterprise strategy. The writing, the research and everything still in progress live at <a href="https://byzyb.ai" class="text-pk-accent underline underline-offset-4">byzyb.ai</a>.</p>
+                    <p class="text-[1.05rem] leading-[1.85] text-ploy-text-secondary">The writing, the research and everything still in progress live at <a href="https://byzyb.ai" class="text-pk-accent underline underline-offset-4">byzyb.ai</a>.</p>
                     <p class="text-[1.05rem] leading-[1.85] text-ploy-text-secondary">If something we made is not doing what it promised, the address below reaches a person, not a queue.</p>
                     <dl class="mt-4 grid gap-px overflow-hidden border border-ploy-border-primary/50 bg-ploy-border-primary/50 sm:grid-cols-2">
                         <div class="bg-ploy-background-primary p-7">

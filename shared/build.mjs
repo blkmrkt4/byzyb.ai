@@ -137,7 +137,7 @@ function pkProductPage(p) {
 <link rel="apple-touch-icon" sizes="180x180" href="../favicons/favicon-180x180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700&family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700&family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../ploy-styles.css">
 <link rel="stylesheet" href="../pklabs-theme.css">
 </head>
@@ -155,7 +155,7 @@ function pkProductPage(p) {
         <p class="mt-8 max-w-2xl text-[1.05rem] leading-[1.85] text-ploy-text-secondary">${p.blurb}</p>
 
         <div class="mt-12 flex flex-wrap items-center gap-4">
-            <a href="${p.pklabs.url}" target="_blank" rel="noreferrer" class="rounded-full bg-pk-accent px-7 py-3 font-mono text-[0.72rem] uppercase tracking-[0.16em] text-pk-on-accent transition-opacity hover:opacity-90">Open ${esc(p.name)} →</a>
+            <a href="${p.pklabs.url}" target="_blank" rel="noreferrer" class="rounded-full bg-pk-accent px-7 py-3 font-mono text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-pk-on-accent transition-opacity hover:opacity-90">Open ${esc(p.name)} →</a>
             <a href="../support.html" class="rounded-full border border-ploy-border-primary px-7 py-3 font-mono text-[0.72rem] uppercase tracking-[0.16em] text-ploy-text-secondary transition-colors hover:text-ploy-text-primary">Get support</a>
         </div>
 
@@ -196,10 +196,10 @@ function pkHeader(depth) {
         <nav class="hidden items-center gap-9 md:flex">
             <a href="${up}index.html#products" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Products</a>
             <a href="${up}changelog.html" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Changelog</a>
-            <a href="${up}index.html#company" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Company</a>
+            <a href="${up}index.html#about" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">About</a>
             <a href="${up}support.html" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Support</a>
         </nav>
-        <a href="mailto:rh@pklabs.ca" class="rounded-full bg-pk-accent px-5 py-2 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-pk-on-accent transition-opacity duration-300 hover:opacity-90">Contact</a>
+        <a href="mailto:rh@pklabs.ca" class="rounded-full bg-pk-accent px-5 py-2 font-mono text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-pk-on-accent transition-opacity duration-300 hover:opacity-90">Contact</a>
     </div>
 </header>`;
 }
