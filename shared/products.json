@@ -7,7 +7,7 @@
     "layout": "feature",
     "logo": "ezsay-mark-white.svg",
     "byzybHref": "https://ezsay.byzyb.ai/",
-    "blurb": "AI writing has a tell - a flatness you can spot even when you can't name it. That tell is costing people grades, credibility, and deals. Ezsay finds it before your reader does: it scans your draft across six dimensions - detectability, AI artifacts, quality, plagiarism, citations, tone - and flags each one with a plain-language reason, so you learn to stop writing like a chatbot instead of just erasing the evidence. It also verifies your citations and converts between eight academic styles, from APA to Bluebook.",
+    "blurb": "AI writing has a tell, a flatness you can spot even when you can't name it. Readers notice it, and it's quietly costing people grades, credibility and deals. Ezsay scans your draft across six dimensions - detectability, AI artifacts, quality, plagiarism, citations and tone - and flags each one with a plain-language reason instead of a score you can't act on. It isn't there to help you hide the machine; it shows you the habits that give it away, so the next draft starts cleaner. It also checks that your citations are real and converts them between eight academic styles, from APA to Bluebook.",
     "pklabs": {
       "slug": "ezsay",
       "tagline": "Find the AI tell before your reader does.",
@@ -23,7 +23,7 @@
     "layout": "card",
     "logo": "language-match-icon.png",
     "byzybHref": "https://language-match.com",
-    "blurb": "Flashcards teach you words. They don't teach you the nerve to use them on a stranger. Language Match pairs you with real conversation partners through swipe-based matching, then coaches you mid-chat - swipe right on any message for an instant translation, left for grammar fixes and better phrasing. It adapts to your level, tracks vocabulary, and speaks it back to you.",
+    "blurb": "Flashcards teach you words. They don't teach you the nerve to use them on a stranger, which is where most people stall after a year of apps. Language Match pairs you with real people to talk to, matched the way a dating app does it, then puts a coach inside the conversation. Swipe right on any message for an instant translation, left for grammar fixes and better phrasing, so you can keep the conversation going instead of leaving it to look something up. It tracks the vocabulary you actually use, adapts to your level, and reads messages back to you so you hear the words before you have to say them.",
     "pklabs": {
       "slug": "language-match",
       "tagline": "Practise on real people, with a coach inside the chat.",
@@ -39,7 +39,7 @@
     "layout": "card",
     "logo": "liquid-relay-icon.png",
     "byzybHref": "https://liquid-relay.com",
-    "blurb": "Film editors bouncing a project between machines. Developers compiling on one box and testing on another. Both need files moving instantly - and both keep hitting the firewall or security policy that blocks the obvious route. Liquid Relay moves files, clipboard content, and screenshots directly between Mac and Windows machines - no cables, no cloud upload, no NAS, nothing for the network to catch.",
+    "blurb": "Two machines on the same desk, and moving a file between them still means a cloud upload, a cable, or a shared drive somebody has to administer. Film editors bouncing a cut between systems and developers compiling on one box and testing on another hit this constantly, and so does anyone whose corporate network blocks the obvious route. Liquid Relay moves files, clipboard content and screenshots directly between Mac and Windows machines. No cables, no cloud upload, no NAS, nothing for the network to catch. Copy on one machine, paste on the other.",
     "pklabs": {
       "slug": "liquid-relay",
       "tagline": "Move files between Mac and Windows without the network noticing.",

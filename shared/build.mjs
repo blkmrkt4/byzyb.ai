@@ -100,7 +100,8 @@ function pkCard(p) {
     <article class="group flex h-full flex-col gap-4 border border-ploy-border-primary/50 bg-ploy-neutral-secondary/30 p-8 transition-colors duration-300 hover:border-pk-accent/60 md:p-10">
         <div class="flex items-center gap-2.5 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-ploy-text-secondary"><span class="h-1.5 w-1.5 rounded-full bg-pk-accent"></span>${p.kind} · ${p.status}</div>
         <h3 class="font-heading text-3xl font-medium tracking-[-0.01em] text-ploy-text-primary">${esc(p.name)}</h3>
-        <p class="text-[0.95rem] leading-[1.75] text-ploy-text-secondary">${esc(p.pklabs.tagline)}</p>
+        <p class="text-[1.05rem] leading-[1.7] text-ploy-text-primary">${esc(p.pklabs.tagline)}</p>
+        <p class="text-[0.95rem] leading-[1.75] text-ploy-text-secondary">${p.blurb}</p>
         <span class="mt-auto inline-flex items-center gap-2 pt-3 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-pk-accent">Details<span class="transition-transform duration-300 group-hover:translate-x-1">→</span></span>
     </article>
 </a>`;
