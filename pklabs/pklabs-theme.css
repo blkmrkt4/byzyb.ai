@@ -71,6 +71,7 @@
 .p-5   { padding: 1.25rem; }
 .p-7   { padding: 1.75rem; }
 .py-3  { padding-block: 0.75rem; }
+.py-20 { padding-block: 5rem; }
 .pt-32 { padding-top: 8rem; }
 .pt-36 { padding-top: 9rem; }
 .pb-24 { padding-bottom: 6rem; }
@@ -79,21 +80,46 @@
 
 /* sizing */
 .h-7 { height: 1.75rem; }
+.w-40 { width: 10rem; }
 .max-w-4xl     { max-width: 56rem; }
+.max-w-\[46rem\] { max-width: 46rem; }
 .max-w-\[48rem\] { max-width: 48rem; }
 .max-w-\[62rem\] { max-width: 62rem; }
 
 /* type */
 .text-\[0\.68rem\] { font-size: 0.68rem; }
 .text-\[0\.92rem\] { font-size: 0.92rem; }
+.text-\[0\.98rem\] { font-size: 0.98rem; }
+.text-\[1\.6rem\]  { font-size: 1.6rem; }
 .text-\[1\.1rem\]  { font-size: 1.1rem; }
 .text-\[clamp\(1\.5rem\,3vw\,2\.25rem\)\]   { font-size: clamp(1.5rem, 3vw, 2.25rem); }
 .text-\[clamp\(2\.75rem\,6vw\,4\.5rem\)\]   { font-size: clamp(2.75rem, 6vw, 4.5rem); }
 .text-\[clamp\(3rem\,7vw\,5\.5rem\)\]       { font-size: clamp(3rem, 7vw, 5.5rem); }
+.text-\[clamp\(2\.1rem\,4\.6vw\,3\.6rem\)\] { font-size: clamp(2.1rem, 4.6vw, 3.6rem); }
+.leading-\[1\.12\] { line-height: 1.12; }
+.leading-\[1\.2\]  { line-height: 1.2; }
 .leading-\[1\.25\] { line-height: 1.25; }
 .leading-\[1\.7\]  { line-height: 1.7; }
 .tracking-\[0\.2em\] { letter-spacing: 0.2em; }
 .underline-offset-4 { text-underline-offset: 4px; }
+
+/* layout */
+.pointer-events-none { pointer-events: none; }
+
+/* The circular mark, sunk into the hero like a seal pressed into the page.
+   Hidden on narrow screens, where it would only crowd the type. */
+.pk-hero-seal {
+    position: absolute;
+    top: 50%;
+    right: -7rem;
+    width: 40rem;
+    max-width: 45vw;
+    transform: translateY(-50%);
+    opacity: 0.085;
+    pointer-events: none;
+    user-select: none;
+}
+@media (max-width: 1023px) { .pk-hero-seal { display: none; } }
 
 /* colour with alpha */
 .bg-pk-accent\/10          { background-color: rgba(255, 101, 0, 0.1); }
@@ -107,6 +133,10 @@
 }
 @media (min-width: 768px) {
     .md\:h-8    { height: 2rem; }
+    .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .md\:h-52   { height: 13rem; }
+    .md\:w-52   { width: 13rem; }
+    .md\:py-24  { padding-block: 6rem; }
     .md\:pt-40  { padding-top: 10rem; }
     .md\:pt-48  { padding-top: 12rem; }
     .md\:pb-28  { padding-bottom: 7rem; }
