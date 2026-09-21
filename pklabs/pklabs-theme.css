@@ -23,6 +23,19 @@
 .hover\:border-pk-accent\/60:hover { border-color: rgba(255, 101, 0, 0.6); }
 .hover\:text-pk-accent:hover { color: var(--pk-accent); }
 
+/* Desktop nav. Bigger, brighter and less letter-spaced than the mono
+   eyebrows elsewhere: this one has to be read, not just seen. */
+.pk-nav-link {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--ploy-text-primary) 82%, transparent);
+    transition: color 0.3s ease;
+}
+.pk-nav-link:hover { color: var(--ploy-text-primary); }
+
 /* Long-form legal and support copy. */
 .prose-pk h2 {
     font-family: 'Cormorant Garamond', serif;
