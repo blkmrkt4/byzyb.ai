@@ -59,10 +59,16 @@
                     </div>
                 </div>
                 <div class="flex flex-col gap-6">
-                    <p class="text-[1.35rem] leading-[1.6] text-ploy-text-primary">PainKiller Labs is the company behind all three products. It signs the terms, answers the support mail and carries the refund promise, which is the part that counts on the day something goes wrong.</p>
-                    <p class="text-[1.05rem] leading-[1.85] text-ploy-text-secondary">That last part is most of the job. Anyone can put software on the internet. Keeping it running, answering for it and fixing it two years later is the work that takes a company, and it is the reason this one exists rather than three separate side projects.</p>
-                    <p class="text-[1.05rem] leading-[1.85] text-ploy-text-secondary">So the contracts, the privacy commitments and the refunds all sit here, and so does the support address. If something we made isn't doing what it promised, that address reaches a person.</p>
-                    <p class="text-[1.05rem] leading-[1.85] text-ploy-text-secondary">We're always looking for good ideas. If something in your week keeps costing you time or money and nobody has built the fix, write in and tell us about it. The writing, the research and everything still in progress live at <a href="https://byzyb.ai" class="text-pk-accent underline underline-offset-4">byzyb.ai</a>.</p>
+                    <p class="text-[1.2rem] leading-[1.7] text-ploy-text-primary">I build in layers. Some products carry no AI at all. They just need to work, and doing that well is its own discipline. In others, AI does the unglamorous part: capturing information a person would otherwise miss, and synthesizing it faster than they could by hand. Useful, but still incremental.</p>
+                    <p class="text-[1.05rem] leading-[1.85] text-ploy-text-secondary">The layer I care about most is different. It asks whether AI lets you do something that was never possible before, something that changes the shape of the product instead of its speed.</p>
+                    <div class="pk-aside">
+                        <p>Early artificial-heart developers spent years building pumps that mimicked the heart's rhythmic beat, partly because they believed that pulse was necessary for long-term circulatory support. It turned out blood doesn't need a pulse. It just needs to flow, and tissue absorbs what it needs regardless of rhythm. Once someone stopped assuming the replacement had to look like the original, the beating disappeared entirely.</p>
+                    </div>
+                    <p class="text-[1.05rem] leading-[1.85] text-ploy-text-secondary">I look for that same opening in software: not how to do the old thing faster, but whether the old thing needs to work this way at all.</p>
+                    <p class="text-[1.05rem] leading-[1.85] text-ploy-text-secondary">I also build with local models, sized to the smallest one that will actually run the job on someone's typical machine, for tasks that need real privacy or can't carry a cost per use, like reading a folder of screenshots or restructuring files. Models keep improving, and some of what I build is aimed at where the model will be in a year, not where it is today. Whether open-weight models running locally end up mattering to that future, I don't know yet. Further out is physical AI, where the category itself is still being invented.</p>
+                    <p class="font-heading text-[clamp(1.5rem,3vw,2.25rem)] font-medium leading-[1.25] text-ploy-text-primary">Different problems call for different layers. Matching the depth of the tool to the depth of the problem is the actual skill.</p>
+                    <p class="mt-6 text-[1.05rem] leading-[1.85] text-ploy-text-secondary">We're always looking for good ideas. If something in your week keeps costing you time or money and nobody has built the fix, write in and tell us about it. The writing, the research and everything still in progress live at <a href="https://byzyb.ai" class="text-pk-accent underline underline-offset-4">byzyb.ai</a>.</p>
+                    <p class="text-[1.05rem] leading-[1.85] text-ploy-text-secondary">If something we made isn't doing what it promised, the address below reaches a person.</p>
                     <dl class="mt-4 grid gap-px overflow-hidden border border-ploy-border-primary/50 bg-ploy-border-primary/50 sm:grid-cols-2">
                         <div class="bg-ploy-background-primary p-7">
                             <dt class="font-mono text-[0.68rem] uppercase tracking-[0.16em] text-ploy-text-secondary">General &amp; support</dt>
@@ -78,7 +84,48 @@
         </div>
     </section>
 
-    <!-- The person ----------------------------------------------------- -->
+    <!-- The layers, drawn ---------------------------------------------- -->
+    <section class="border-t border-ploy-border-primary/60">
+        <div class="mx-auto max-w-[82rem] px-6 py-24 md:px-12 md:py-32">
+            <p class="font-mono text-[0.72rem] uppercase tracking-[0.2em] text-pk-accent">The layers</p>
+            <h2 class="mt-5 max-w-3xl font-heading text-[clamp(2.5rem,5vw,4rem)] font-medium leading-[1.02] tracking-[-0.01em] text-ploy-text-primary">Different problems. Different depths.</h2>
+
+            <div class="pk-journey">
+                <svg class="pk-route" aria-hidden="true"><path class="pk-trail"/><path class="pk-drawn"/><image class="pk-bee" href="brand/pklabs-bee.png" width="56" height="35"/></svg>
+
+                <article class="pk-layer">
+                    <span class="pk-node"></span>
+                    <div class="pk-layer-eyebrow">Reliable software</div>
+                    <h3 class="pk-layer-title">Make it work.</h3>
+                    <p class="pk-layer-copy">No model in sight. Software that holds up, which is its own discipline.</p>
+                    <div class="pk-flow"><span>Input</span><b>&rarr;</b><span>Process</span><b>&rarr;</b><span>Result</span></div>
+                </article>
+
+                <article class="pk-layer">
+                    <span class="pk-node"></span>
+                    <div class="pk-layer-eyebrow">AI assistance</div>
+                    <h3 class="pk-layer-title">Take the work out.</h3>
+                    <p class="pk-layer-copy">The unglamorous part, done faster than a person could by hand.</p>
+                    <div class="pk-flow"><span>Capture</span><b>+</b><span>Synthesize</span><b>&rarr;</b><span>Review</span></div>
+                </article>
+
+                <article class="pk-layer">
+                    <span class="pk-node"></span>
+                    <div class="pk-layer-eyebrow">New possibilities &middot; where I spend my time</div>
+                    <h3 class="pk-layer-title">Change what's possible.</h3>
+                    <p class="pk-layer-copy">The shape of the product changes, not its speed.</p>
+                    <div class="pk-flow"><span>Intent</span><b>&#8605;</b><span>A different path to the outcome</span></div>
+                </article>
+            </div>
+
+            <div class="pk-local">
+                <h3>Across the AI layers, local when it matters.</h3>
+                <p>The smallest model that will actually run the job on the machine in front of you.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Who runs it ---------------------------------------------------- -->
     <section class="border-t border-ploy-border-primary/60">
         <div class="mx-auto max-w-[82rem] px-6 py-24 md:px-12 md:py-32">
             <div class="grid gap-14 md:grid-cols-[1fr_1.1fr]">
@@ -95,61 +142,6 @@
                     </div>
                 </div>
             </div>
-        </div>
-    </section>
-
-
-    <!-- How I build ---------------------------------------------------- -->
-    <section class="border-t border-ploy-border-primary/60">
-        <div class="mx-auto max-w-[82rem] px-6 py-24 md:px-12 md:py-32">
-            <p class="font-mono text-[0.72rem] uppercase tracking-[0.2em] text-pk-accent">Method</p>
-            <h2 class="mt-5 max-w-3xl font-heading text-[clamp(2.5rem,5vw,4rem)] font-medium leading-[1.02] tracking-[-0.01em] text-ploy-text-primary">Different problems. Different depths.</h2>
-            <p class="mt-7 max-w-2xl text-[1.1rem] leading-[1.85] text-ploy-text-secondary">I build in layers. The right depth depends on what the problem actually needs.</p>
-
-            <div class="pk-journey">
-                <svg class="pk-route" aria-hidden="true"><path class="pk-trail"/><path class="pk-drawn"/><image class="pk-bee" href="brand/pklabs-bee.png" width="56" height="35"/></svg>
-
-                <article class="pk-layer">
-                    <span class="pk-node"></span>
-                    <div class="pk-layer-eyebrow">Reliable software</div>
-                    <h3 class="pk-layer-title">Make it work.</h3>
-                    <p class="pk-layer-copy">Some products need no AI at all. They just need to work, and doing that well is its own discipline.</p>
-                    <div class="pk-flow"><span>Input</span><b>&rarr;</b><span>Process</span><b>&rarr;</b><span>Result</span></div>
-                </article>
-
-                <article class="pk-layer">
-                    <span class="pk-node"></span>
-                    <div class="pk-layer-eyebrow">AI assistance</div>
-                    <h3 class="pk-layer-title">Take the work out.</h3>
-                    <p class="pk-layer-copy">Capture information a person would otherwise miss. Synthesize it faster than they could by hand. Useful, but still incremental.</p>
-                    <div class="pk-flow"><span>Capture</span><b>+</b><span>Synthesize</span><b>&rarr;</b><span>Review</span></div>
-                </article>
-
-                <article class="pk-layer">
-                    <span class="pk-node"></span>
-                    <div class="pk-layer-eyebrow">New possibilities &middot; where I spend my time</div>
-                    <h3 class="pk-layer-title">Change what's possible.</h3>
-                    <p class="pk-layer-copy">Can AI make something possible that wasn't before? Something that changes the shape of the product instead of its speed.</p>
-                    <div class="pk-flow"><span>Intent</span><b>&#8605;</b><span>A different path to the outcome</span></div>
-                    <div class="pk-aside pk-layer-aside">
-                        <p>Early artificial-heart developers spent years building pumps that mimicked the heart's rhythmic beat, partly because they believed that pulse was necessary for long-term circulatory support. It turned out blood doesn't need a pulse. It just needs to flow, and tissue absorbs what it needs regardless of rhythm. Once someone stopped assuming the replacement had to look like the original, the beating disappeared entirely.</p>
-                    </div>
-                    <p class="pk-layer-copy pk-layer-copy-wide">I look for that same opening in software: not how to do the old thing faster, but whether the old thing needs to work this way at all.</p>
-                </article>
-            </div>
-
-            <div class="pk-local">
-                <h3>Across the AI layers, keep it local when it matters.</h3>
-                <p>The smallest model that will actually run the job on someone's typical machine, for work that needs real privacy or can't carry a cost per use. Reading a folder of screenshots. Restructuring files.</p>
-            </div>
-
-            <div class="pk-horizon">
-                <p class="font-mono text-[0.68rem] uppercase tracking-[0.16em] text-ploy-text-secondary">Farther out</p>
-                <h3>Physical AI</h3>
-                <p class="pk-horizon-copy">Some of what I build is aimed at where the model will be in a year, not where it is today. Further out is physical AI, where the category itself is still being invented.</p>
-            </div>
-
-            <p class="mt-16 max-w-3xl font-heading text-[clamp(1.5rem,3vw,2.25rem)] font-medium leading-[1.25] text-ploy-text-primary">Matching the depth of the tool to the depth of the problem is the actual skill.</p>
         </div>
     </section>
 
