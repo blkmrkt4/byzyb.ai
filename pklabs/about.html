@@ -100,28 +100,56 @@
 
 
     <!-- How I build ---------------------------------------------------- -->
-    <!-- The diagram slots in under the heading, in the left column, the way
-         the seal and the portrait do above. Drop it at brand/layers.svg and
-         uncomment the <img> below. -->
     <section class="border-t border-ploy-border-primary/60">
         <div class="mx-auto max-w-[82rem] px-6 py-24 md:px-12 md:py-32">
-            <div class="grid gap-14 md:grid-cols-[1fr_1.1fr]">
-                <div>
-                    <p class="font-mono text-[0.72rem] uppercase tracking-[0.2em] text-pk-accent">Method</p>
-                    <h2 class="mt-5 font-heading text-[clamp(2.5rem,5vw,4rem)] font-medium leading-[1.02] tracking-[-0.01em] text-ploy-text-primary">How I build.</h2>
-                    <!-- <img src="brand/layers.svg" alt="The four layers" class="mt-12 w-full max-w-[26rem]"/> -->
-                </div>
-                <div class="flex flex-col gap-6">
-                    <p class="text-[1.05rem] leading-[1.85] text-ploy-text-secondary">I build in layers. Some products carry no AI at all. They just need to work, and doing that well is its own discipline. In others, AI does the unglamorous part: capturing information a person would otherwise miss, and synthesizing it faster than they could by hand. Useful, but still incremental.</p>
-                    <p class="text-[1.05rem] leading-[1.85] text-ploy-text-secondary">The layer I care about most is different. It asks whether AI lets you do something that was never possible before, something that changes the shape of the product instead of its speed.</p>
-                    <div class="pk-aside">
+            <p class="font-mono text-[0.72rem] uppercase tracking-[0.2em] text-pk-accent">Method</p>
+            <h2 class="mt-5 max-w-3xl font-heading text-[clamp(2.5rem,5vw,4rem)] font-medium leading-[1.02] tracking-[-0.01em] text-ploy-text-primary">Different problems. Different depths.</h2>
+            <p class="mt-7 max-w-2xl text-[1.1rem] leading-[1.85] text-ploy-text-secondary">I build in layers. The right depth depends on what the problem actually needs.</p>
+
+            <div class="pk-journey">
+                <svg class="pk-route" aria-hidden="true"><path class="pk-trail"/><path class="pk-drawn"/><image class="pk-bee" href="brand/pklabs-bee.png" width="56" height="35"/></svg>
+
+                <article class="pk-layer">
+                    <span class="pk-node"></span>
+                    <div class="pk-layer-eyebrow">Reliable software</div>
+                    <h3 class="pk-layer-title">Make it work.</h3>
+                    <p class="pk-layer-copy">Some products need no AI at all. They just need to work, and doing that well is its own discipline.</p>
+                    <div class="pk-flow"><span>Input</span><b>&rarr;</b><span>Process</span><b>&rarr;</b><span>Result</span></div>
+                </article>
+
+                <article class="pk-layer">
+                    <span class="pk-node"></span>
+                    <div class="pk-layer-eyebrow">AI assistance</div>
+                    <h3 class="pk-layer-title">Take the work out.</h3>
+                    <p class="pk-layer-copy">Capture information a person would otherwise miss. Synthesize it faster than they could by hand. Useful, but still incremental.</p>
+                    <div class="pk-flow"><span>Capture</span><b>+</b><span>Synthesize</span><b>&rarr;</b><span>Review</span></div>
+                </article>
+
+                <article class="pk-layer">
+                    <span class="pk-node"></span>
+                    <div class="pk-layer-eyebrow">New possibilities &middot; where I spend my time</div>
+                    <h3 class="pk-layer-title">Change what's possible.</h3>
+                    <p class="pk-layer-copy">Can AI make something possible that wasn't before? Something that changes the shape of the product instead of its speed.</p>
+                    <div class="pk-flow"><span>Intent</span><b>&#8605;</b><span>A different path to the outcome</span></div>
+                    <div class="pk-aside pk-layer-aside">
                         <p>Early artificial-heart developers spent years building pumps that mimicked the heart's rhythmic beat, partly because they believed that pulse was necessary for long-term circulatory support. It turned out blood doesn't need a pulse. It just needs to flow, and tissue absorbs what it needs regardless of rhythm. Once someone stopped assuming the replacement had to look like the original, the beating disappeared entirely.</p>
                     </div>
-                    <p class="text-[1.05rem] leading-[1.85] text-ploy-text-secondary">I look for that same opening in software: not how to do the old thing faster, but whether the old thing needs to work this way at all.</p>
-                    <p class="text-[1.05rem] leading-[1.85] text-ploy-text-secondary">I also build with local models, sized to the smallest one that will actually run the job on someone's typical machine, for tasks that need real privacy or can't carry a cost per use, like reading a folder of screenshots or restructuring files. Models keep improving, and some of what I build is aimed at where the model will be in a year, not where it is today. Whether open-weight models running locally end up mattering to that future, I don't know yet. Further out is physical AI, where the category itself is still being invented.</p>
-                    <p class="text-[1.2rem] leading-[1.7] text-ploy-text-primary">Different problems call for different layers. Matching the depth of the tool to the depth of the problem is the actual skill.</p>
-                </div>
+                    <p class="pk-layer-copy pk-layer-copy-wide">I look for that same opening in software: not how to do the old thing faster, but whether the old thing needs to work this way at all.</p>
+                </article>
             </div>
+
+            <div class="pk-local">
+                <h3>Across the AI layers, keep it local when it matters.</h3>
+                <p>The smallest model that will actually run the job on someone's typical machine, for work that needs real privacy or can't carry a cost per use. Reading a folder of screenshots. Restructuring files.</p>
+            </div>
+
+            <div class="pk-horizon">
+                <p class="font-mono text-[0.68rem] uppercase tracking-[0.16em] text-ploy-text-secondary">Farther out</p>
+                <h3>Physical AI</h3>
+                <p class="pk-horizon-copy">Some of what I build is aimed at where the model will be in a year, not where it is today. Further out is physical AI, where the category itself is still being invented.</p>
+            </div>
+
+            <p class="mt-16 max-w-3xl font-heading text-[clamp(1.5rem,3vw,2.25rem)] font-medium leading-[1.25] text-ploy-text-primary">Matching the depth of the tool to the depth of the problem is the actual skill.</p>
         </div>
     </section>
 
@@ -142,5 +170,73 @@
 </footer>
 <!-- footer:end -->
 
+
+<script>
+/* The path is measured from the live layout, so copy edits and phone widths
+   stay aligned. The bee rides it as you scroll; nothing animates otherwise. */
+(() => {
+  const journey = document.querySelector('.pk-journey');
+  if (!journey) return;
+  const svg = journey.querySelector('.pk-route');
+  const trail = journey.querySelector('.pk-trail');
+  const drawn = journey.querySelector('.pk-drawn');
+  const bee = journey.querySelector('.pk-bee');
+  const layers = [...journey.querySelectorAll('.pk-layer')];
+  const still = matchMedia('(prefers-reduced-motion: reduce)');
+  const beeW = +bee.getAttribute('width'), beeH = +bee.getAttribute('height');
+  let nodes = [], length = 0, pending = false;
+
+  function measure() {
+    const box = journey.getBoundingClientRect();
+    if (!box.width) return;
+    nodes = layers.map(layer => {
+      const dot = layer.querySelector('.pk-node').getBoundingClientRect();
+      return { x: dot.left - box.left + dot.width / 2, y: dot.top - box.top + dot.height / 2 };
+    });
+    svg.setAttribute('viewBox', `0 0 ${box.width} ${box.height}`);
+    let d = `M ${nodes[0].x} ${nodes[0].y}`;
+    for (let i = 1; i < nodes.length; i++) {
+      const a = nodes[i - 1], b = nodes[i], bend = b.y - 85;
+      d += ` L ${a.x} ${bend - 95} C ${a.x} ${bend}, ${b.x} ${bend}, ${b.x} ${b.y}`;
+    }
+    trail.setAttribute('d', d);
+    drawn.setAttribute('d', d);
+    length = trail.getTotalLength();
+    drawn.style.strokeDasharray = `${length} ${length}`;
+    update();
+  }
+
+  function update() {
+    pending = false;
+    if (!length) return;
+    const y = innerHeight * 0.55 - journey.getBoundingClientRect().top;
+    let distance;
+    if (y <= nodes[0].y) distance = 0;
+    else if (y >= nodes[nodes.length - 1].y) distance = length;
+    else {
+      let low = 0, high = length;
+      for (let i = 0; i < 18; i++) {
+        const mid = (low + high) / 2;
+        if (trail.getPointAtLength(mid).y < y) low = mid; else high = mid;
+      }
+      distance = (low + high) / 2;
+    }
+    drawn.style.strokeDashoffset = still.matches ? '0' : String(length - distance);
+    const point = trail.getPointAtLength(distance);
+    bee.setAttribute('x', point.x - beeW / 2);
+    bee.setAttribute('y', point.y - beeH / 2);
+    layers.forEach((layer, i) => layer.dataset.reached = String(still.matches || y >= nodes[i].y));
+  }
+
+  addEventListener('scroll', () => {
+    if (!pending) { pending = true; requestAnimationFrame(update); }
+  }, { passive: true });
+  addEventListener('resize', measure);
+  addEventListener('pageshow', measure);
+  still.addEventListener('change', update);
+  new ResizeObserver(measure).observe(journey);
+  measure();
+})();
+</script>
 </body>
 </html>
