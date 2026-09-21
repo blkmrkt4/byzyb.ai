@@ -192,7 +192,7 @@ function pkHeader(depth) {
   return `<header class="fixed inset-x-0 top-0 z-[100] bg-gradient-to-b from-ploy-background-primary via-ploy-background-primary/70 to-transparent">
     <div class="mx-auto flex max-w-[82rem] items-center justify-between px-6 py-5 md:px-12 md:py-6">
         <a href="${up}index.html" class="flex items-center" aria-label="PainKiller Labs">
-            <img src="${up}brand/pklabs-horizontal.png" srcset="${up}brand/pklabs-horizontal.png 1x, ${up}brand/pklabs-horizontal@2x.png 2x" alt="PainKiller Labs" class="h-7 w-auto md:h-8"/>
+            <img src="${up}brand/pklabs-horizontal.png" srcset="${up}brand/pklabs-horizontal.png 1x, ${up}brand/pklabs-horizontal@2x.png 2x" alt="PainKiller Labs" class="h-8 w-auto md:h-11"/>
         </a>
         <nav class="hidden items-center gap-9 md:flex">
             <a href="${up}index.html#products" class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ploy-text-secondary transition-colors duration-300 hover:text-ploy-text-primary">Products</a>

@@ -80,6 +80,7 @@
 
 /* sizing */
 .h-7 { height: 1.75rem; }
+.h-8 { height: 2rem; }
 .w-40 { width: 10rem; }
 .max-w-4xl     { max-width: 56rem; }
 .max-w-\[26rem\] { max-width: 26rem; }
@@ -175,6 +176,7 @@
 @media (min-width: 768px) {
     .md\:h-8    { height: 2rem; }
     .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .md\:h-11   { height: 2.75rem; }
     .md\:h-52   { height: 13rem; }
     .md\:w-52   { width: 13rem; }
     .md\:py-24  { padding-block: 6rem; }
