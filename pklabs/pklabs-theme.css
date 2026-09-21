@@ -82,6 +82,7 @@
 .h-7 { height: 1.75rem; }
 .w-40 { width: 10rem; }
 .max-w-4xl     { max-width: 56rem; }
+.max-w-\[26rem\] { max-width: 26rem; }
 .max-w-\[46rem\] { max-width: 46rem; }
 .max-w-\[48rem\] { max-width: 48rem; }
 .max-w-\[62rem\] { max-width: 62rem; }
@@ -91,6 +92,7 @@
 .text-\[0\.68rem\] { font-size: 0.68rem; }
 .text-\[0\.92rem\] { font-size: 0.92rem; }
 .text-\[0\.98rem\] { font-size: 0.98rem; }
+.text-\[1\.2rem\]  { font-size: 1.2rem; }
 .text-\[1\.35rem\] { font-size: 1.35rem; }
 .text-\[1\.6rem\]  { font-size: 1.6rem; }
 .text-\[1\.1rem\]  { font-size: 1.1rem; }
@@ -118,6 +120,19 @@
 .pk-company-mark img {
     display: block;
     margin-inline: auto;
+}
+
+/* An aside inside running prose. Used for the example that carries an
+   argument rather than continuing it. */
+.pk-aside {
+    border-left: 2px solid var(--pk-accent);
+    padding: 0.15rem 0 0.15rem 1.6rem;
+}
+.pk-aside p {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.8;
+    color: var(--ploy-text-secondary);
 }
 
 /* Portrait frame. A background-image rather than an <img> so that a missing
