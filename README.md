@@ -1,11 +1,12 @@
-# byzyb.ai + pklabs.ca
+# byzyb.ai + pklabs.ca + painkiller-labs.com
 
-Two static sites in one repo.
+Three static sites in one repo.
 
 | | |
 |---|---|
 | **`byzyb/`** | byzyb.ai — Robin Hutchinson. Resume, essays, and the complete portfolio. |
 | **`pklabs/`** | pklabs.ca — PainKiller Labs. Shipped products, support, and the legal layer. |
+| **`painkiller-labs/`** | painkiller-labs.com — the parent company site: three pillars, platforms, leadership. One self-contained `index.html`. |
 | **`shared/`** | The source of truth. Product copy, the stylesheet, and the build. |
 | **`brand/`** | Logo masters. Not served by either site. |
 | **`docs/manual.html`** | **Which site does this belong on?** Open this first. |
@@ -35,6 +36,7 @@ Both sites are static; nothing builds on the server.
 |---|---|---|
 | byzyb.ai | Vercel | `byzyb` |
 | pklabs.ca | Vercel | `pklabs` |
+| painkiller-labs.com | Vercel | `painkiller-labs` |
 
 **The byzyb.ai Vercel project's Root Directory must be set to `byzyb`** — its
 files used to sit at the repo root. Until that setting changes, a deploy
