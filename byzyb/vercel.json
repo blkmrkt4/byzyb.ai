@@ -1,0 +1,14 @@
+{
+  "redirects": [
+    {
+      "source": "/rbd",
+      "destination": "https://bound-production.up.railway.app",
+      "permanent": false
+    },
+    {
+      "source": "/rbd/:path*",
+      "destination": "https://bound-production.up.railway.app/:path*",
+      "permanent": false
+    }
+  ]
+}
