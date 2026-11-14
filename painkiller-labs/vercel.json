@@ -1,4 +1,9 @@
 {
   "cleanUrls": true,
-  "trailingSlash": false
+  "trailingSlash": false,
+  "rewrites": [
+    { "source": "/admin", "destination": "https://ledger-production-dd701628.up.railway.app/admin" },
+    { "source": "/admin/:path*", "destination": "https://ledger-production-dd701628.up.railway.app/admin/:path*" },
+    { "source": "/api/stripe/webhook", "destination": "https://ledger-production-dd701628.up.railway.app/api/stripe/webhook" }
+  ]
 }

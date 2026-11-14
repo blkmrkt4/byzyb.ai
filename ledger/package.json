@@ -1,0 +1,11 @@
+{
+  "name": "pk-ledger",
+  "private": true,
+  "type": "module",
+  "description": "Private invoice ledger for painkiller-labs.com/admin. No dependencies: node:http, node:sqlite, fetch.",
+  "engines": { "node": "22.x" },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server.mjs",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.mjs"
+  }
+}
