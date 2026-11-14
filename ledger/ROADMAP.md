@@ -22,10 +22,10 @@ Agreed 2026-11-14. Tick items off here as they ship.
 
 ## Phase 2: see who has paid at a glance
 
-- [ ] **3. Dashboard (opens first).** Owed to you now, overdue and by whom, due in the next 30
+- [x] **3. Dashboard (opens first).** Owed to you now, overdue and by whom, due in the next 30
       days, received this month. Aged receivables (current, 1–30, 31–60, 60+ days late) and a
       balance per client.
-- [ ] **4. Printable reports.** Receivables report; payments received for a date range with HST
+- [x] **4. Printable reports.** Receivables report; payments received for a date range with HST
       collected (for HST filing); client statement; a payments CSV alongside the invoices CSV.
 
 ## Phase 3: match to the bank
@@ -49,3 +49,7 @@ Agreed 2026-11-14. Tick items off here as they ship.
   back to a payment link per payment otherwise. Refunds and disputes need the Stripe webhook
   to send `charge.refunded` and `charge.dispute.*` events. The HST number comes from the
   `HST_NUMBER` variable on the Railway service.
+- Phase 2 shipped 2026-11-14. Dashboard at /admin/dashboard (signing in lands there) with a
+  "Finish setting up" checklist for the Stripe webhook events, the Checkout key permission
+  and the HST number. Reports at /admin/reports: receivables, payments and HST (with HST
+  charged on invoices issued in the period), client statements, CSV exports, print layouts.

@@ -1,5 +1,5 @@
 // Painkiller Labs admin. Plain JavaScript, no build step.
-// Routes: /admin/invoices, /admin/invoices/new, /admin/invoices/:id, /admin/invoices/:id/edit
+// Routes: /admin/dashboard, /admin/reports, /admin/invoices, /admin/invoices/new, /admin/invoices/:id, /admin/invoices/:id/edit
 
 const app = document.getElementById('app');
 const toastEl = document.getElementById('toast');
@@ -118,11 +118,13 @@ async function route() {
   window.scrollTo(0, 0);
   try {
     let m;
+    if (p === '/admin/dashboard' || p === '/admin') return await dashboardPage();
+    if (p === '/admin/reports') return await reportsPage();
     if (p === '/admin/invoices') return await listPage();
     if (p === '/admin/invoices/new') return await formPage(null);
     if ((m = p.match(/^\/admin\/invoices\/([A-Za-z0-9]{4})\/edit$/))) return await formPage(m[1].toUpperCase());
     if ((m = p.match(/^\/admin\/invoices\/([A-Za-z0-9]{4})(?:-\d{2})?$/))) return await detailPage(m[1].toUpperCase());
-    app.innerHTML = `<div class="empty">Page not found. <a href="/admin/invoices" data-nav>Go to invoices</a></div>`;
+    app.innerHTML = `<div class="empty">Page not found. <a href="/admin/dashboard" data-nav>Go to the dashboard</a></div>`;
   } catch (err) {
     app.innerHTML = `<div class="notice bad">${esc(err.message)}</div><p><a href="/admin/invoices" data-nav>Back to invoices</a></p>`;
   }
@@ -198,6 +200,7 @@ async function listPage() {
   }));
 
   renderUnmatched(unmatched, params.get('ignored') === '1');
+  if (location.hash === '#unmatched') $('#unmatched').scrollIntoView();
 }
 
 function renderUnmatched({ payments, open_lines }, showIgnored) {
@@ -710,6 +713,346 @@ async function detailPage(id) {
     if (note === null) return;
     if (await busy(b, () => api(`payments/${b.dataset.ignore}/ignore`, { method: 'POST', body: { note } }))) { toast('Payment removed'); reload(); }
   }));
+}
+
+// ---------- shared bits for dashboard and reports ----------
+
+// { CAD: 1200, USD: 300 } -> "$12.00 + US$3.00". Empty or all-zero -> "$0.00".
+function totalsText(t) {
+  const parts = Object.entries(t || {}).filter(([, v]) => v);
+  return parts.length ? parts.map(([c, v]) => money(v, c)).join(' + ') : money(0);
+}
+const totalCents = (t) => Object.values(t || {}).reduce((a, v) => a + v, 0);
+const monthName = (ym) => new Date(`${ym}-15T12:00:00Z`).toLocaleDateString('en-CA', { month: 'long', timeZone: 'UTC' });
+const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const lateText = (d) => (d === 1 ? '1 day' : `${d} days`);
+const AGE_LABEL = { current: 'Not late yet', d1_30: '1–30 days late', d31_60: '31–60 days late', d61_plus: 'More than 60 days late' };
+const AGE_SHORT = { current: 'Not late', d1_30: '1–30 days', d31_60: '31–60 days', d61_plus: '61+ days' };
+const AGE_KEYS = Object.keys(AGE_LABEL);
+
+function printHead(title, sub) {
+  return `<div class="print-head"><div><strong>Painkiller Labs Inc.</strong> · ${esc(title)}</div><div>${esc(sub)} · Printed ${esc(niceDate(config.today))}</div></div>`;
+}
+
+// ---------- dashboard ----------
+
+const SETUP_TEXT = {
+  webhook_events: {
+    title: 'Send refunds and disputes to the ledger',
+    body: 'In Stripe, open Developers → Webhooks → the painkiller-labs.com/api/stripe/webhook endpoint and add these events: charge.refunded, charge.dispute.created, charge.dispute.updated and charge.dispute.closed. Until then, a refunded payment still shows as paid.',
+  },
+  checkout: {
+    title: 'Let the Pay buttons create Stripe checkouts',
+    body: 'In Stripe, open Developers → API keys, edit the restricted key the ledger uses, and set Checkout Sessions, Prices and Payment Links to Write. This ticks itself off once the key can reach Checkout.',
+  },
+  hst_number: {
+    title: 'Add your HST number',
+    body: 'Once you have it, send it to Claude or set HST_NUMBER on the ledger service in Railway. Invoices that charge HST must show it.',
+  },
+};
+
+function setupPanel(setup) {
+  const todo = setup.filter((s) => !s.done);
+  if (!todo.length) return '';
+  return `
+    <section class="panel setup noprint">
+      <h2>Finish setting up <span class="muted small">${plural(todo.length, 'thing')} left</span></h2>
+      <ol class="setup-list">${todo.map((s) => `
+        <li><div><strong>${esc(SETUP_TEXT[s.key].title)}</strong><p class="muted small">${esc(SETUP_TEXT[s.key].body)}</p></div>
+          ${s.manual ? `<button class="btn btn-quiet btn-sm" data-setup="${s.key}">Mark done</button>` : ''}</li>`).join('')}</ol>
+    </section>`;
+}
+
+function tile(label, value, sub, href) {
+  const inner = `<div class="tile-label">${esc(label)}</div><div class="tile-value">${value}</div>${sub ? `<div class="tile-sub">${sub}</div>` : ''}`;
+  return href ? `<a class="tile" href="${href}" data-nav>${inner}</a>` : `<div class="tile">${inner}</div>`;
+}
+
+function meterList(aging) {
+  const total = AGE_KEYS.reduce((a, k) => a + totalCents(aging[k]), 0);
+  return `<ul class="meters">${AGE_KEYS.map((k) => {
+    const v = totalCents(aging[k]);
+    const pct = total ? Math.round((v / total) * 1000) / 10 : 0;
+    return `<li class="meter m-${k}" title="${esc(AGE_LABEL[k])}: ${esc(totalsText(aging[k]))}${total ? ` (${pct}%)` : ''}">
+      <span class="meter-name">${esc(AGE_LABEL[k])}</span>
+      <span class="meter-track" aria-hidden="true"><span class="meter-fill" data-pct="${pct}"></span></span>
+      <span class="meter-value">${esc(totalsText(aging[k]))}</span></li>`;
+  }).join('')}</ul>`;
+}
+
+function itemRows(items, cols) {
+  return items.map((l) => `
+    <tr class="click" data-href="/admin/invoices/${esc(l.invoice_id)}">
+      <td data-label="Payment"><span><a class="id" href="/admin/invoices/${esc(l.invoice_id)}" data-nav>${esc(l.ref)}</a>${l.label ? `<div class="muted small">${esc(l.label)}</div>` : ''}</span></td>
+      <td data-label="Client">${esc(l.client_name)}</td>
+      ${cols.includes('late') ? `<td data-label="Late"><span class="badge Overdue">${lateText(l.days_late)}</span></td>` : ''}
+      ${cols.includes('due') ? `<td data-label="Due">${esc(l.due_date ? niceDate(l.due_date) : 'On completion')}</td>` : ''}
+      <td data-label="Amount" class="num">${money(l.outstanding_cents, l.currency)}</td>
+    </tr>`).join('');
+}
+
+function clickableRows(root) {
+  $$('tr.click[data-href]', root).forEach((tr) => tr.addEventListener('click', (e) => {
+    if (e.target.closest('a,button')) return;
+    go(tr.dataset.href);
+  }));
+}
+
+async function dashboardPage() {
+  const d = await api('dashboard');
+  document.title = 'Dashboard | Painkiller Labs admin';
+  const overdueClients = new Set(d.overdue_items.map((l) => l.client_name)).size;
+  const openInvoices = d.clients.reduce((a, c) => a + c.invoices, 0);
+  const thisMonth = totalCents(d.received_this_month);
+  const lastMonth = totalCents(d.received_last_month);
+  const delta = thisMonth - lastMonth;
+  const deltaText = lastMonth || thisMonth
+    ? `<span class="${delta >= 0 ? 'up' : 'down'}">${delta >= 0 ? '+' : '−'}${money(Math.abs(delta))}</span> vs ${esc(monthName(d.last_month))}`
+    : `Nothing yet in ${esc(monthName(d.last_month))} either`;
+
+  app.innerHTML = `
+    <div class="head">
+      <h1>Dashboard</h1>
+      <div class="actions"><a class="btn btn-quiet" href="/admin/reports" data-nav>Reports</a><a class="btn" href="/admin/invoices/new" data-nav>New invoice</a></div>
+    </div>
+    ${setupPanel(d.setup)}
+    <section class="hero-row${d.setup.some((s) => !s.done) ? ' section' : ''}">
+      <div class="hero">
+        <div class="tile-label">Owed to you</div>
+        <div class="hero-num">${esc(totalsText(d.owed))}</div>
+        <div class="tile-sub">${openInvoices ? `${plural(openInvoices, 'open invoice')}${totalCents(d.unsent) ? ` · ${esc(totalsText(d.unsent))} not sent yet` : ''}${totalCents(d.on_completion) ? ` · ${esc(totalsText(d.on_completion))} due on completion` : ''}` : 'Nobody owes you anything right now.'}</div>
+      </div>
+      <div class="kpis">
+        ${tile('Overdue', esc(totalsText(d.overdue)), d.overdue_items.length ? `${plural(d.overdue_items.length, 'payment')} from ${plural(overdueClients, 'client')}` : 'Nothing overdue', null)}
+        ${tile('Due in the next 30 days', esc(totalsText(d.due_30)), d.upcoming_items.length ? plural(d.upcoming_items.length, 'payment') : 'Nothing due soon', null)}
+        ${tile(`Received in ${monthName(d.month)}`, esc(totalsText(d.received_this_month)), deltaText, `/admin/reports?r=payments&period=this-month`)}
+        ${tile('Unmatched payments', String(d.unmatched.count), d.unmatched.count ? `${esc(totalsText(d.unmatched.total))} to assign` : 'Every payment is assigned', d.unmatched.count ? '/admin/invoices#unmatched' : null)}
+      </div>
+    </section>
+
+    <div class="dash-grid section">
+      <section class="panel">
+        <div class="head tight"><h2>How late is the money?</h2><a class="small" href="/admin/reports?r=receivables" data-nav>Receivables report</a></div>
+        ${meterList(d.aging)}
+        <p class="muted small">Unpaid amounts on sent invoices by how far past their due date they are. Drafts and payments due on completion count as not late.</p>
+      </section>
+      <section class="panel">
+        <h2>Overdue</h2>
+        ${d.overdue_items.length ? `<table class="tbl compact"><thead><tr><th>Payment</th><th>Client</th><th>Late</th><th class="num">Amount</th></tr></thead>
+          <tbody>${itemRows(d.overdue_items.slice(0, 8), ['late'])}</tbody></table>
+          ${d.overdue_items.length > 8 ? `<p class="small"><a href="/admin/invoices?status=Overdue" data-nav>All ${d.overdue_items.length} overdue payments</a></p>` : ''}`
+          : '<div class="empty">Nothing overdue. Everyone is paid up to date.</div>'}
+      </section>
+    </div>
+
+    <section class="panel section">
+      <div class="head tight"><h2>Balance by client</h2><span class="muted small">Click a client for their statement</span></div>
+      ${d.clients.length ? `<table class="tbl compact">
+        <thead><tr><th>Client</th><th class="num">Open invoices</th><th class="num">Owed</th><th class="num">Overdue</th><th>Oldest late payment</th></tr></thead>
+        <tbody>${d.clients.map((c) => `
+          <tr class="click" data-href="/admin/reports?r=statement&client=${encodeURIComponent(c.client_name)}">
+            <td data-label="Client"><a href="/admin/reports?r=statement&client=${encodeURIComponent(c.client_name)}" data-nav>${esc(c.client_name)}</a></td>
+            <td data-label="Open invoices" class="num">${c.invoices}</td>
+            <td data-label="Owed" class="num">${esc(totalsText(c.outstanding))}</td>
+            <td data-label="Overdue" class="num">${totalCents(c.overdue) ? esc(totalsText(c.overdue)) : '<span class="muted">—</span>'}</td>
+            <td data-label="Oldest late">${c.oldest_days_late ? `<span class="badge Overdue">${lateText(c.oldest_days_late)}</span>` : '<span class="muted">Not late</span>'}</td>
+          </tr>`).join('')}</tbody></table>` : '<div class="empty">No client owes anything.</div>'}
+    </section>
+
+    <div class="dash-grid section">
+      <section class="panel">
+        <h2>Due in the next 30 days</h2>
+        ${d.upcoming_items.length ? `<table class="tbl compact"><thead><tr><th>Payment</th><th>Client</th><th>Due</th><th class="num">Amount</th></tr></thead>
+          <tbody>${itemRows(d.upcoming_items, ['due'])}</tbody></table>` : '<div class="empty">Nothing due in the next 30 days.</div>'}
+      </section>
+      <section class="panel">
+        <div class="head tight"><h2>Recent payments</h2><a class="small" href="/admin/reports?r=payments&period=this-month" data-nav>Payments report</a></div>
+        ${d.recent_payments.length ? `<table class="tbl compact"><thead><tr><th>Date</th><th>From</th><th>Payment</th><th class="num">Amount</th></tr></thead>
+          <tbody>${d.recent_payments.map((p) => `
+            <tr${p.ref ? ` class="click" data-href="/admin/invoices/${esc(p.ref.slice(0, 4))}"` : ''}>
+              <td data-label="Date">${esc(niceDate(p.date))}</td>
+              <td data-label="From">${esc(p.client_name || p.payer || '—')}</td>
+              <td data-label="Payment">${p.ref ? `<span class="mono">${esc(p.ref)}</span>` : '<span class="badge Partly">Unmatched</span>'}</td>
+              <td data-label="Amount" class="num">${money(p.net_cents, p.currency)}${p.net_cents !== p.amount_cents ? `<div class="muted small">of ${money(p.amount_cents, p.currency)}</div>` : ''}</td>
+            </tr>`).join('')}</tbody></table>` : '<div class="empty">No payments yet.</div>'}
+      </section>
+    </div>
+
+    ${d.unsent_items.length ? `
+      <section class="panel section">
+        <div class="head tight"><h2>Not sent yet</h2><span class="muted small">Invoices still in draft. Email them from the invoice page.</span></div>
+        <table class="tbl compact"><thead><tr><th>Payment</th><th>Client</th><th>Due</th><th class="num">Amount</th></tr></thead>
+        <tbody>${itemRows(d.unsent_items, ['due'])}</tbody></table>
+      </section>` : ''}`;
+
+  clickableRows(app);
+  // Widths are set here because the page's CSP doesn't allow inline style attributes.
+  $$('.meter-fill').forEach((el) => { el.style.width = `${el.dataset.pct}%`; });
+  $$('[data-setup]').forEach((b) => b.addEventListener('click', async () => {
+    if (await busy(b, () => api(`setup/${b.dataset.setup}`, { method: 'POST', body: { done: true } }))) { toast('Marked done'); dashboardPage(); }
+  }));
+}
+
+// ---------- reports ----------
+
+function periodRange(period, today) {
+  const [y, m] = today.split('-').map(Number);
+  const iso = (yy, mm, dd) => new Date(Date.UTC(yy, mm - 1, dd)).toISOString().slice(0, 10);
+  const monthEnd = (yy, mm) => iso(yy, mm + 1, 0);
+  const q = Math.floor((m - 1) / 3);
+  switch (period) {
+    case 'this-month': return [iso(y, m, 1), monthEnd(y, m)];
+    case 'last-month': return [iso(y, m - 1, 1), monthEnd(y, m - 1)];
+    case 'this-quarter': return [iso(y, q * 3 + 1, 1), monthEnd(y, q * 3 + 3)];
+    case 'last-quarter': return [iso(y, q * 3 - 2, 1), monthEnd(y, q * 3)];
+    case 'this-year': return [iso(y, 1, 1), iso(y, 12, 31)];
+    case 'last-year': return [iso(y - 1, 1, 1), iso(y - 1, 12, 31)];
+    default: return null;
+  }
+}
+const PERIODS = { 'this-month': 'This month', 'last-month': 'Last month', 'this-quarter': 'This quarter', 'last-quarter': 'Last quarter', 'this-year': 'This year', 'last-year': 'Last year' };
+const REPORTS = { receivables: 'Receivables', payments: 'Payments and HST', statement: 'Client statement' };
+
+async function reportsPage() {
+  const params = new URLSearchParams(location.search);
+  const r = REPORTS[params.get('r')] ? params.get('r') : 'receivables';
+  document.title = `${REPORTS[r]} | Painkiller Labs admin`;
+  const tabs = `<nav class="tabs noprint" aria-label="Reports">${Object.entries(REPORTS).map(([k, v]) => `<a href="/admin/reports?r=${k}" data-nav${k === r ? ' aria-current="page"' : ''}>${v}</a>`).join('')}</nav>`;
+  const head = (extra = '') => `<div class="head"><h1>Reports</h1><div class="actions noprint">${extra}<button class="btn btn-quiet" type="button" id="print">Print or save as PDF</button></div></div>${tabs}`;
+  const bindPrint = () => $('#print')?.addEventListener('click', () => window.print());
+
+  if (r === 'receivables') {
+    const d = await api('reports/receivables');
+    const cells = (t) => AGE_KEYS.map((k) => `<td class="num" data-label="${AGE_SHORT[k]}">${totalCents(t[k]) ? esc(totalsText(t[k])) : '<span class="muted">—</span>'}</td>`).join('');
+    app.innerHTML = `${head('<a class="btn btn-quiet" href="/admin/api/reports/receivables.csv" download>Export CSV</a>')}
+      ${printHead('Receivables', `As of ${niceDate(d.as_of)}`)}
+      <p class="muted section">Everything clients owe as of ${esc(niceDate(d.as_of))}, by how late it is. Drafts and payments due on completion count as not late.</p>
+      <dl class="summary five">${[...AGE_KEYS, 'total'].map((k) => `<div><dt>${k === 'total' ? 'Total owed' : AGE_SHORT[k]}</dt><dd>${esc(totalsText(d.totals[k]))}</dd></div>`).join('')}</dl>
+      ${d.clients.length ? `<table class="tbl report">
+        <thead><tr><th>Client / payment</th><th>Due</th>${AGE_KEYS.map((k) => `<th class="num">${AGE_SHORT[k]}</th>`).join('')}<th class="num">Total</th></tr></thead>
+        <tbody>${d.clients.map((c) => `
+          <tr class="group"><td data-label="Client" colspan="2"><a href="/admin/reports?r=statement&client=${encodeURIComponent(c.client_name)}" data-nav>${esc(c.client_name)}</a></td>${cells(c)}<td class="num" data-label="Total">${esc(totalsText(c.total))}</td></tr>
+          ${c.items.map((l) => `
+            <tr class="click" data-href="/admin/invoices/${esc(l.invoice_id)}">
+              <td data-label="Payment"><span class="mono">${esc(l.ref)}</span>${l.label ? ` <span class="muted small">${esc(l.label)}</span>` : ''}${l.sent ? '' : ' <span class="badge Draft">Not sent</span>'}</td>
+              <td data-label="Due">${esc(l.due_date ? niceDate(l.due_date) : 'On completion')}${l.days_late ? ` <span class="muted small">(${lateText(l.days_late)} late)</span>` : ''}</td>
+              ${AGE_KEYS.map((k) => `<td class="num" data-label="${AGE_SHORT[k]}">${l.bucket === k ? money(l.outstanding_cents, l.currency) : ''}</td>`).join('')}
+              <td class="num" data-label="Total">${money(l.outstanding_cents, l.currency)}</td>
+            </tr>`).join('')}`).join('')}</tbody>
+        <tfoot><tr><td colspan="2">Total</td>${cells(d.totals)}<td class="num">${esc(totalsText(d.totals.total))}</td></tr></tfoot>
+      </table>` : '<div class="empty">Nobody owes you anything.</div>'}`;
+    clickableRows(app);
+    return bindPrint();
+  }
+
+  if (r === 'payments') {
+    const period = params.get('period') || (params.get('from') ? '' : 'this-month');
+    const range = periodRange(period, config.today) || [params.get('from'), params.get('to')];
+    const [from, to] = range;
+    const d = await api(`reports/payments?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    const t = d.totals;
+    const inv = Object.entries(d.invoiced);
+    app.innerHTML = `${head(`<a class="btn btn-quiet" href="/admin/api/reports/payments.csv?from=${esc(from)}&to=${esc(to)}" download>Export CSV</a>`)}
+      ${printHead('Payments and HST', `${niceDate(from)} to ${niceDate(to)}`)}
+      <form class="filters report-filters noprint section" id="range">
+        <label>From <input type="date" name="from" value="${esc(from)}" required></label>
+        <label>To <input type="date" name="to" value="${esc(to)}" required></label>
+        <button class="btn btn-quiet" type="submit">Show</button>
+        <div class="chips">${Object.entries(PERIODS).map(([k, v]) => `<a class="chip" href="/admin/reports?r=payments&period=${k}" data-nav${k === period ? ' aria-current="true"' : ''}>${v}</a>`).join('')}</div>
+      </form>
+      <div class="dash-grid section">
+        <section class="panel">
+          <h2>Money received</h2>
+          <dl class="kv wide">
+            <dt>Payments received</dt><dd class="num">${esc(totalsText(t.received))}</dd>
+            <dt>Refunds</dt><dd class="num">${totalCents(t.refunded) ? esc(totalsText(t.refunded)) : money(0)}</dd>
+            <dt><strong>Net received</strong></dt><dd class="num"><strong>${esc(totalsText(t.net))}</strong></dd>
+            <dt>HST in those payments</dt><dd class="num">${esc(totalsText(t.hst))}</dd>
+            <dt>Before tax</dt><dd class="num">${esc(totalsText(t.before_tax))}</dd>
+          </dl>
+          ${totalCents(t.unmatched) ? `<div class="notice warn small">${esc(totalsText(t.unmatched))} isn't matched to an invoice, so it has no HST worked out. <a href="/admin/invoices#unmatched" data-nav>Match it</a>.</div>` : ''}
+          ${totalCents(t.disputed) ? `<div class="notice bad small">${esc(totalsText(t.disputed))} is held in card disputes and isn't counted as paid on the invoices.</div>` : ''}
+        </section>
+        <section class="panel">
+          <h2>Invoiced in this period</h2>
+          ${inv.length ? `<dl class="kv wide">${inv.map(([c, v]) => `
+            <dt>Invoices issued</dt><dd class="num">${v.count}</dd>
+            <dt>Before tax</dt><dd class="num">${money(v.subtotal, c)}</dd>
+            <dt><strong>HST charged</strong></dt><dd class="num"><strong>${money(v.hst, c)}</strong></dd>
+            <dt>Total invoiced</dt><dd class="num">${money(v.total, c)}</dd>`).join('')}</dl>` : '<p class="muted">No invoices issued in this period.</p>'}
+          <p class="muted small">HST is normally reported for the period you invoice in, so "HST charged" is usually the figure for your return. If your accountant files on a cash basis, use "HST in those payments" instead.</p>
+        </section>
+      </div>
+      <section class="section">
+        <h2>Every payment and refund</h2>
+        ${d.rows.length ? `<table class="tbl report section">
+          <thead><tr><th>Date</th><th>Payment</th><th>Client / payer</th><th>Method</th><th class="num">Amount</th><th class="num">HST</th></tr></thead>
+          <tbody>${d.rows.map((x) => `
+            <tr${x.ref ? ` class="click" data-href="/admin/invoices/${esc(x.ref.slice(0, 4))}"` : ''}>
+              <td data-label="Date">${esc(niceDate(x.date))}</td>
+              <td data-label="Payment">${x.ref ? `<span class="mono">${esc(x.ref)}</span>` : '<span class="badge Partly">Unmatched</span>'}${x.kind === 'refund' ? ' <span class="badge Overdue">Refund</span>' : ''}${x.dispute_status ? ' <span class="badge Overdue">Disputed</span>' : ''}</td>
+              <td data-label="Client">${esc(x.client_name || x.payer || '—')}</td>
+              <td data-label="Method">${esc(x.method || '')}</td>
+              <td data-label="Amount" class="num">${money(x.amount_cents, x.currency)}</td>
+              <td data-label="HST" class="num">${x.matched ? money(x.hst_cents, x.currency) : '<span class="muted">—</span>'}</td>
+            </tr>`).join('')}</tbody>
+          <tfoot><tr><td colspan="4">Net</td><td class="num">${esc(totalsText(t.net))}</td><td class="num">${esc(totalsText(t.hst))}</td></tr></tfoot>
+        </table>` : '<div class="empty section">No payments in this period.</div>'}
+      </section>`;
+    $('#range').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const f = e.target;
+      if (!f.from.value || !f.to.value) return toast('Choose both dates.', true);
+      go(`/admin/reports?r=payments&from=${f.from.value}&to=${f.to.value}`, true);
+    });
+    clickableRows(app);
+    return bindPrint();
+  }
+
+  // Client statement
+  const { clients } = await api('clients');
+  const client = params.get('client') || '';
+  const picker = `<form class="filters report-filters noprint section" id="pick">
+      <label>Client <select name="client"><option value="">Choose a client…</option>${clients.map((c) => `<option${c === client ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
+    </form>`;
+  if (!client) {
+    app.innerHTML = `${head()}${picker}<div class="empty section">${clients.length ? 'Choose a client to see every invoice, payment and refund, with a running balance.' : 'No clients yet.'}</div>`;
+  } else {
+    const s = await api(`reports/statement?client=${encodeURIComponent(client)}`);
+    app.innerHTML = `${head()}${printHead(`Statement for ${s.client_name}`, `As of ${niceDate(s.as_of)}`)}${picker}
+      <div class="statement-head section">
+        <div><h2>${esc(s.client_name)}</h2>${s.client_email ? `<p class="muted">${esc(s.client_email)}</p>` : ''}</div>
+        <dl class="summary one"><div><dt>Balance owing</dt><dd>${esc(totalsText(s.balance))}</dd></div></dl>
+      </div>
+      <table class="tbl report section">
+        <thead><tr><th>Date</th><th>Description</th><th class="num">Charges</th><th class="num">Payments</th><th class="num">Balance</th></tr></thead>
+        <tbody>${s.entries.map((e) => `
+          <tr${e.ref ? ` class="click" data-href="/admin/invoices/${esc(e.ref.slice(0, 4))}"` : ''}>
+            <td data-label="Date">${esc(niceDate(e.date))}</td>
+            <td data-label="Description">${esc(e.text)}</td>
+            <td data-label="Charges" class="num">${e.charge_cents ? money(e.charge_cents, e.currency) : ''}</td>
+            <td data-label="Payments" class="num">${e.credit_cents ? money(e.credit_cents, e.currency) : ''}</td>
+            <td data-label="Balance" class="num">${money(e.balance_cents, e.currency)}</td>
+          </tr>`).join('')}</tbody>
+        <tfoot><tr><td colspan="4">Balance owing</td><td class="num">${esc(totalsText(s.balance))}</td></tr></tfoot>
+      </table>
+      ${s.open_items.length ? `
+        <section class="section">
+          <h2>Still to pay</h2>
+          <table class="tbl report section">
+            <thead><tr><th>Payment</th><th>Due</th><th class="num">Amount</th></tr></thead>
+            <tbody>${s.open_items.map((l) => `
+              <tr class="click" data-href="/admin/invoices/${esc(l.invoice_id)}">
+                <td data-label="Payment"><span class="mono">${esc(l.ref)}</span>${l.label ? ` <span class="muted small">${esc(l.label)}</span>` : ''}</td>
+                <td data-label="Due">${esc(l.due_date ? niceDate(l.due_date) : 'On completion')}${l.days_late ? ` <span class="badge Overdue">${lateText(l.days_late)} late</span>` : ''}</td>
+                <td data-label="Amount" class="num">${money(l.outstanding_cents, l.currency)}</td>
+              </tr>`).join('')}</tbody>
+          </table>
+        </section>` : '<p class="muted section">Nothing left to pay.</p>'}`;
+  }
+  $('#pick select').addEventListener('change', (e) => go(`/admin/reports?r=statement${e.target.value ? `&client=${encodeURIComponent(e.target.value)}` : ''}`, true));
+  clickableRows(app);
+  bindPrint();
 }
 
 // ---------- start ----------

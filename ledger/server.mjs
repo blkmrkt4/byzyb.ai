@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDb } from './lib/db.mjs';
 import * as L from './lib/ledger.mjs';
+import * as R from './lib/reports.mjs';
 import * as A from './lib/auth.mjs';
 import { sendLoginEmail, sendInvoiceEmail } from './lib/email.mjs';
 import { renderInvoicePage, renderNotFound, invoiceEmail } from './lib/invoice-page.mjs';
@@ -49,6 +50,8 @@ const STATIC = {
   'admin.css': 'text/css; charset=utf-8',
   'admin.js': 'text/javascript; charset=utf-8',
 };
+const SETUP_MANUAL = ['webhook_events', 'checkout'];
+
 const INVOICE_STATIC = {
   'invoice.css': 'text/css; charset=utf-8',
   'invoice.js': 'text/javascript; charset=utf-8',
@@ -154,6 +157,13 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
         public_url: cfg.publicUrl, hst_number: cfg.business.hstNumber,
       });
     }
+    if (method === 'GET' && a === 'dashboard') return json(res, 200, { ...R.dashboard(db), setup: await setupStatus() });
+    if (method === 'POST' && a === 'setup' && SETUP_MANUAL.includes(b)) {
+      L.setSetting(db, `setup.${b}`, body.done ? 'done' : '');
+      return json(res, 200, { ok: true });
+    }
+    if (method === 'GET' && a === 'reports') return reportsApi(res, b, q);
+    if (method === 'GET' && a === 'clients') return json(res, 200, { clients: L.listClients(db) });
     if (method === 'GET' && a === 'next-id') return json(res, 200, { id: L.nextInvoiceId(db) });
     if (method === 'GET' && a === 'invoices' && !b) return json(res, 200, { invoices: L.listInvoices(db, q), clients: L.listClients(db) });
     if (method === 'GET' && a === 'invoices.csv') {
@@ -191,6 +201,46 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
       if (c === 'ignore') { L.ignorePayment(db, b, body.note); return json(res, 200, { ok: true }); }
       if (c === 'restore') { L.restorePayment(db, b); return json(res, 200, { ok: true }); }
     }
+    return json(res, 404, { error: 'Not found' });
+  }
+
+  // ---------- setup checklist ----------
+  // Things only the owner can do outside the ledger. Each is detected where the
+  // ledger can see it, and can be ticked off by hand where it can't.
+  let checkoutCheck = { at: 0, ok: false };
+  async function checkoutAllowed() {
+    if (!stripe) return false;
+    if (Date.now() - checkoutCheck.at < 10 * 60_000) return checkoutCheck.ok;
+    let ok = false;
+    try { await stripe.get('/checkout/sessions', { limit: 1 }); ok = true; } catch { ok = false; }
+    checkoutCheck = { at: Date.now(), ok };
+    return ok;
+  }
+  async function setupStatus() {
+    const manual = (k) => L.getSetting(db, `setup.${k}`) === 'done';
+    const sawAdjustment = !!db.prepare("SELECT 1 FROM audit_log WHERE action IN ('refund', 'dispute') LIMIT 1").get();
+    return [
+      { key: 'webhook_events', done: manual('webhook_events') || sawAdjustment, manual: true },
+      { key: 'checkout', done: manual('checkout') || await checkoutAllowed(), manual: true },
+      { key: 'hst_number', done: !!cfg.business.hstNumber, manual: false },
+    ];
+  }
+
+  // ---------- reports ----------
+  function reportsApi(res, name, q) {
+    const csv = name?.endsWith('.csv');
+    const kind = csv ? name.slice(0, -4) : name;
+    const today = L.todayToronto();
+    const file = (n, body) => send(res, 200, body, 'text/csv; charset=utf-8', { 'Content-Disposition': `attachment; filename="${n}"` });
+    if (kind === 'receivables') {
+      const r = R.receivables(db, today);
+      return csv ? file(`receivables-${today}.csv`, R.receivablesCsv(r)) : json(res, 200, r);
+    }
+    if (kind === 'payments') {
+      const r = R.paymentsReport(db, { from: q.from, to: q.to });
+      return csv ? file(`payments-${q.from}-to-${q.to}.csv`, R.paymentsCsv(r)) : json(res, 200, r);
+    }
+    if (kind === 'statement' && !csv) return json(res, 200, R.clientStatement(db, q.client, today));
     return json(res, 404, { error: 'Not found' });
   }
 
@@ -321,10 +371,10 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
       const t = new URLSearchParams(await readBody(req, 10_000)).get('token');
       const session = A.redeemLoginToken(db, t);
       if (!session) return send(res, 400, authPage('Link expired', `<p>This sign-in link has expired or has already been used.</p><p><a class="btn" href="/admin/login">Get a new link</a></p>`));
-      return redirect(res, '/admin/invoices', { 'Set-Cookie': A.sessionCookie(session, cfg.secureCookies) });
+      return redirect(res, '/admin/dashboard', { 'Set-Cookie': A.sessionCookie(session, cfg.secureCookies) });
     }
     if (p === '/admin/dev-login' && cfg.devLogin && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress)) {
-      return redirect(res, '/admin/invoices', { 'Set-Cookie': A.sessionCookie(A.createSession(db), false) });
+      return redirect(res, '/admin/dashboard', { 'Set-Cookie': A.sessionCookie(A.createSession(db), false) });
     }
     if (p === '/admin/logout' && req.method === 'POST') {
       A.endSession(db, req);
@@ -338,7 +388,7 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
         return handleApi(req, res, url, p.slice('/admin/api/'.length).split('/').map(decodeURIComponent));
       }
       if (!authed) return redirect(res, '/admin/login');
-      if (p === '/admin') return redirect(res, '/admin/invoices');
+      if (p === '/admin') return redirect(res, '/admin/dashboard');
       return send(res, 200, shell);
     }
 

@@ -95,6 +95,12 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS settings (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_lines_invoice   ON payment_lines(invoice_id);
 CREATE INDEX IF NOT EXISTS idx_payments_line   ON payments(payment_line_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity    ON audit_log(entity, entity_id);

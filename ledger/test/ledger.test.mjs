@@ -10,6 +10,7 @@ import * as L from '../lib/ledger.mjs';
 import { randomInvoiceId, findRefs, ID_ALPHABET } from '../lib/ids.mjs';
 import { signStripePayload, verifyStripeSignature, paymentFromEvent, createPaymentLink, createLineCheckout, adjustmentFromEvent } from '../lib/stripe.mjs';
 import * as A from '../lib/auth.mjs';
+import * as R from '../lib/reports.mjs';
 import { createApp, makeConfig } from '../server.mjs';
 
 const fresh = () => openDb(':memory:');
@@ -263,7 +264,7 @@ test('magic link sign-in works once, only for the admin address', async (t) => {
   // Opening the link (as an email scanner would) doesn't use it up.
   assert.equal((await req(`/admin/auth?token=${token}`)).status, 200);
   const signIn = await post('/admin/auth', { token });
-  assert.equal(signIn.headers.get('location'), '/admin/invoices');
+  assert.equal(signIn.headers.get('location'), '/admin/dashboard');
   const cookie = signIn.headers.get('set-cookie').split(';')[0];
   assert.match(signIn.headers.get('set-cookie'), /HttpOnly/);
   assert.equal((await post('/admin/auth', { token })).status, 400);
@@ -539,4 +540,88 @@ test('if Checkout is not allowed, Pay falls back to a reusable payment link for 
   const again = await req(`/invoice/${token}/pay/01`, { method: 'POST' });
   assert.equal(again.headers.get('location'), 'https://buy.stripe.com/line1');
   assert.equal(calls.filter(([p]) => p === '/payment_links').length, 1);
+});
+
+// ---------- dashboard and reports ----------
+
+// Three clients: one paid, one late, one with a draft split.
+function book(db) {
+  const paid = invoice(db, { client_name: 'Paid Co', issue_date: '2026-10-01', first_due: '2026-10-15' });
+  L.markSent(db, paid, { sent_date: '2026-10-01' });
+  L.recordManualPayment(db, { line_id: L.getInvoice(db, paid).lines[0].id, amount_cents: 113000, received_at: '2026-11-03', method: 'e-transfer' });
+  const late = invoice(db, { client_name: 'Late Ltd', issue_date: '2026-09-01', subtotal_cents: 30000, schedule: 'monthly', count: 3, first_due: '2026-09-01' });
+  L.markSent(db, late, { sent_date: '2026-09-01' });
+  const draft = split(db, { client_name: 'Draft Inc', issue_date: '2026-11-10', first_due: '2026-11-20' });
+  return { paid, late, draft };
+}
+
+test('the dashboard totals what is owed, overdue, due soon and received', () => {
+  const db = fresh();
+  const { late } = book(db);
+  const d = R.dashboard(db, '2026-11-14');
+  // Late Ltd: 3 × 11,300 (Sep 1, Oct 1, Nov 1 all past). Draft Inc: 300,000 unsent.
+  assert.deepEqual(d.owed, { CAD: 33900 + 300000 });
+  assert.deepEqual(d.overdue, { CAD: 33900 });
+  assert.deepEqual(d.unsent, { CAD: 300000 });
+  assert.deepEqual(d.on_completion, { CAD: 150000 });
+  assert.deepEqual(d.received_this_month, { CAD: 113000 });
+  assert.deepEqual(d.received_last_month, {});
+  assert.deepEqual(d.aging.d61_plus, { CAD: 11300 });
+  assert.deepEqual(d.aging.d31_60, { CAD: 11300 });
+  assert.deepEqual(d.aging.d1_30, { CAD: 11300 });
+  assert.deepEqual(d.aging.current, { CAD: 300000 });
+  assert.equal(d.overdue_items[0].ref, `${late}-01`);
+  assert.equal(d.overdue_items[0].days_late, 74);
+  assert.deepEqual(d.clients.map((c) => c.client_name), ['Late Ltd', 'Draft Inc']);
+});
+
+test('the receivables report groups by client and adds up to what is owed', () => {
+  const db = fresh();
+  book(db);
+  const r = R.receivables(db, '2026-11-14');
+  assert.deepEqual(r.clients.map((c) => c.client_name), ['Draft Inc', 'Late Ltd']);
+  assert.deepEqual(r.totals.total, { CAD: 333900 });
+  assert.match(R.receivablesCsv(r), /^Client,Payment number,.*\r\nDraft Inc,/s);
+});
+
+test('the payments report works out HST, refunds by date, and HST invoiced', async () => {
+  const db = fresh();
+  const { paid } = book(db);
+  const card = invoice(db, { client_name: 'Card Corp', issue_date: '2026-11-05' });
+  L.upsertStripePayment(db, await paymentFromEvent(checkout({ created: Date.parse('2026-11-06T15:00:00Z') / 1000, metadata: { invoice_id: card } })));
+  L.applyRefund(db, { payment_intent: 'pi_1', amount_refunded: 11300 });
+  const r = R.paymentsReport(db, { from: '2026-11-01', to: '2026-11-30' });
+  // Two payments of 1,130 each (HST 130 each), and a 113 refund (HST 13) today.
+  assert.deepEqual(r.totals.received, { CAD: 226000 });
+  assert.deepEqual(r.totals.refunded, { CAD: -11300 });
+  assert.deepEqual(r.totals.net, { CAD: 214700 });
+  assert.deepEqual(r.totals.hst, { CAD: 26000 - 1300 });
+  assert.deepEqual(r.totals.before_tax, { CAD: 214700 - 24700 });
+  // Invoiced in November: Card Corp 1,130 (HST 130) and Draft Inc 3,000 (no HST).
+  assert.deepEqual(r.invoiced.CAD, { count: 2, subtotal: 400000, hst: 13000, total: 413000 });
+  assert.equal(r.rows[0].ref, `${paid}-01`);
+  assert.throws(() => R.paymentsReport(db, { from: '2026-12-01', to: '2026-11-01' }), /after/);
+  assert.match(R.paymentsCsv(r), /HST portion/);
+});
+
+test('a client statement keeps a running balance', () => {
+  const db = fresh();
+  const { paid } = book(db);
+  const s = R.clientStatement(db, 'Paid Co', '2026-11-14');
+  assert.deepEqual(s.entries.map((e) => [e.kind, e.balance_cents]), [['invoice', 113000], ['payment', 0]]);
+  assert.deepEqual(s.balance, { CAD: 0 });
+  assert.equal(s.entries[1].ref, `${paid}-01`);
+  assert.throws(() => R.clientStatement(db, 'Nobody'), /No invoices/);
+});
+
+test('the dashboard API includes the setup checklist, and items can be ticked off', async (t) => {
+  const { req, db } = await server(t);
+  const cookie = `pk_admin=${A.createSession(db)}`;
+  const get = async () => (await (await req('/admin/api/dashboard', { headers: { cookie } })).json()).setup;
+  assert.deepEqual((await get()).map((s) => [s.key, s.done]), [['webhook_events', false], ['checkout', false], ['hst_number', false]]);
+  await req('/admin/api/setup/webhook_events', { method: 'POST', body: '{"done":true}', headers: { cookie, 'x-ledger': '1' } });
+  assert.equal((await get())[0].done, true);
+  assert.equal((await req('/admin/api/setup/hst_number', { method: 'POST', body: '{"done":true}', headers: { cookie, 'x-ledger': '1' } })).status, 404);
+  const csv = await req('/admin/api/reports/payments.csv?from=2026-11-01&to=2026-11-30', { headers: { cookie } });
+  assert.match(csv.headers.get('content-disposition'), /payments-2026-11-01-to-2026-11-30\.csv/);
 });

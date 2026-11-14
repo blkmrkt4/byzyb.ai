@@ -598,6 +598,17 @@ export function savePayLink(db, lineId, url, amount) {
   db.prepare('UPDATE payment_lines SET pay_link_url = ?, pay_link_amount = ? WHERE id = ?').run(url, amount, lineId);
 }
 
+// ---------- settings ----------
+
+export function getSetting(db, key) {
+  return db.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value ?? null;
+}
+
+export function setSetting(db, key, value) {
+  db.prepare(`INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`).run(key, String(value), nowIso());
+}
+
 // ---------- refunds and disputes ----------
 
 function stripePaymentFor(db, { payment_intent, charge }) {
