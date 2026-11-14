@@ -63,6 +63,28 @@ export const HANDLED_EVENTS = [
   'payment_intent.succeeded',
 ];
 
+// Events that change a payment we already have: refunds and disputes.
+export const ADJUSTMENT_EVENTS = [
+  'charge.refunded',
+  'charge.dispute.created',
+  'charge.dispute.updated',
+  'charge.dispute.closed',
+];
+
+const idOf = (v) => (typeof v === 'string' ? v : v?.id) || null;
+
+// Returns { kind: 'refund' | 'dispute', ... } or { skip: reason }.
+export function adjustmentFromEvent(event) {
+  const o = event.data?.object || {};
+  if (event.type === 'charge.refunded') {
+    return { kind: 'refund', payment_intent: idOf(o.payment_intent), charge: o.id, amount_refunded: o.amount_refunded ?? 0 };
+  }
+  if (event.type.startsWith('charge.dispute.')) {
+    return { kind: 'dispute', payment_intent: idOf(o.payment_intent), charge: idOf(o.charge), amount: o.amount ?? 0, status: o.status || 'needs_response' };
+  }
+  return { skip: `event type ${event.type} not handled` };
+}
+
 function invoiceNumberFromCustomFields(fields = []) {
   const f = fields.find((c) => /invoice/i.test(`${c.key} ${c.label?.custom || ''}`)) ;
   return f?.text?.value || f?.dropdown?.value || f?.numeric?.value || null;
@@ -139,6 +161,46 @@ export async function paymentFromEvent(event, stripe) {
     default:
       return { skip: `event type ${event.type} not handled` };
   }
+}
+
+// ---------- checkout for one payment ----------
+
+// A Checkout Session for whatever is still owed on one payment of an invoice.
+// Made when the client presses Pay, so the amount is always current.
+export async function createLineCheckout(stripe, inv, line, { successUrl, cancelUrl }) {
+  const ref = lineRef(inv.id, line.suffix);
+  const of = inv.lines.length > 1 ? ` (payment ${line.suffix} of ${inv.lines.length})` : '';
+  const name = `Invoice ${ref}${line.label ? ` · ${line.label}` : ''}${of}`;
+  const meta = { invoice_id: inv.id, payment_suffix: String(line.suffix).padStart(2, '0'), invoice_ref: ref, source: 'pk-ledger' };
+  const session = await stripe.post('/checkout/sessions', {
+    mode: 'payment',
+    line_items: [{ quantity: 1, price_data: { currency: inv.currency.toLowerCase(), unit_amount: line.outstanding_cents, product_data: { name } } }],
+    metadata: meta,
+    payment_intent_data: { description: `Invoice ${ref} — ${inv.client_name}`, metadata: meta },
+    customer_email: inv.client_email || undefined,
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+  });
+  return session.url;
+}
+
+// Fallback when the key can't create Checkout Sessions: a reusable Payment
+// Link for this one payment, with the same metadata so it matches the same way.
+export async function createLinePaymentLink(stripe, inv, line, { successUrl }) {
+  const ref = lineRef(inv.id, line.suffix);
+  const of = inv.lines.length > 1 ? ` (payment ${line.suffix} of ${inv.lines.length})` : '';
+  const meta = { invoice_id: inv.id, payment_suffix: String(line.suffix).padStart(2, '0'), invoice_ref: ref, source: 'pk-ledger' };
+  const price = await stripe.post('/prices', {
+    currency: inv.currency.toLowerCase(), unit_amount: line.outstanding_cents,
+    product_data: { name: `Invoice ${ref}${line.label ? ` · ${line.label}` : ''}${of}` },
+  });
+  const link = await stripe.post('/payment_links', {
+    line_items: [{ price: price.id, quantity: 1 }],
+    metadata: meta,
+    payment_intent_data: { description: `Invoice ${ref} — ${inv.client_name}`, metadata: meta },
+    after_completion: { type: 'redirect', redirect: { url: successUrl } },
+  });
+  return { id: link.id, url: link.url };
 }
 
 // ---------- payment links ----------

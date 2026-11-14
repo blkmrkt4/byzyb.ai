@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomToken } from './ids.mjs';
 
 // Records are never hard-deleted: invoices are voided, payments are ignored or
 // unassigned. The only DELETEs in this codebase are for expired login tokens
@@ -27,6 +28,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   notes           TEXT NOT NULL DEFAULT '',
   stripe_link_id  TEXT,
   stripe_link_url TEXT,
+  public_token    TEXT,
   created_at      TEXT NOT NULL,
   updated_at      TEXT NOT NULL
 );
@@ -36,7 +38,10 @@ CREATE TABLE IF NOT EXISTS payment_lines (
   invoice_id   TEXT NOT NULL REFERENCES invoices(id),
   suffix       INTEGER NOT NULL,
   amount_cents INTEGER NOT NULL,
-  due_date     TEXT NOT NULL,
+  due_date     TEXT,
+  label        TEXT NOT NULL DEFAULT '',
+  pay_link_url    TEXT,
+  pay_link_amount INTEGER,
   UNIQUE (invoice_id, suffix)
 );
 
@@ -62,6 +67,9 @@ CREATE TABLE IF NOT EXISTS payments (
   match_method        TEXT,
   ignored_at          TEXT,
   note                TEXT,
+  refunded_cents      INTEGER NOT NULL DEFAULT 0,
+  dispute_cents       INTEGER NOT NULL DEFAULT 0,
+  dispute_status      TEXT,
   created_at          TEXT NOT NULL
 );
 
@@ -97,7 +105,55 @@ export function openDb(file) {
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
   db.exec(SCHEMA);
+  migrate(db);
   return db;
+}
+
+const columns = (db, table) => db.prepare(`PRAGMA table_info(${table})`).all();
+const hasColumn = (db, table, name) => columns(db, table).some((c) => c.name === name);
+
+// Bring a database created by an older version up to date. Safe to run every start.
+function migrate(db) {
+  if (!hasColumn(db, 'invoices', 'public_token')) db.exec('ALTER TABLE invoices ADD COLUMN public_token TEXT');
+  const untokened = db.prepare('SELECT id FROM invoices WHERE public_token IS NULL').all();
+  const setToken = db.prepare('UPDATE invoices SET public_token = ? WHERE id = ?');
+  for (const { id } of untokened) setToken.run(randomToken(), id);
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_token ON invoices(public_token)');
+
+  for (const [col, def] of [['refunded_cents', 'INTEGER NOT NULL DEFAULT 0'], ['dispute_cents', 'INTEGER NOT NULL DEFAULT 0'], ['dispute_status', 'TEXT']]) {
+    if (!hasColumn(db, 'payments', col)) db.exec(`ALTER TABLE payments ADD COLUMN ${col} ${def}`);
+  }
+
+  // Split payments can be left undated ("due on completion"), so due_date became
+  // nullable and each payment got a label. SQLite can't drop NOT NULL in place,
+  // so the table is rebuilt, keeping every row and ID.
+  const due = columns(db, 'payment_lines').find((c) => c.name === 'due_date');
+  if (due.notnull || !hasColumn(db, 'payment_lines', 'label')) {
+    db.exec('PRAGMA foreign_keys = OFF');
+    tx(db, () => {
+      db.exec(`
+        CREATE TABLE payment_lines_new (
+          id           INTEGER PRIMARY KEY,
+          invoice_id   TEXT NOT NULL REFERENCES invoices(id),
+          suffix       INTEGER NOT NULL,
+          amount_cents INTEGER NOT NULL,
+          due_date     TEXT,
+          label        TEXT NOT NULL DEFAULT '',
+          UNIQUE (invoice_id, suffix)
+        );
+        INSERT INTO payment_lines_new (id, invoice_id, suffix, amount_cents, due_date)
+          SELECT id, invoice_id, suffix, amount_cents, due_date FROM payment_lines;
+        DROP TABLE payment_lines;
+        ALTER TABLE payment_lines_new RENAME TO payment_lines;
+        CREATE INDEX IF NOT EXISTS idx_lines_invoice ON payment_lines(invoice_id);`);
+    });
+    db.exec('PRAGMA foreign_keys = ON');
+  }
+
+  // Cached fallback payment link per payment (see createLinePaymentLink). After the rebuild above.
+  for (const [col, def] of [['pay_link_url', 'TEXT'], ['pay_link_amount', 'INTEGER']]) {
+    if (!hasColumn(db, 'payment_lines', col)) db.exec(`ALTER TABLE payment_lines ADD COLUMN ${col} ${def}`);
+  }
 }
 
 // Run fn inside a transaction. node:sqlite is synchronous, so fn must be too.

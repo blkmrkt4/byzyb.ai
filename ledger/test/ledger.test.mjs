@@ -1,10 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { openDb } from '../lib/db.mjs';
 import * as L from '../lib/ledger.mjs';
 import { randomInvoiceId, findRefs, ID_ALPHABET } from '../lib/ids.mjs';
-import { signStripePayload, verifyStripeSignature, paymentFromEvent, createPaymentLink } from '../lib/stripe.mjs';
+import { signStripePayload, verifyStripeSignature, paymentFromEvent, createPaymentLink, createLineCheckout, adjustmentFromEvent } from '../lib/stripe.mjs';
+import * as A from '../lib/auth.mjs';
 import { createApp, makeConfig } from '../server.mjs';
 
 const fresh = () => openDb(':memory:');
@@ -220,11 +225,13 @@ test('Stripe signatures are checked', () => {
 
 // ---------- server ----------
 
-async function server(t, extra = {}) {
+async function server(t, extra = {}, deps = {}) {
   const db = fresh();
   const emails = [];
   const cfg = { ...makeConfig({ PORT: '0', STRIPE_WEBHOOK_SECRET: 'whsec_test' }), ...extra };
-  const srv = http.createServer(createApp(cfg, db, { stripe: null, sendEmail: async (m) => emails.push(m), log: { error() {} } }));
+  const srv = http.createServer(createApp(cfg, db, {
+    stripe: null, sendEmail: async (m) => emails.push(m), sendInvoice: async (m) => emails.push(m), log: { error() {} }, ...deps,
+  }));
   await new Promise((r) => srv.listen(0, '127.0.0.1', r));
   t.after(() => srv.close());
   const base = `http://127.0.0.1:${srv.address().port}`;
@@ -301,4 +308,235 @@ test('a new invoice keeps the number the form showed, unless it is taken', () =>
   assert.notEqual(again, shown);
   assert.match(again, /^[2-9A-HJKMNP-Z]{4}$/);
   assert.notEqual(invoice(db, { id: 'OOPS' }), 'OOPS');
+});
+
+// ---------- split payments ----------
+
+const split = (db, over = {}) => invoice(db, { subtotal_cents: 300000, hst_enabled: false, schedule: 'split', first_due: '2026-11-20', ...over });
+
+test('a split defaults to a dated deposit and an undated final payment', () => {
+  const db = fresh();
+  const inv = L.getInvoice(db, split(db), '2026-12-31');
+  assert.deepEqual(inv.lines.map((l) => [l.ref.slice(-2), l.amount_cents, l.due_date, l.label]),
+    [['01', 150000, '2026-11-20', 'Deposit'], ['02', 150000, null, 'Final payment']]);
+});
+
+test('a split can have uneven amounts, labels and blank dates; other schedules need dates', () => {
+  const db = fresh();
+  const id = split(db, { lines: [
+    { amount_cents: 100000, due_date: '2026-11-20', label: 'Deposit' },
+    { amount_cents: 50000, due_date: '', label: 'Design sign-off' },
+    { amount_cents: 150000, due_date: null, label: 'Launch' },
+  ] });
+  assert.deepEqual(L.getInvoice(db, id).lines.map((l) => [l.amount_cents, l.due_date, l.label]),
+    [[100000, '2026-11-20', 'Deposit'], [50000, null, 'Design sign-off'], [150000, null, 'Launch']]);
+  assert.throws(() => invoice(db, { subtotal_cents: 20000, hst_enabled: false, schedule: 'monthly', lines: [
+    { amount_cents: 10000, due_date: '2026-11-01' }, { amount_cents: 10000, due_date: null }] }), /needs a due date/);
+  assert.throws(() => split(db, { lines: [{ amount_cents: 300000, due_date: '2026-11-20' }] }), /at least two/);
+});
+
+test('undated payments are never overdue until a date is set', () => {
+  const db = fresh();
+  const id = split(db);
+  L.markSent(db, id, { sent_date: '2026-11-15' });
+  const line1 = L.getInvoice(db, id).lines[0];
+  L.recordManualPayment(db, { line_id: line1.id, amount_cents: 150000, received_at: '2026-11-18', method: 'e-transfer' });
+  assert.equal(L.getInvoice(db, id, '2027-06-01').status, 'Partly paid');
+  L.setLineDueDate(db, id, 2, '2027-01-15');
+  assert.equal(L.getInvoice(db, id, '2027-06-01').status, 'Overdue');
+  assert.equal(L.getInvoice(db, id).history[0].action, 'due_date');
+  L.setLineDueDate(db, id, 2, null);
+  assert.equal(L.getInvoice(db, id, '2027-06-01').lines[1].due_date, null);
+  assert.throws(() => L.setLineDueDate(db, invoice(db), 1, null), /Only a split/);
+});
+
+test('a client checkout is for what is still owed on that one payment', async () => {
+  const db = fresh();
+  const id = split(db, { client_email: 'pat@acme.test' });
+  const line1 = L.getInvoice(db, id).lines[0];
+  L.recordManualPayment(db, { line_id: line1.id, amount_cents: 50000, method: 'cheque' });
+  const inv = L.getInvoice(db, id);
+  const calls = [];
+  const stripe = { post: async (path, params) => { calls.push([path, params]); return { url: 'https://checkout.stripe.com/c/pay/cs_x' }; } };
+  const url = await createLineCheckout(stripe, inv, inv.lines[0], { successUrl: 'https://s/ok', cancelUrl: 'https://s/no' });
+  assert.equal(url, 'https://checkout.stripe.com/c/pay/cs_x');
+  const [path, params] = calls[0];
+  assert.equal(path, '/checkout/sessions');
+  assert.equal(params.line_items[0].price_data.unit_amount, 100000);
+  assert.equal(params.line_items[0].price_data.product_data.name, `Invoice ${id}-01 · Deposit (payment 1 of 2)`);
+  assert.deepEqual(params.metadata, { invoice_id: id, payment_suffix: '01', invoice_ref: `${id}-01`, source: 'pk-ledger' });
+  assert.deepEqual(params.payment_intent_data.metadata, params.metadata);
+  assert.equal(params.customer_email, 'pat@acme.test');
+});
+
+// ---------- refunds and disputes ----------
+
+test('a refund stops counting as paid; partial refunds count the rest', async () => {
+  const db = fresh();
+  const id = invoice(db);
+  L.upsertStripePayment(db, await paymentFromEvent(checkout({ metadata: { invoice_id: id, payment_suffix: '01' } })));
+  assert.equal(L.getInvoice(db, id).status, 'Paid');
+  const refund = (amount) => adjustmentFromEvent({ type: 'charge.refunded', data: { object: { id: 'ch_1', payment_intent: 'pi_1', amount_refunded: amount } } });
+  assert.equal(L.applyRefund(db, refund(13000)).changed, true);
+  let inv = L.getInvoice(db, id);
+  assert.equal(inv.paid_cents, 100000);
+  assert.equal(inv.outstanding_cents, 13000);
+  assert.equal(inv.status, 'Partly paid');
+  assert.equal(L.applyRefund(db, refund(13000)).changed, false);
+  L.applyRefund(db, refund(113000));
+  inv = L.getInvoice(db, id);
+  assert.equal(inv.paid_cents, 0);
+  assert.equal(inv.lines[0].payments[0].refunded_cents, 113000);
+  assert.ok(inv.history.some((h) => h.action === 'refund'));
+  assert.equal(L.openLines(db).length, 1);
+  assert.deepEqual(L.applyRefund(db, { payment_intent: 'pi_unknown', amount_refunded: 5 }), { found: false });
+});
+
+test('an open or lost dispute stops counting as paid; a won one counts again', async () => {
+  const db = fresh();
+  const id = invoice(db);
+  L.upsertStripePayment(db, await paymentFromEvent(checkout({ metadata: { invoice_id: id } })));
+  const dispute = (type, status) => adjustmentFromEvent({ type, data: { object: { id: 'dp_1', charge: 'ch_1', payment_intent: 'pi_1', amount: 113000, status } } });
+  L.applyDispute(db, dispute('charge.dispute.created', 'needs_response'));
+  assert.equal(L.getInvoice(db, id).paid_cents, 0);
+  L.applyDispute(db, dispute('charge.dispute.closed', 'won'));
+  assert.equal(L.getInvoice(db, id).paid_cents, 113000);
+  L.applyDispute(db, dispute('charge.dispute.closed', 'lost'));
+  const inv = L.getInvoice(db, id);
+  assert.equal(inv.paid_cents, 0);
+  assert.equal(inv.lines[0].payments[0].dispute_status, 'lost');
+});
+
+test('the webhook applies refunds', async (t) => {
+  const { req, db } = await server(t);
+  const id = invoice(db);
+  L.upsertStripePayment(db, await paymentFromEvent(checkout({ metadata: { invoice_id: id } })));
+  const raw = JSON.stringify({ id: 'evt_r', type: 'charge.refunded', data: { object: { id: 'ch_1', payment_intent: 'pi_1', amount_refunded: 113000 } } });
+  const r = await req('/api/stripe/webhook', { method: 'POST', body: raw, headers: { 'stripe-signature': signStripePayload(raw, 'whsec_test') } });
+  assert.deepEqual(await r.json(), { received: true, kind: 'refund', found: true, payment_id: 1, changed: true, invoice_id: id });
+  assert.equal(L.getInvoice(db, id).outstanding_cents, 113000);
+});
+
+// ---------- client invoice page ----------
+
+test('the client invoice page shows the invoice and a Pay button per open payment', async (t) => {
+  const stripe = { post: async () => ({ url: 'https://checkout.stripe.com/c/pay/cs_x' }) };
+  const { req, db } = await server(t, { business: { ...makeConfig({}).business, hstNumber: '123456789 RT0001' } }, { stripe });
+  const id = split(db, { client_name: 'Acme Dental', description: 'New website' });
+  const inv = L.getInvoice(db, id);
+  assert.match(inv.public_token, /^[A-Za-z0-9_-]{24}$/);
+
+  const page = await req(`/invoice/${inv.public_token}`);
+  assert.equal(page.status, 200);
+  assert.equal(page.headers.get('x-robots-tag'), 'noindex, nofollow');
+  const html = await page.text();
+  assert.match(html, new RegExp(`Invoice number</dt><dd class="ref">${id}`));
+  assert.match(html, /HST no\. 123456789 RT0001/);
+  assert.match(html, /Painkiller Labs Inc\./);
+  assert.match(html, /Payment 1 of 2 · Deposit/);
+  assert.match(html, /Payment 2 of 2 · Final payment/);
+  assert.match(html, /On completion/);
+  assert.equal((html.match(/class="pay"/g) || []).length, 2);
+
+  const pay = await req(`/invoice/${inv.public_token}/pay/01`, { method: 'POST' });
+  assert.equal(pay.status, 303);
+  assert.equal(pay.headers.get('location'), 'https://checkout.stripe.com/c/pay/cs_x');
+
+  assert.equal((await req('/invoice/not-a-real-token-at-all-xx')).status, 404);
+  assert.equal((await req(`/invoice/${inv.public_token}/pay/09`, { method: 'POST' })).status, 303);
+  assert.equal((await req('/invoice/assets/invoice.css')).status, 200);
+});
+
+test('a paid or void invoice has no Pay buttons', async (t) => {
+  const stripe = { post: async () => ({ url: 'x' }) };
+  const { req, db } = await server(t, {}, { stripe });
+  const id = invoice(db);
+  L.recordManualPayment(db, { line_id: L.getInvoice(db, id).lines[0].id, amount_cents: 113000, method: 'cheque' });
+  const paid = await (await req(`/invoice/${L.getInvoice(db, id).public_token}`)).text();
+  assert.match(paid, /Paid in full/);
+  assert.doesNotMatch(paid, /class="pay"/);
+  const v = invoice(db);
+  L.voidInvoice(db, v, 'Replaced');
+  const voided = await (await req(`/invoice/${L.getInvoice(db, v).public_token}`)).text();
+  assert.match(voided, /cancelled/);
+  assert.doesNotMatch(voided, /class="pay"/);
+});
+
+test('emailing an invoice sends the client link and marks it sent', async (t) => {
+  const { req, db, emails } = await server(t);
+  const id = split(db, { client_email: 'pat@acme.test' });
+  const cookie = `pk_admin=${A.createSession(db)}`;
+  const r = await req(`/admin/api/invoices/${id}/email`, { method: 'POST', body: '{}', headers: { cookie, 'x-ledger': '1' } });
+  assert.equal(r.status, 200);
+  const mail = emails.at(-1);
+  assert.equal(mail.to, 'pat@acme.test');
+  assert.equal(mail.replyTo, 'rh@pklabs.ca');
+  assert.match(mail.subject, new RegExp(`Invoice ${id}`));
+  assert.match(mail.text, new RegExp(`/invoice/${L.getInvoice(db, id).public_token}`));
+  assert.match(mail.text, /paid in 2 payments\. Payment 1 of 2 · Deposit/);
+  const inv = L.getInvoice(db, id);
+  assert.equal(inv.sent_via, 'email');
+  assert.equal(inv.sent_to, 'pat@acme.test');
+
+  const noEmail = split(db, { client_email: "" });
+  const bad = await req(`/admin/api/invoices/${noEmail}/email`, { method: 'POST', body: '{}', headers: { cookie, 'x-ledger': '1' } });
+  assert.equal(bad.status, 400);
+});
+
+// ---------- upgrading an existing database ----------
+
+test('an older database is upgraded without losing rows', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ledger-'));
+  const file = path.join(dir, 'old.db');
+  const old = new DatabaseSync(file);
+  old.exec(`
+    CREATE TABLE invoices (id TEXT PRIMARY KEY, client_name TEXT NOT NULL, client_email TEXT NOT NULL DEFAULT '',
+      description TEXT NOT NULL DEFAULT '', line_items TEXT NOT NULL DEFAULT '[]', currency TEXT NOT NULL DEFAULT 'CAD',
+      subtotal_cents INTEGER NOT NULL, hst_enabled INTEGER NOT NULL DEFAULT 1, hst_cents INTEGER NOT NULL, total_cents INTEGER NOT NULL,
+      schedule TEXT NOT NULL DEFAULT 'one_time', issue_date TEXT NOT NULL, sent_date TEXT, sent_to TEXT, sent_via TEXT,
+      voided_at TEXT, void_reason TEXT, notes TEXT NOT NULL DEFAULT '', stripe_link_id TEXT, stripe_link_url TEXT,
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE TABLE payment_lines (id INTEGER PRIMARY KEY, invoice_id TEXT NOT NULL REFERENCES invoices(id), suffix INTEGER NOT NULL,
+      amount_cents INTEGER NOT NULL, due_date TEXT NOT NULL, UNIQUE (invoice_id, suffix));
+    CREATE TABLE payments (id INTEGER PRIMARY KEY, source TEXT NOT NULL, ref TEXT UNIQUE, stripe_type TEXT, stripe_object_id TEXT,
+      stripe_event_id TEXT, stripe_subscription TEXT, method TEXT, amount_cents INTEGER NOT NULL, currency TEXT NOT NULL,
+      received_at TEXT NOT NULL, payer_name TEXT, payer_email TEXT, description TEXT, invoice_ref_entered TEXT,
+      metadata TEXT NOT NULL DEFAULT '{}', payment_line_id INTEGER REFERENCES payment_lines(id), matched_at TEXT,
+      match_method TEXT, ignored_at TEXT, note TEXT, created_at TEXT NOT NULL);
+    INSERT INTO invoices (id, client_name, subtotal_cents, hst_cents, total_cents, issue_date, created_at, updated_at)
+      VALUES ('K7M2', 'Acme', 100000, 13000, 113000, '2026-11-01', 'x', 'x');
+    INSERT INTO payment_lines (id, invoice_id, suffix, amount_cents, due_date) VALUES (7, 'K7M2', 1, 113000, '2026-11-15');
+    INSERT INTO payments (source, method, amount_cents, currency, received_at, payment_line_id, created_at)
+      VALUES ('manual', 'cheque', 113000, 'CAD', '2026-11-10', 7, 'x');`);
+  old.close();
+
+  const db = openDb(file);
+  const inv = L.getInvoice(db, 'K7M2');
+  assert.equal(inv.status, 'Paid');
+  assert.equal(inv.lines[0].id, 7);
+  assert.equal(inv.lines[0].label, '');
+  assert.match(inv.public_token, /^[A-Za-z0-9_-]{24}$/);
+  assert.equal(db.prepare('PRAGMA table_info(payment_lines)').all().find((c) => c.name === 'due_date').notnull, 0);
+  db.close();
+  assert.equal(openDb(file).prepare('SELECT public_token FROM invoices').get().public_token, inv.public_token);
+});
+
+test('if Checkout is not allowed, Pay falls back to a reusable payment link for that payment', async (t) => {
+  const calls = [];
+  const stripe = { post: async (path, params) => {
+    calls.push([path, params]);
+    if (path === '/checkout/sessions') throw new Error('Stripe: more_permissions_required');
+    return path === '/prices' ? { id: 'price_1' } : { id: 'plink_1', url: 'https://buy.stripe.com/line1' };
+  } };
+  const { req, db } = await server(t, {}, { stripe });
+  const id = split(db);
+  const token = L.getInvoice(db, id).public_token;
+  const first = await req(`/invoice/${token}/pay/01`, { method: 'POST' });
+  assert.equal(first.headers.get('location'), 'https://buy.stripe.com/line1');
+  const link = calls.find(([p]) => p === '/payment_links')[1];
+  assert.deepEqual(link.metadata, { invoice_id: id, payment_suffix: '01', invoice_ref: `${id}-01`, source: 'pk-ledger' });
+  assert.equal(calls.find(([p]) => p === '/prices')[1].unit_amount, 150000);
+  const again = await req(`/invoice/${token}/pay/01`, { method: 'POST' });
+  assert.equal(again.headers.get('location'), 'https://buy.stripe.com/line1');
+  assert.equal(calls.filter(([p]) => p === '/payment_links').length, 1);
 });

@@ -37,7 +37,8 @@ function niceDate(d) {
 const niceDateTime = (iso) => new Date(iso).toLocaleString('en-CA', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Toronto' });
 
 const badge = (status) => `<span class="badge ${esc(status.split(' ')[0])}">${esc(status)}</span>`;
-const SCHEDULE_LABEL = { one_time: 'One-time', monthly: 'Monthly', annual: 'Annual' };
+const SCHEDULE_LABEL = { one_time: 'One-time', split: 'Split (deposit, then balance)', monthly: 'Monthly', annual: 'Annual' };
+const dueText = (d) => (d ? niceDate(d) : 'On completion');
 const VIA_LABEL = { stripe: 'Stripe', email: 'Email', other: 'Other' };
 
 function toast(msg, bad = false) {
@@ -69,7 +70,7 @@ async function busy(btn, fn) {
 
 // Mirrors lib/ledger.mjs so the form can preview the schedule.
 function addInterval(date, schedule, n) {
-  if (n === 0 || schedule === 'one_time') return date;
+  if (n === 0 || schedule === 'one_time' || schedule === 'split') return date;
   const [y, m, d] = date.split('-').map(Number);
   const months = schedule === 'monthly' ? n : n * 12;
   const target = new Date(Date.UTC(y, m - 1 + months, 1));
@@ -77,11 +78,21 @@ function addInterval(date, schedule, n) {
   target.setUTCDate(Math.min(d, lastDay));
   return target.toISOString().slice(0, 10);
 }
+function splitLabel(i, n) {
+  if (i === 0) return 'Deposit';
+  return i === n - 1 ? 'Final payment' : `Payment ${i + 1}`;
+}
+
 function buildSchedule(total, schedule, count, firstDue) {
-  const n = schedule === 'one_time' ? 1 : Math.max(1, Math.min(120, Number(count) || 1));
+  const min = schedule === 'split' ? 2 : 1;
+  const n = schedule === 'one_time' ? 1 : Math.max(min, Math.min(120, Number(count) || min));
   const base = Math.floor(total / n);
   const rest = total - base * n;
-  return Array.from({ length: n }, (_, i) => ({ amount_cents: base + (i === 0 ? rest : 0), due_date: addInterval(firstDue, schedule, i) }));
+  return Array.from({ length: n }, (_, i) => ({
+    amount_cents: base + (i === 0 ? rest : 0),
+    due_date: schedule === 'split' && i > 0 ? '' : addInterval(firstDue, schedule, i),
+    label: schedule === 'split' ? splitLabel(i, n) : '',
+  }));
 }
 
 // ---------- routing ----------
@@ -191,7 +202,7 @@ async function listPage() {
 
 function renderUnmatched({ payments, open_lines }, showIgnored) {
   const box = $('#unmatched');
-  const option = (l) => `<option value="${l.id}">${esc(l.ref)} · ${esc(l.client_name)} · ${money(l.amount_cents - l.paid_cents, l.currency)} due ${esc(niceDate(l.due_date))}</option>`;
+  const option = (l) => `<option value="${l.id}">${esc(l.ref)} · ${esc(l.client_name)} · ${money(l.amount_cents - l.paid_cents, l.currency)} due ${esc(l.due_date ? niceDate(l.due_date) : 'on completion')}</option>`;
   const rows = payments.map((p) => {
     const lines = open_lines.filter((l) => l.currency === p.currency);
     const hint = [p.invoice_ref_entered && `Entered: ${p.invoice_ref_entered}`, p.description].filter(Boolean).join(' · ');
@@ -260,8 +271,9 @@ async function formPage(id) {
 
   const state = {
     items: inv?.line_items?.length ? inv.line_items.map((i) => ({ ...i })) : [],
-    linesEdited: false,
-    lines: inv ? inv.lines.map((l) => ({ amount_cents: l.amount_cents, due_date: l.due_date })) : [],
+    // Editing keeps the saved payments (custom amounts, labels, blank dates) until a schedule field changes.
+    linesEdited: !!inv,
+    lines: inv ? inv.lines.map((l) => ({ amount_cents: l.amount_cents, due_date: l.due_date || '', label: l.label || '' })) : [],
   };
   const lockedNote = inv && !full
     ? `<div class="notice warn">This invoice has been ${inv.sent_date ? 'sent' : ''}${inv.sent_date && (inv.paid_cents || inv.stripe_link_id) ? ' or ' : ''}${inv.paid_cents ? 'paid' : inv.stripe_link_id ? 'given a Stripe link' : ''}, so only the client, description and notes can change. To change amounts, void it and create a new one.</div>`
@@ -294,13 +306,14 @@ async function formPage(id) {
           <div class="grid3">
             <label>Schedule <select name="schedule">${Object.entries(SCHEDULE_LABEL).map(([k, v]) => `<option value="${k}"${(inv?.schedule || 'one_time') === k ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
             <label id="count-wrap">Number of payments <input name="count" type="number" min="1" max="120" value="${inv && inv.schedule !== 'one_time' ? inv.lines.length : 12}"></label>
-            <label>First payment due <input name="first_due" type="date" value="${esc(inv?.lines?.[0]?.due_date || config.today)}"></label>
+            <label><span id="first-due-label">First payment due</span> <input name="first_due" type="date" value="${esc(inv?.lines?.[0]?.due_date || config.today)}"></label>
           </div>
           <div id="lines"></div>
         </div>
       </fieldset>
       <label>Notes <span class="muted small">(private, not shown to the client)</span><textarea name="notes" rows="2">${esc(inv?.notes)}</textarea></label>
-      ${!inv ? `<label class="check"><input type="checkbox" name="create_stripe_link"${config.stripe ? '' : ' disabled'}> Create a Stripe payment link${config.stripe ? '' : ' <span class="muted small">(Stripe isn’t connected)</span>'}</label>` : ''}
+      ${!inv ? `<label class="check" id="sub-wrap"><input type="checkbox" name="create_stripe_link"${config.stripe ? '' : ' disabled'}> Also set up automatic card payments (a Stripe subscription that charges each payment on schedule)${config.stripe ? '' : ' <span class="muted small">(Stripe isn’t connected)</span>'}</label>` : ''}
+      <p class="muted small">The client pays from their invoice page, with a Pay button for each payment. You can email it once the invoice is created.</p>
       <div id="form-error"></div>
       <div class="actions"><button class="btn" type="submit">${inv ? 'Save changes' : 'Create invoice'}</button>
         <a class="btn btn-quiet" href="${inv ? `/admin/invoices/${inv.id}` : '/admin/invoices'}" data-nav>Cancel</a></div>
@@ -340,23 +353,28 @@ async function formPage(id) {
   function renderLines() {
     const t = totals();
     const schedule = f.schedule.value;
+    const split = schedule === 'split';
     $('#count-wrap').hidden = schedule === 'one_time';
+    $('#first-due-label').textContent = split ? 'Deposit due' : schedule === 'one_time' ? 'Payment due' : 'First payment due';
+    if ($('#sub-wrap')) $('#sub-wrap').hidden = !['monthly', 'annual'].includes(schedule);
     const cur = /^[A-Z]{3}$/.test(f.currency.value.toUpperCase()) ? f.currency.value.toUpperCase() : 'CAD';
     if (!state.linesEdited) state.lines = buildSchedule(t.total || 0, schedule, f.count.value, f.first_due.value || config.today);
     const sum = state.lines.reduce((a, l) => a + (l.amount_cents ?? 0), 0);
     const ref = invNo;
     $('#lines').innerHTML = `
       <table class="tbl">
-        <thead><tr><th>Payment number</th><th>Due date</th><th class="num">Amount</th></tr></thead>
+        <thead><tr><th>Payment number</th>${split ? '<th>Label</th>' : ''}<th>Due date</th><th class="num">Amount</th></tr></thead>
         <tbody>${state.lines.map((l, i) => `
           <tr data-i="${i}">
             <td data-label="Payment number" class="mono">${esc(ref)}-${String(i + 1).padStart(2, '0')}</td>
-            <td data-label="Due date"><input type="date" data-k="due_date" value="${esc(l.due_date)}" aria-label="Payment ${i + 1} due date"></td>
+            ${split ? `<td data-label="Label"><input data-k="label" value="${esc(l.label)}" maxlength="60" placeholder="e.g. Deposit" aria-label="Payment ${i + 1} label"></td>` : ''}
+            <td data-label="Due date"><input type="date" data-k="due_date" value="${esc(l.due_date)}" aria-label="Payment ${i + 1} due date">${split && !l.due_date ? '<div class="muted small">On completion</div>' : ''}</td>
             <td data-label="Amount" class="num"><input data-k="amount" inputmode="decimal" value="${l.amount_cents == null ? '' : centsToInput(l.amount_cents)}" aria-label="Payment ${i + 1} amount"></td>
           </tr>`).join('')}</tbody>
       </table>
       ${state.linesEdited ? `<p class="small ${sum === t.total ? 'muted' : ''}">${sum === t.total ? 'Payments add up to the total.' : `<strong>Payments add up to ${money(sum, cur)}, but the total is ${money(t.total || 0, cur)}.</strong>`} <button type="button" class="link-btn small" id="reset-lines">Split evenly again</button></p>`
-        : `<p class="muted small">Split evenly; any odd cents go on the first payment. Each payment number is the invoice number plus -01, -02 and so on. You can change amounts and dates.</p>`}`;
+        : schedule === 'one_time' ? `<p class="muted small">The client pays this as payment number ${esc(ref)}-01.</p>`
+        : `<p class="muted small">Split evenly; any odd cents go on the first payment. Each payment number is the invoice number plus -01, -02 and so on. You can change amounts and dates.${split ? ' Leave a date blank for “due on completion”; you can set it later from the invoice page.' : ''}</p>`}`;
   }
 
   const refresh = () => { renderTotals(); renderLines(); };
@@ -392,6 +410,7 @@ async function formPage(id) {
       if (!row) return;
       const l = state.lines[row.dataset.i];
       if (e.target.dataset.k === 'due_date') l.due_date = e.target.value;
+      else if (e.target.dataset.k === 'label') l.label = e.target.value;
       else l.amount_cents = parseMoney(e.target.value);
       state.linesEdited = true;
       renderLines();
@@ -414,14 +433,15 @@ async function formPage(id) {
       const t = totals();
       if (t.total == null || state.items.some((i) => i.amount_cents == null)) return err('Check the amounts: use numbers like 1500 or 1500.00.');
       if (!t.total) return err('Enter an amount.');
-      if (state.lines.some((l) => l.amount_cents == null || !l.due_date)) return err('Every payment needs an amount and a due date.');
+      if (state.lines.some((l) => !l.amount_cents)) return err('Every payment needs an amount.');
+      if (f.schedule.value !== 'split' && state.lines.some((l) => !l.due_date)) return err('Every payment needs a due date.');
       Object.assign(body, {
         line_items: t.items, subtotal_cents: t.subtotal, hst_enabled: f.hst_enabled.checked,
         currency: f.currency.value.toUpperCase(), issue_date: f.issue_date.value, schedule: f.schedule.value,
-        lines: state.lines,
+        lines: state.lines.map((l) => ({ ...l, due_date: l.due_date || null })),
       });
       if (!inv) body.id = newId;
-      if (!inv) body.create_stripe_link = !!f.create_stripe_link?.checked;
+      if (!inv) body.create_stripe_link = ['monthly', 'annual'].includes(f.schedule.value) && !!f.create_stripe_link?.checked;
     }
     const btn = f.querySelector('button[type="submit"]');
     btn.disabled = true;
@@ -451,8 +471,11 @@ const ACTION_LABEL = {
   stripe_link_failed: 'Stripe payment link failed', subscription_end: 'Stripe subscription set to end',
   subscription_end_failed: 'Could not end the Stripe subscription', receive: 'Payment received from Stripe',
   match: 'Payment matched', unmatch: 'Payment unassigned', ignore: 'Payment ignored', restore: 'Payment restored',
-  record_manual: 'Manual payment recorded',
+  record_manual: 'Manual payment recorded', due_date: 'Due date changed', refund: 'Refunded in Stripe',
+  dispute: 'Card dispute', checkout_failed: 'Client checkout failed',
 };
+const DISPUTE_LABEL = { warning_needs_response: 'inquiry, needs a response', warning_under_review: 'inquiry under review', warning_closed: 'inquiry closed',
+  needs_response: 'needs a response', under_review: 'under review', won: 'won, money kept', lost: 'lost, money returned', prevented: 'prevented' };
 
 function describe(h, currency) {
   const d = h.detail || {};
@@ -461,6 +484,8 @@ function describe(h, currency) {
   if (d.amount_cents != null) bits.push(money(d.amount_cents, d.currency || currency));
   if (d.method) bits.push(d.method);
   if (d.sent_via) bits.push(`${VIA_LABEL[d.sent_via] || d.sent_via}${d.sent_to ? ` to ${d.sent_to}` : ''}, ${niceDate(d.sent_date)}`);
+  if (h.action === 'due_date') bits.push(`${dueText(d.from)} → ${dueText(d.to)}`);
+  if (d.status) bits.push(DISPUTE_LABEL[d.status] || d.status);
   if (d.reason) bits.push(d.reason);
   if (d.note) bits.push(d.note);
   if (d.error) bits.push(d.error);
@@ -475,13 +500,14 @@ async function detailPage(id) {
   const isVoid = !!inv.voided_at;
   const nextDue = inv.lines.find((l) => l.outstanding_cents > 0);
   const openLines = inv.lines.filter((l) => l.outstanding_cents > 0);
+  const clientLink = `${config.public_url || location.origin}/invoice/${inv.public_token}`;
 
   const lineRows = inv.lines.map((l) => {
     const pays = l.payments.filter((p) => !p.ignored_at);
     return `
       <tr>
-        <td data-label="Payment number" class="mono">${esc(l.ref)}</td>
-        <td data-label="Due"><span>${esc(niceDate(l.due_date))}${!isVoid && l.outstanding_cents && l.due_date < config.today ? ' <span class="badge Overdue">Overdue</span>' : ''}</span></td>
+        <td data-label="Payment number"><span><span class="mono">${esc(l.ref)}</span>${l.label ? `<div class="muted small">${esc(l.label)}</div>` : ''}</span></td>
+        <td data-label="Due"><span>${esc(dueText(l.due_date))}${!isVoid && l.outstanding_cents && l.due_date && l.due_date < config.today ? ' <span class="badge Overdue">Overdue</span>' : ''}${!isVoid && l.outstanding_cents ? ` <button class="link-btn small" data-due="${l.suffix}">${l.due_date ? 'Change' : 'Set date'}</button>` : ''}</span></td>
         <td data-label="Amount" class="num">${money(l.amount_cents, cur)}</td>
         <td data-label="Paid" class="num">${l.paid_cents ? money(l.paid_cents, cur) : '<span class="muted">—</span>'}</td>
         <td data-label="Paid on">${l.paid_at ? esc(niceDate(l.paid_at)) : '<span class="muted">—</span>'}</td>
@@ -489,6 +515,8 @@ async function detailPage(id) {
           <div>${p.source === 'stripe'
             ? `<span class="mono">${esc(p.stripe_object_id)}</span>`
             : `<span>${esc(p.method)}${p.note ? ` · ${esc(p.note)}` : ''}</span>`}
+            ${p.refunded_cents ? `<span class="badge Overdue">${p.refunded_cents >= p.amount_cents ? 'Refunded' : `Refunded ${money(p.refunded_cents, cur)}`}</span>` : ''}
+            ${p.dispute_status ? `<span class="badge ${p.dispute_cents ? 'Overdue' : 'Paid'}">Dispute: ${esc(DISPUTE_LABEL[p.dispute_status] || p.dispute_status)}</span>` : ''}
             ${pays.length > 1 ? `<span class="muted small">${money(p.amount_cents, cur)}</span>` : ''}
             ${p.source === 'stripe' && !isVoid ? `<button class="link-btn small" data-unassign="${p.id}">Unassign</button>` : ''}
             ${p.source === 'manual' && !isVoid ? `<button class="link-btn small" data-ignore="${p.id}">Remove</button>` : ''}
@@ -518,15 +546,22 @@ async function detailPage(id) {
     <div class="actions">
       <button class="btn" data-panel="send">${inv.sent_date ? 'Update sent details' : 'Mark as sent'}</button>
       <button class="btn btn-quiet" data-panel="pay"${openLines.length ? '' : ' disabled'}>Record a manual payment</button>
-      ${!inv.stripe_link_url && config.stripe ? '<button class="btn btn-quiet" id="make-link">Create Stripe link</button>' : ''}
+      ${!inv.stripe_link_url && config.stripe && ['monthly', 'annual'].includes(inv.schedule) ? '<button class="btn btn-quiet" id="make-link">Set up automatic payments</button>' : ''}
       <a class="btn btn-quiet" href="/admin/invoices/${esc(inv.id)}/edit" data-nav>Edit</a>
       <button class="btn btn-danger" data-panel="void">Void</button>
     </div>
     <div id="panel"></div>`}
+    ${isVoid ? '' : `
+      <div class="panel">
+        <h2>Client invoice</h2>
+        <p class="muted small">The client's copy of invoice ${esc(inv.id)}. They can view it, print it or save it as a PDF, and pay each payment by card. Payments made there are matched automatically.</p>
+        ${config.hst_number ? '' : '<div class="notice warn small">Your HST number isn’t on invoices yet. Set HST_NUMBER on the ledger service in Railway; invoices that charge HST must show it.</div>'}
+        <div class="linkbox"><input readonly value="${esc(clientLink)}" aria-label="Client invoice link"><button class="btn btn-quiet btn-sm" id="copy-client">Copy</button><a class="btn btn-quiet btn-sm" href="${esc(clientLink)}" target="_blank" rel="noopener">Open</a><button class="btn btn-sm" data-panel="email">Email to client</button></div>
+      </div>`}
     ${inv.stripe_link_url ? `
       <div class="panel">
         <h2>Stripe payment link</h2>
-        <p class="muted small">${inv.schedule === 'one_time' ? 'One payment' : `A ${inv.schedule === 'monthly' ? 'monthly' : 'yearly'} subscription for ${inv.lines.length} payments; it stops after the last one`}. Payments through this link are matched automatically.</p>
+        <p class="muted small">${inv.schedule === 'one_time' || inv.schedule === 'split' ? 'One payment' : `A ${inv.schedule === 'monthly' ? 'monthly' : 'yearly'} subscription for ${inv.lines.length} payments; it stops after the last one`}. Payments through this link are matched automatically.</p>
         <div class="linkbox"><input readonly value="${esc(inv.stripe_link_url)}" aria-label="Stripe payment link"><button class="btn btn-quiet btn-sm" id="copy-link">Copy</button><a class="btn btn-quiet btn-sm" href="${esc(inv.stripe_link_url)}" target="_blank" rel="noopener">Open</a></div>
       </div>` : ''}
     <section class="section">
@@ -540,7 +575,7 @@ async function detailPage(id) {
       <h2>Details</h2>
       <dl class="kv">
         <dt>Issue date</dt><dd>${esc(niceDate(inv.issue_date))}</dd>
-        <dt>Schedule</dt><dd>${esc(SCHEDULE_LABEL[inv.schedule])}${inv.schedule !== 'one_time' ? `, ${inv.lines.length} payments` : ''}</dd>
+        <dt>Schedule</dt><dd>${esc(SCHEDULE_LABEL[inv.schedule] || inv.schedule)}${inv.schedule !== 'one_time' ? `, ${inv.lines.length} payments` : ''}</dd>
         <dt>Sent</dt><dd>${inv.sent_date ? `${esc(niceDate(inv.sent_date))} by ${esc(VIA_LABEL[inv.sent_via] || inv.sent_via)}${inv.sent_to ? ` to ${esc(inv.sent_to)}` : ''}` : '<span class="muted">Not sent</span>'}</dd>
         <dt>Subtotal</dt><dd>${money(inv.subtotal_cents, cur)}</dd>
         <dt>HST</dt><dd>${inv.hst_enabled ? `${money(inv.hst_cents, cur)} (13%)` : 'Not charged'}</dd>
@@ -576,7 +611,7 @@ async function detailPage(id) {
         <h2>Record a manual payment</h2>
         <p class="muted small">For e-transfers, cheques and cash. Stripe payments are recorded automatically.</p>
         <div class="grid2">
-          <label>Payment line <select name="line_id">${openLines.map((l) => `<option value="${l.id}" data-out="${l.outstanding_cents}">${esc(l.ref)} · ${money(l.outstanding_cents, cur)} due ${esc(niceDate(l.due_date))}</option>`).join('')}</select></label>
+          <label>Payment line <select name="line_id">${openLines.map((l) => `<option value="${l.id}" data-out="${l.outstanding_cents}">${esc(l.ref)}${l.label ? ` ${esc(l.label)}` : ''} · ${money(l.outstanding_cents, cur)} due ${esc(l.due_date ? niceDate(l.due_date) : 'on completion')}</option>`).join('')}</select></label>
           <label>Amount <input name="amount" inputmode="decimal" value="${openLines[0] ? centsToInput(openLines[0].outstanding_cents) : ''}"></label>
           <label>Date received <input type="date" name="received_at" value="${esc(config.today)}"></label>
           <label>Method <select name="method"><option value="e-transfer">E-transfer</option><option value="cheque">Cheque</option><option value="cash">Cash</option><option value="other">Other</option></select></label>
@@ -584,6 +619,24 @@ async function detailPage(id) {
         <label>Note <input name="note" placeholder="Reference number, cheque number…"></label>
         <div class="actions"><button class="btn" type="submit">Record payment</button><button class="btn btn-quiet" type="button" data-close>Cancel</button></div>
       </form>`,
+    email: () => `
+      <form class="subpanel stack" data-form="email">
+        <h2>Email invoice ${esc(inv.id)}</h2>
+        <p class="muted small">Sends the client a link to their invoice, with the total and what's due first. Replies come to ${esc(config.admin_email || 'you')}. The invoice is marked as sent.${inv.sent_date ? ` It was last sent ${esc(niceDate(inv.sent_date))}.` : ''}</p>
+        ${config.email ? '' : '<div class="notice bad small">Email isn’t set up on the server (RESEND_API_KEY), so this will fail. Copy the link instead.</div>'}
+        <label>Send to <input type="email" name="to" required value="${esc(inv.client_email)}"></label>
+        <div class="actions"><button class="btn" type="submit">Send email</button><button class="btn btn-quiet" type="button" data-close>Cancel</button></div>
+      </form>`,
+    due: (suffix) => {
+      const l = inv.lines.find((x) => x.suffix === Number(suffix));
+      return `
+      <form class="subpanel stack" data-form="due" data-suffix="${l.suffix}">
+        <h2>When is ${esc(l.ref)} due?</h2>
+        <p class="muted small">${esc(l.label || `Payment ${l.suffix}`)} · ${money(l.outstanding_cents, cur)} to pay. The client's invoice shows the new date straight away.${inv.schedule === 'split' ? ' Leave it blank for “due on completion”.' : ''}</p>
+        <label>Due date <input type="date" name="due_date" value="${esc(l.due_date || config.today)}"${inv.schedule === 'split' ? '' : ' required'}></label>
+        <div class="actions"><button class="btn" type="submit">Save date</button><button class="btn btn-quiet" type="button" data-close>Cancel</button></div>
+      </form>`;
+    },
     void: () => `
       <form class="subpanel stack" data-form="void">
         <h2>Void invoice ${esc(inv.id)}</h2>
@@ -593,10 +646,16 @@ async function detailPage(id) {
       </form>`,
   };
 
-  $$('button[data-panel]').forEach((b) => b.addEventListener('click', () => {
-    panel.innerHTML = panels[b.dataset.panel]();
+  const openPanel = (html) => {
+    panel.innerHTML = html;
+    panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     panel.querySelector('input, select')?.focus();
-  }));
+  };
+  $$('button[data-panel]').forEach((b) => b.addEventListener('click', () => openPanel(panels[b.dataset.panel]())));
+  $$('button[data-due]').forEach((b) => b.addEventListener('click', () => openPanel(panels.due(b.dataset.due))));
+  $('#copy-client')?.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(clientLink); toast('Invoice link copied'); } catch { $('#copy-client').previousElementSibling.select(); }
+  });
 
   panel?.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) panel.innerHTML = ''; });
   panel?.addEventListener('change', (e) => {
@@ -621,6 +680,13 @@ async function detailPage(id) {
         line_id: Number(f.line_id.value), amount_cents: amount, received_at: f.received_at.value, method: f.method.value, note: f.note.value,
       } }));
       if (ok) toast('Payment recorded');
+    } else if (kind === 'email') {
+      const out = await busy(btn, () => api(`invoices/${inv.id}/email`, { method: 'POST', body: { to: f.to.value } }));
+      ok = out;
+      if (out) toast(`Invoice emailed to ${out.sent_to}`);
+    } else if (kind === 'due') {
+      ok = await busy(btn, () => api(`invoices/${inv.id}/lines/${f.dataset.suffix}/due`, { method: 'POST', body: { due_date: f.due_date.value || null } }));
+      if (ok) toast('Due date saved');
     } else if (kind === 'void') {
       if (!f.reason.value.trim()) return toast('Give a reason for voiding.', true);
       ok = await busy(btn, () => api(`invoices/${inv.id}/void`, { method: 'POST', body: { reason: f.reason.value } }));

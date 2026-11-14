@@ -10,6 +10,11 @@ export function randomInvoiceId() {
   return id;
 }
 
+// The secret part of a client's invoice link: 144 random bits, URL-safe.
+export function randomToken() {
+  return crypto.randomBytes(18).toString('base64url');
+}
+
 export function isInvoiceId(s) {
   return typeof s === 'string' && new RegExp(`^${ID_CHAR}{4}$`).test(s);
 }

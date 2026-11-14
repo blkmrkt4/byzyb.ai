@@ -1,10 +1,15 @@
 import { tx } from './db.mjs';
-import { randomInvoiceId, isInvoiceId, lineRef, findRefs } from './ids.mjs';
+import { randomInvoiceId, randomToken, isInvoiceId, lineRef, findRefs } from './ids.mjs';
 
 export const HST_RATE = 0.13;
-export const SCHEDULES = ['one_time', 'monthly', 'annual'];
+export const SCHEDULES = ['one_time', 'split', 'monthly', 'annual'];
 export const SENT_VIA = ['stripe', 'email', 'other'];
 export const MANUAL_METHODS = ['e-transfer', 'cheque', 'cash', 'other'];
+// What a payment still counts for after refunds and disputes. Used in every paid total.
+const NET = '(p.amount_cents - p.refunded_cents - p.dispute_cents)';
+// Dispute outcomes where the money stays with us.
+const DISPUTE_KEPT = ['won', 'warning_closed', 'prevented'];
+
 export const STATUSES = ['Draft', 'Sent', 'Partly paid', 'Paid', 'Overdue', 'Void'];
 
 export class LedgerError extends Error {
@@ -45,7 +50,7 @@ export function computeTotals({ line_items = [], subtotal_cents, hst_enabled = t
 }
 
 export function addInterval(date, schedule, n) {
-  if (n === 0 || schedule === 'one_time') return date;
+  if (n === 0 || schedule === 'one_time' || schedule === 'split') return date;
   const [y, m, d] = date.split('-').map(Number);
   const months = schedule === 'monthly' ? n : n * 12;
   const target = new Date(Date.UTC(y, m - 1 + months, 1));
@@ -56,8 +61,8 @@ export function addInterval(date, schedule, n) {
 
 // Split the total evenly; any leftover cents go on the first payment.
 export function buildSchedule({ total_cents, schedule, count, first_due }) {
-  if (!SCHEDULES.includes(schedule)) throw new LedgerError('Schedule must be one-time, monthly or annual');
-  const n = schedule === 'one_time' ? 1 : Number(count);
+  if (!SCHEDULES.includes(schedule)) throw new LedgerError('Schedule must be one-time, split, monthly or annual');
+  const n = schedule === 'one_time' ? 1 : Number(count ?? (schedule === 'split' ? 2 : count));
   if (!Number.isInteger(n) || n < 1 || n > 120) throw new LedgerError('Number of payments must be between 1 and 120');
   if (!isDate(first_due)) throw new LedgerError('First due date is required');
   const base = Math.floor(total_cents / n);
@@ -65,16 +70,32 @@ export function buildSchedule({ total_cents, schedule, count, first_due }) {
   return Array.from({ length: n }, (_, i) => ({
     suffix: i + 1,
     amount_cents: base + (i === 0 ? rest : 0),
-    due_date: addInterval(first_due, schedule, i),
+    // A split's first payment (the deposit) is due on the first date; the rest
+    // wait until admin sets a date, e.g. on completion.
+    due_date: schedule === 'split' && i > 0 ? null : addInterval(first_due, schedule, i),
+    label: schedule === 'split' ? splitLabel(i, n) : '',
   }));
 }
 
-function normaliseLines(lines, total) {
+export function splitLabel(i, n) {
+  if (i === 0) return 'Deposit';
+  return i === n - 1 ? 'Final payment' : `Payment ${i + 1}`;
+}
+
+function normaliseLines(lines, total, schedule) {
   if (!Array.isArray(lines) || !lines.length) throw new LedgerError('At least one payment is required');
   if (lines.length > 120) throw new LedgerError('Too many payments');
   const out = lines.map((l, i) => {
-    if (!isDate(l.due_date)) throw new LedgerError(`Payment ${i + 1} needs a due date`);
-    return { suffix: i + 1, amount_cents: cents(l.amount_cents, `Payment ${i + 1} amount`), due_date: l.due_date };
+    const undated = l.due_date == null || l.due_date === '';
+    // Only a split may leave payments undated ("due on completion").
+    if (undated && schedule !== 'split') throw new LedgerError(`Payment ${i + 1} needs a due date`);
+    if (!undated && !isDate(l.due_date)) throw new LedgerError(`Payment ${i + 1} has an invalid due date`);
+    const amount = cents(l.amount_cents, `Payment ${i + 1} amount`);
+    if (amount <= 0) throw new LedgerError(`Payment ${i + 1} must be more than zero`);
+    return {
+      suffix: i + 1, amount_cents: amount, due_date: undated ? null : l.due_date,
+      label: String(l.label || '').trim().slice(0, 60),
+    };
   });
   const sum = out.reduce((a, l) => a + l.amount_cents, 0);
   if (sum !== total) throw new LedgerError(`Payments add up to ${sum / 100} but the total is ${total / 100}`);
@@ -86,7 +107,7 @@ function normaliseLines(lines, total) {
 function lineRows(db, invoiceId) {
   return db.prepare(`
     SELECT pl.*,
-           COALESCE(SUM(p.amount_cents), 0) AS paid_cents,
+           COALESCE(SUM(${NET}), 0) AS paid_cents,
            MAX(p.received_at)               AS paid_at
       FROM payment_lines pl
       LEFT JOIN payments p ON p.payment_line_id = pl.id AND p.ignored_at IS NULL
@@ -100,7 +121,7 @@ export function invoiceStatus(inv, lines, today = todayToronto()) {
   const paid = lines.reduce((a, l) => a + l.paid_cents, 0);
   if (lines.length && lines.every((l) => l.paid_cents >= l.amount_cents)) return 'Paid';
   if (!inv.sent_date) return paid > 0 ? 'Partly paid' : 'Draft';
-  if (lines.some((l) => l.paid_cents < l.amount_cents && l.due_date < today)) return 'Overdue';
+  if (lines.some((l) => l.paid_cents < l.amount_cents && l.due_date && l.due_date < today)) return 'Overdue';
   return paid > 0 ? 'Partly paid' : 'Sent';
 }
 
@@ -120,7 +141,7 @@ function summarise(inv, lines, today) {
 export function listInvoices(db, { status, client, q } = {}, today = todayToronto()) {
   const invoices = db.prepare('SELECT * FROM invoices ORDER BY issue_date DESC, created_at DESC').all();
   const allLines = db.prepare(`
-    SELECT pl.*, COALESCE(SUM(p.amount_cents), 0) AS paid_cents
+    SELECT pl.*, COALESCE(SUM(${NET}), 0) AS paid_cents
       FROM payment_lines pl
       LEFT JOIN payments p ON p.payment_line_id = pl.id AND p.ignored_at IS NULL
      GROUP BY pl.id`).all();
@@ -167,6 +188,13 @@ export function getInvoice(db, id, today = todayToronto()) {
   };
 }
 
+export function getInvoiceByToken(db, token, today = todayToronto()) {
+  const row = typeof token === 'string' && /^[A-Za-z0-9_-]{20,40}$/.test(token)
+    ? db.prepare('SELECT id FROM invoices WHERE public_token = ?').get(token) : null;
+  if (!row) throw new LedgerError('Invoice not found', 404);
+  return getInvoice(db, row.id, today);
+}
+
 export function listClients(db) {
   return db.prepare('SELECT DISTINCT client_name FROM invoices ORDER BY client_name COLLATE NOCASE').all().map((r) => r.client_name);
 }
@@ -175,7 +203,7 @@ export function listClients(db) {
 export function openLines(db) {
   return db.prepare(`
     SELECT pl.id, pl.invoice_id, pl.suffix, pl.amount_cents, pl.due_date,
-           i.client_name, i.currency, COALESCE(SUM(p.amount_cents), 0) AS paid_cents
+           i.client_name, i.currency, COALESCE(SUM(${NET}), 0) AS paid_cents
       FROM payment_lines pl
       JOIN invoices i ON i.id = pl.invoice_id AND i.voided_at IS NULL
       LEFT JOIN payments p ON p.payment_line_id = pl.id AND p.ignored_at IS NULL
@@ -218,10 +246,12 @@ function cleanInput(input) {
   });
   if (totals.total_cents <= 0) throw new LedgerError('Total must be more than zero');
   const schedule = input.schedule || 'one_time';
+  if (!SCHEDULES.includes(schedule)) throw new LedgerError('Schedule must be one-time, split, monthly or annual');
   const lines = input.lines?.length
-    ? normaliseLines(input.lines, totals.total_cents)
+    ? normaliseLines(input.lines, totals.total_cents, schedule)
     : buildSchedule({ total_cents: totals.total_cents, schedule, count: input.count, first_due: input.first_due || issue_date });
   if (schedule === 'one_time' && lines.length !== 1) throw new LedgerError('A one-time invoice has exactly one payment');
+  if (schedule === 'split' && lines.length < 2) throw new LedgerError('A split invoice needs at least two payments');
   return {
     client_name,
     client_email: String(input.client_email || '').trim(),
@@ -256,12 +286,12 @@ export function createInvoice(db, input) {
     const now = nowIso();
     db.prepare(`
       INSERT INTO invoices (id, client_name, client_email, description, line_items, currency,
-        subtotal_cents, hst_enabled, hst_cents, total_cents, schedule, issue_date, notes, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        subtotal_cents, hst_enabled, hst_cents, total_cents, schedule, issue_date, notes, public_token, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(id, v.client_name, v.client_email, v.description, JSON.stringify(v.line_items), v.currency,
-        v.subtotal_cents, v.hst_enabled ? 1 : 0, v.hst_cents, v.total_cents, v.schedule, v.issue_date, v.notes, now, now);
-    const ins = db.prepare('INSERT INTO payment_lines (invoice_id, suffix, amount_cents, due_date) VALUES (?, ?, ?, ?)');
-    for (const l of v.lines) ins.run(id, l.suffix, l.amount_cents, l.due_date);
+        v.subtotal_cents, v.hst_enabled ? 1 : 0, v.hst_cents, v.total_cents, v.schedule, v.issue_date, v.notes, randomToken(), now, now);
+    const ins = db.prepare('INSERT INTO payment_lines (invoice_id, suffix, amount_cents, due_date, label) VALUES (?, ?, ?, ?, ?)');
+    for (const l of v.lines) ins.run(id, l.suffix, l.amount_cents, l.due_date, l.label);
     audit(db, 'invoice', id, 'create', {
       client_name: v.client_name, total_cents: v.total_cents, currency: v.currency,
       schedule: v.schedule, payments: v.lines.length,
@@ -292,9 +322,9 @@ export function updateInvoice(db, id, input) {
       if ((v.hst_enabled ? 1 : 0) !== inv.hst_enabled) changes.hst_enabled = { from: !!inv.hst_enabled, to: v.hst_enabled };
       const newItems = JSON.stringify(v.line_items);
       if (newItems !== inv.line_items) changes.line_items = { from: JSON.parse(inv.line_items), to: v.line_items };
-      const oldLines = db.prepare('SELECT suffix, amount_cents, due_date FROM payment_lines WHERE invoice_id = ? ORDER BY suffix').all(inv.id);
-      const linesChanged = JSON.stringify(oldLines.map((l) => [l.suffix, l.amount_cents, l.due_date]))
-        !== JSON.stringify(v.lines.map((l) => [l.suffix, l.amount_cents, l.due_date]));
+      const oldLines = db.prepare('SELECT suffix, amount_cents, due_date, label FROM payment_lines WHERE invoice_id = ? ORDER BY suffix').all(inv.id);
+      const key = (l) => [l.suffix, l.amount_cents, l.due_date, l.label];
+      const linesChanged = JSON.stringify(oldLines.map(key)) !== JSON.stringify(v.lines.map(key));
       if (linesChanged && v.lines.length < oldLines.length) {
         throw new LedgerError('Payments can’t be removed once created. Void the invoice and create a new one instead.');
       }
@@ -305,11 +335,11 @@ export function updateInvoice(db, id, input) {
         .run(v.client_name, v.client_email, v.description, newItems, v.currency, v.subtotal_cents,
           v.hst_enabled ? 1 : 0, v.hst_cents, v.total_cents, v.schedule, v.issue_date, v.notes, nowIso(), inv.id);
       if (linesChanged) {
-        const upd = db.prepare('UPDATE payment_lines SET amount_cents = ?, due_date = ? WHERE invoice_id = ? AND suffix = ?');
-        const ins = db.prepare('INSERT INTO payment_lines (invoice_id, suffix, amount_cents, due_date) VALUES (?, ?, ?, ?)');
+        const upd = db.prepare('UPDATE payment_lines SET amount_cents = ?, due_date = ?, label = ? WHERE invoice_id = ? AND suffix = ?');
+        const ins = db.prepare('INSERT INTO payment_lines (invoice_id, suffix, amount_cents, due_date, label) VALUES (?, ?, ?, ?, ?)');
         for (const l of v.lines) {
-          if (l.suffix <= oldLines.length) upd.run(l.amount_cents, l.due_date, inv.id, l.suffix);
-          else ins.run(inv.id, l.suffix, l.amount_cents, l.due_date);
+          if (l.suffix <= oldLines.length) upd.run(l.amount_cents, l.due_date, l.label, inv.id, l.suffix);
+          else ins.run(inv.id, l.suffix, l.amount_cents, l.due_date, l.label);
         }
         changes.payments = { from: oldLines, to: v.lines };
       }
@@ -362,6 +392,23 @@ export function setStripeLink(db, id, { link_id, url }) {
     db.prepare('UPDATE invoices SET stripe_link_id = ?, stripe_link_url = ?, updated_at = ? WHERE id = ?')
       .run(link_id, url, nowIso(), id);
     audit(db, 'invoice', id, 'stripe_link', { link_id, url });
+  });
+}
+
+// Set or change when a payment is due, e.g. when a split's final payment
+// becomes due on completion. Works after sending, unlike other amount changes.
+export function setLineDueDate(db, invoiceId, suffix, dueDate) {
+  const inv = requireInvoice(db, invoiceId);
+  if (inv.voided_at) throw new LedgerError('A void invoice can’t be changed');
+  const line = db.prepare('SELECT * FROM payment_lines WHERE invoice_id = ? AND suffix = ?').get(inv.id, Number(suffix));
+  if (!line) throw new LedgerError('Payment not found', 404);
+  const date = dueDate || null;
+  if (date && !isDate(date)) throw new LedgerError('Due date is invalid');
+  if (!date && inv.schedule !== 'split') throw new LedgerError('Only a split payment can be left without a due date');
+  if (date === line.due_date) return;
+  tx(db, () => {
+    db.prepare('UPDATE payment_lines SET due_date = ? WHERE id = ?').run(date, line.id);
+    audit(db, 'invoice', inv.id, 'due_date', { line: lineRef(inv.id, line.suffix), from: line.due_date, to: date });
   });
 }
 
@@ -455,7 +502,7 @@ export function restorePayment(db, pid) {
 // The next payment line on an invoice that still owes money.
 function nextOpenLine(db, invoiceId) {
   return db.prepare(`
-    SELECT pl.*, COALESCE(SUM(p.amount_cents), 0) AS paid_cents FROM payment_lines pl
+    SELECT pl.*, COALESCE(SUM(${NET}), 0) AS paid_cents FROM payment_lines pl
       LEFT JOIN payments p ON p.payment_line_id = pl.id AND p.ignored_at IS NULL
      WHERE pl.invoice_id = ? GROUP BY pl.id HAVING paid_cents < pl.amount_cents
      ORDER BY pl.suffix LIMIT 1`).get(invoiceId);
@@ -543,6 +590,58 @@ export function upsertStripePayment(db, rec) {
       }
     }
     return { payment_id: p.id, created, matched, invoice_paid: invoicePaid, invoice_id: p.invoice_id || null, subscription: p.stripe_subscription };
+  });
+}
+
+// Remember a fallback payment link for one payment, for the amount it charges.
+export function savePayLink(db, lineId, url, amount) {
+  db.prepare('UPDATE payment_lines SET pay_link_url = ?, pay_link_amount = ? WHERE id = ?').run(url, amount, lineId);
+}
+
+// ---------- refunds and disputes ----------
+
+function stripePaymentFor(db, { payment_intent, charge }) {
+  return (payment_intent && db.prepare('SELECT * FROM payments WHERE ref = ?').get(payment_intent))
+    || (charge && db.prepare('SELECT * FROM payments WHERE ref = ?').get(charge))
+    || null;
+}
+
+function lineOf(db, p) {
+  return p.payment_line_id ? db.prepare('SELECT * FROM payment_lines WHERE id = ?').get(p.payment_line_id) : null;
+}
+
+// Stripe reports the total refunded so far on the charge, so this sets rather than adds.
+export function applyRefund(db, { payment_intent, charge, amount_refunded }) {
+  return tx(db, () => {
+    const p = stripePaymentFor(db, { payment_intent, charge });
+    if (!p) return { found: false };
+    const refunded = Math.min(Math.max(Number(amount_refunded) || 0, 0), p.amount_cents);
+    if (refunded === p.refunded_cents) return { found: true, payment_id: p.id, changed: false };
+    db.prepare('UPDATE payments SET refunded_cents = ? WHERE id = ?').run(refunded, p.id);
+    const line = lineOf(db, p);
+    audit(db, 'payment', p.id, 'refund', {
+      ...(line ? { line: lineRef(line.invoice_id, line.suffix) } : {}),
+      amount_cents: refunded - p.refunded_cents, total_refunded_cents: refunded, currency: p.currency, stripe_id: p.stripe_object_id,
+    });
+    return { found: true, payment_id: p.id, changed: true, invoice_id: line?.invoice_id || null };
+  });
+}
+
+// While a dispute is open, or once it's lost, the disputed amount doesn't count
+// as paid. If we win, it counts again.
+export function applyDispute(db, { payment_intent, charge, amount, status }) {
+  return tx(db, () => {
+    const p = stripePaymentFor(db, { payment_intent, charge });
+    if (!p) return { found: false };
+    const held = DISPUTE_KEPT.includes(status) ? 0 : Math.min(Math.max(Number(amount) || 0, 0), p.amount_cents - p.refunded_cents);
+    if (held === p.dispute_cents && status === p.dispute_status) return { found: true, payment_id: p.id, changed: false };
+    db.prepare('UPDATE payments SET dispute_cents = ?, dispute_status = ? WHERE id = ?').run(held, status, p.id);
+    const line = lineOf(db, p);
+    audit(db, 'payment', p.id, 'dispute', {
+      ...(line ? { line: lineRef(line.invoice_id, line.suffix) } : {}),
+      status, amount_cents: Number(amount) || 0, currency: p.currency, stripe_id: p.stripe_object_id,
+    });
+    return { found: true, payment_id: p.id, changed: true, invoice_id: line?.invoice_id || null };
   });
 }
 

@@ -6,9 +6,11 @@ import { fileURLToPath } from 'node:url';
 import { openDb } from './lib/db.mjs';
 import * as L from './lib/ledger.mjs';
 import * as A from './lib/auth.mjs';
-import { sendLoginEmail } from './lib/email.mjs';
+import { sendLoginEmail, sendInvoiceEmail } from './lib/email.mjs';
+import { renderInvoicePage, renderNotFound, invoiceEmail } from './lib/invoice-page.mjs';
 import {
   verifyStripeSignature, makeStripe, paymentFromEvent, createPaymentLink, cancelSubscriptionAtPeriodEnd, HANDLED_EVENTS,
+  ADJUSTMENT_EVENTS, adjustmentFromEvent, createLineCheckout, createLinePaymentLink,
 } from './lib/stripe.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -27,6 +29,16 @@ export function makeConfig(env = process.env) {
     stripeKey: env.STRIPE_SECRET_KEY || '',
     webhookSecret: env.STRIPE_WEBHOOK_SECRET || '',
     secureCookies: publicUrl.startsWith('https://'),
+    // Shown on the client's invoice. Canadian invoices with HST must show the HST number.
+    business: {
+      name: env.BUSINESS_NAME || 'Painkiller Labs Inc.',
+      shortName: env.BUSINESS_SHORT_NAME || 'Painkiller Labs',
+      address: (env.BUSINESS_ADDRESS || '8 Parkwood Avenue\nToronto, ON M4V 2W8\nCanada').replace(/\\n/g, '\n'),
+      email: env.BUSINESS_EMAIL || env.ADMIN_EMAIL || 'rh@pklabs.ca',
+      hstNumber: env.HST_NUMBER || '',
+      etransferEmail: env.ETRANSFER_EMAIL || '',
+      publicUrl,
+    },
     // Local development only: /admin/dev-login signs in without email. Refused
     // unless PUBLIC_URL is localhost and the request comes from this machine.
     devLogin: env.LEDGER_DEV_LOGIN === '1' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(publicUrl),
@@ -36,6 +48,10 @@ export function makeConfig(env = process.env) {
 const STATIC = {
   'admin.css': 'text/css; charset=utf-8',
   'admin.js': 'text/javascript; charset=utf-8',
+};
+const INVOICE_STATIC = {
+  'invoice.css': 'text/css; charset=utf-8',
+  'invoice.js': 'text/javascript; charset=utf-8',
 };
 
 const BASE_HEADERS = {
@@ -90,7 +106,7 @@ function authPage(heading, inner) {
   return page(heading, `<main class="auth"><div class="auth-card"><p class="eyebrow">Painkiller Labs admin</p><h1>${esc(heading)}</h1>${inner}</div></main>`);
 }
 
-export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEmail = sendLoginEmail, log = console } = {}) {
+export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEmail = sendLoginEmail, sendInvoice = sendInvoiceEmail, log = console } = {}) {
   const shell = fs.readFileSync(path.join(here, 'public', 'admin.html'), 'utf8');
 
   async function handleWebhook(req, res) {
@@ -99,6 +115,13 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
       return json(res, 400, { error: 'Invalid signature' });
     }
     const event = JSON.parse(raw);
+    if (ADJUSTMENT_EVENTS.includes(event.type)) {
+      const adj = adjustmentFromEvent(event);
+      if (adj.skip) return json(res, 200, { received: true, skipped: adj.skip });
+      const out = adj.kind === 'refund' ? L.applyRefund(db, adj) : L.applyDispute(db, adj);
+      // A refund for a payment the ledger never saw (e.g. a plan payment) is fine to skip.
+      return json(res, 200, { received: true, kind: adj.kind, ...out });
+    }
     if (!HANDLED_EVENTS.includes(event.type)) return json(res, 200, { received: true, skipped: event.type });
     const rec = await paymentFromEvent(event, stripe);
     if (rec.skip) return json(res, 200, { received: true, skipped: rec.skip });
@@ -125,7 +148,12 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
     const q = Object.fromEntries(url.searchParams);
     const [a, b, c] = parts;
 
-    if (method === 'GET' && a === 'config') return json(res, 200, { stripe: !!stripe, admin_email: cfg.adminEmail, today: L.todayToronto() });
+    if (method === 'GET' && a === 'config') {
+      return json(res, 200, {
+        stripe: !!stripe, email: !!cfg.resendKey, admin_email: cfg.adminEmail, today: L.todayToronto(),
+        public_url: cfg.publicUrl, hst_number: cfg.business.hstNumber,
+      });
+    }
     if (method === 'GET' && a === 'next-id') return json(res, 200, { id: L.nextInvoiceId(db) });
     if (method === 'GET' && a === 'invoices' && !b) return json(res, 200, { invoices: L.listInvoices(db, q), clients: L.listClients(db) });
     if (method === 'GET' && a === 'invoices.csv') {
@@ -144,6 +172,11 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
       if (c === 'send') { L.markSent(db, b, body); return json(res, 200, { ok: true }); }
       if (c === 'void') { L.voidInvoice(db, b, body.reason); return json(res, 200, { ok: true }); }
       if (c === 'payments') return json(res, 201, { id: L.recordManualPayment(db, body) });
+      if (c === 'email') return json(res, 200, await emailInvoice(b, body.to));
+      if (c === 'lines' && parts[3] && parts[4] === 'due') {
+        L.setLineDueDate(db, b, parts[3], body.due_date);
+        return json(res, 200, { ok: true });
+      }
       if (c === 'stripe-link') {
         const err = await makeLink(b.toUpperCase());
         return err ? json(res, 400, { error: err }) : json(res, 200, { ok: true });
@@ -159,6 +192,66 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
       if (c === 'restore') { L.restorePayment(db, b); return json(res, 200, { ok: true }); }
     }
     return json(res, 404, { error: 'Not found' });
+  }
+
+  async function emailInvoice(id, toOverride) {
+    const inv = L.getInvoice(db, id);
+    if (inv.voided_at) throw new L.LedgerError('A void invoice can’t be emailed');
+    const to = String(toOverride || inv.client_email || '').trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) throw new L.LedgerError('Add the client’s email address first');
+    const link = `${cfg.publicUrl}/invoice/${inv.public_token}`;
+    const mail = invoiceEmail(inv, { business: cfg.business, link });
+    try {
+      await sendInvoice({ to, ...mail, replyTo: cfg.adminEmail, apiKey: cfg.resendKey, from: cfg.emailFrom });
+    } catch (err) {
+      log.error('[ledger] invoice email failed:', err.message);
+      throw new L.LedgerError(`The email didn’t send: ${err.message}`, 502);
+    }
+    L.markSent(db, inv.id, { sent_date: L.todayToronto(), sent_to: to, sent_via: 'email' });
+    return { sent_to: to };
+  }
+
+  // The client's invoice page and its Pay buttons. The token in the URL is the
+  // only key, so these pages never show anything not on the invoice itself.
+  async function handleInvoice(req, res, url, rest) {
+    const headers = { 'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; form-action 'self' https://checkout.stripe.com; frame-ancestors 'none'; base-uri 'none'" };
+    const [token, action, suffix] = rest;
+    if (token === 'assets' && INVOICE_STATIC[action] && !suffix) {
+      return send(res, 200, fs.readFileSync(path.join(here, 'public', action)), INVOICE_STATIC[action], { 'Cache-Control': 'no-cache' });
+    }
+    let inv;
+    try { inv = L.getInvoiceByToken(db, token); } catch {
+      return send(res, 404, renderNotFound(cfg.business), 'text/html; charset=utf-8', headers);
+    }
+    const self = `${cfg.publicUrl}/invoice/${inv.public_token}`;
+    if (!action && req.method === 'GET') {
+      const n = url.searchParams.get('paid') === '1' ? 'paid' : url.searchParams.get('pay') === 'unavailable' ? 'nopay' : null;
+      return send(res, 200, renderInvoicePage(inv, {
+        business: cfg.business, today: L.todayToronto(), token: inv.public_token, canPay: !!stripe, notice: n,
+      }), 'text/html; charset=utf-8', headers);
+    }
+    if (action === 'pay' && req.method === 'POST' && /^\d{2}$/.test(suffix || '')) {
+      const line = inv.lines.find((l) => l.suffix === Number(suffix));
+      if (!line || inv.voided_at || !line.outstanding_cents) return redirect(res, self);
+      if (!stripe) return redirect(res, `${self}?pay=unavailable`);
+      try {
+        return redirect(res, await createLineCheckout(stripe, inv, line, { successUrl: `${self}?paid=1`, cancelUrl: self }));
+      } catch (err) {
+        log.error('[ledger] checkout failed, trying a payment link', inv.id, err.message);
+      }
+      // Fallback: a payment link for this payment, reused while the amount owed is the same.
+      try {
+        if (line.pay_link_url && line.pay_link_amount === line.outstanding_cents) return redirect(res, line.pay_link_url);
+        const link = await createLinePaymentLink(stripe, inv, line, { successUrl: `${self}?paid=1` });
+        L.savePayLink(db, line.id, link.url, line.outstanding_cents);
+        return redirect(res, link.url);
+      } catch (err) {
+        log.error('[ledger] payment link failed', inv.id, err.message);
+        L.audit(db, 'invoice', inv.id, 'checkout_failed', { line: line.ref, error: err.message });
+        return redirect(res, `${self}?pay=unavailable`);
+      }
+    }
+    return send(res, 404, renderNotFound(cfg.business), 'text/html; charset=utf-8', headers);
   }
 
   async function makeLink(id) {
@@ -182,6 +275,10 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
     if (p === '/health') return send(res, 200, 'ok', 'text/plain');
     if (p === '/api/stripe/webhook' && req.method === 'POST') return handleWebhook(req, res);
     if (p === '/robots.txt') return send(res, 200, 'User-agent: *\nDisallow: /\n', 'text/plain');
+
+    if (p.startsWith('/invoice/')) {
+      return handleInvoice(req, res, url, p.slice('/invoice/'.length).split('/').map(decodeURIComponent));
+    }
 
     if (p.startsWith('/admin/static/')) {
       const name = p.slice('/admin/static/'.length);

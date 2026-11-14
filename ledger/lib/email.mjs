@@ -18,3 +18,15 @@ export async function sendLoginEmail({ to, link, apiKey, from, fetchImpl = fetch
   });
   if (!res.ok) throw new Error(`Resend ${res.status}: ${await res.text()}`);
 }
+
+// Sends an invoice email through Resend. Replies go to the admin address.
+// Without an API key it refuses, because the client would never get it.
+export async function sendInvoiceEmail({ to, subject, text, html, replyTo, apiKey, from, fetchImpl = fetch }) {
+  if (!apiKey) throw new Error('Email isn’t set up (RESEND_API_KEY is not set).');
+  const res = await fetchImpl('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from, to: [to], reply_to: replyTo ? [replyTo] : undefined, subject, text, html }),
+  });
+  if (!res.ok) throw new Error(`Resend ${res.status}: ${await res.text()}`);
+}
