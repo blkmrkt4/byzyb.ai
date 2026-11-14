@@ -10,6 +10,10 @@ export function randomInvoiceId() {
   return id;
 }
 
+export function isInvoiceId(s) {
+  return typeof s === 'string' && new RegExp(`^${ID_CHAR}{4}$`).test(s);
+}
+
 export function lineRef(invoiceId, suffix) {
   return `${invoiceId}-${String(suffix).padStart(2, '0')}`;
 }

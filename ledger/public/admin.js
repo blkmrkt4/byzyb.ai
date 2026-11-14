@@ -252,6 +252,8 @@ function renderUnmatched({ payments, open_lines }, showIgnored) {
 
 async function formPage(id) {
   const inv = id ? await api(`invoices/${id}`) : null;
+  const newId = inv ? null : (await api('next-id')).id;
+  const invNo = inv?.id || newId;
   if (inv?.voided_at) throw new Error('A void invoice can’t be edited.');
   const full = !inv || (!inv.sent_date && !inv.paid_cents && !inv.stripe_link_id);
   document.title = `${inv ? `Edit ${inv.id}` : 'New invoice'} | Painkiller Labs admin`;
@@ -267,7 +269,7 @@ async function formPage(id) {
 
   app.innerHTML = `
     <a class="back" href="${inv ? `/admin/invoices/${inv.id}` : '/admin/invoices'}" data-nav>← ${inv ? inv.id : 'Invoices'}</a>
-    <div class="head"><h1>${inv ? `Edit invoice ${esc(inv.id)}` : 'New invoice'}</h1></div>
+    <div class="head"><div><h1>${inv ? 'Edit invoice' : 'New invoice'}</h1><p class="muted">Invoice number <span class="mono">${esc(invNo)}</span></p></div></div>
     ${lockedNote}
     <form id="inv" class="panel stack" novalidate>
       <div class="grid2">
@@ -342,19 +344,19 @@ async function formPage(id) {
     const cur = /^[A-Z]{3}$/.test(f.currency.value.toUpperCase()) ? f.currency.value.toUpperCase() : 'CAD';
     if (!state.linesEdited) state.lines = buildSchedule(t.total || 0, schedule, f.count.value, f.first_due.value || config.today);
     const sum = state.lines.reduce((a, l) => a + (l.amount_cents ?? 0), 0);
-    const ref = inv?.id || 'XXXX';
+    const ref = invNo;
     $('#lines').innerHTML = `
       <table class="tbl">
-        <thead><tr><th>Payment</th><th>Due date</th><th class="num">Amount</th></tr></thead>
+        <thead><tr><th>Payment number</th><th>Due date</th><th class="num">Amount</th></tr></thead>
         <tbody>${state.lines.map((l, i) => `
           <tr data-i="${i}">
-            <td data-label="Payment" class="mono">${esc(ref)}-${String(i + 1).padStart(2, '0')}</td>
+            <td data-label="Payment number" class="mono">${esc(ref)}-${String(i + 1).padStart(2, '0')}</td>
             <td data-label="Due date"><input type="date" data-k="due_date" value="${esc(l.due_date)}" aria-label="Payment ${i + 1} due date"></td>
             <td data-label="Amount" class="num"><input data-k="amount" inputmode="decimal" value="${l.amount_cents == null ? '' : centsToInput(l.amount_cents)}" aria-label="Payment ${i + 1} amount"></td>
           </tr>`).join('')}</tbody>
       </table>
       ${state.linesEdited ? `<p class="small ${sum === t.total ? 'muted' : ''}">${sum === t.total ? 'Payments add up to the total.' : `<strong>Payments add up to ${money(sum, cur)}, but the total is ${money(t.total || 0, cur)}.</strong>`} <button type="button" class="link-btn small" id="reset-lines">Split evenly again</button></p>`
-        : `<p class="muted small">Split evenly; any odd cents go on the first payment. You can change amounts and dates.${inv ? '' : ' The invoice ID is assigned when you create it.'}</p>`}`;
+        : `<p class="muted small">Split evenly; any odd cents go on the first payment. Each payment number is the invoice number plus -01, -02 and so on. You can change amounts and dates.</p>`}`;
   }
 
   const refresh = () => { renderTotals(); renderLines(); };
@@ -418,6 +420,7 @@ async function formPage(id) {
         currency: f.currency.value.toUpperCase(), issue_date: f.issue_date.value, schedule: f.schedule.value,
         lines: state.lines,
       });
+      if (!inv) body.id = newId;
       if (!inv) body.create_stripe_link = !!f.create_stripe_link?.checked;
     }
     const btn = f.querySelector('button[type="submit"]');
@@ -429,7 +432,7 @@ async function formPage(id) {
         go(`/admin/invoices/${inv.id}`, true);
       } else {
         const out = await api('invoices', { method: 'POST', body });
-        toast(`Invoice ${out.id} created`);
+        toast(out.id === newId ? `Invoice ${out.id} created` : `Invoice ${out.id} created (${newId} was taken, so it got a new number)`);
         if (out.link_error) setTimeout(() => toast(`Invoice created, but the Stripe link failed: ${out.link_error}`, true), 400);
         go(`/admin/invoices/${out.id}`, true);
       }
@@ -477,7 +480,7 @@ async function detailPage(id) {
     const pays = l.payments.filter((p) => !p.ignored_at);
     return `
       <tr>
-        <td data-label="Payment" class="mono">${esc(l.ref)}</td>
+        <td data-label="Payment number" class="mono">${esc(l.ref)}</td>
         <td data-label="Due"><span>${esc(niceDate(l.due_date))}${!isVoid && l.outstanding_cents && l.due_date < config.today ? ' <span class="badge Overdue">Overdue</span>' : ''}</span></td>
         <td data-label="Amount" class="num">${money(l.amount_cents, cur)}</td>
         <td data-label="Paid" class="num">${l.paid_cents ? money(l.paid_cents, cur) : '<span class="muted">—</span>'}</td>
@@ -502,7 +505,7 @@ async function detailPage(id) {
   app.innerHTML = `
     <a class="back" href="/admin/invoices" data-nav>← Invoices</a>
     <div class="head">
-      <div><h1><span class="mono-h">${esc(inv.id)}</span> ${badge(inv.status)}</h1><p class="muted">${esc(inv.client_name)}${inv.client_email ? ` · ${esc(inv.client_email)}` : ''}</p></div>
+      <div><h1>Invoice <span class="mono-h">${esc(inv.id)}</span> ${badge(inv.status)}</h1><p class="muted">${esc(inv.client_name)}${inv.client_email ? ` · ${esc(inv.client_email)}` : ''}</p></div>
     </div>
     ${isVoid ? `<div class="notice bad">Voided ${esc(niceDateTime(inv.voided_at))}${inv.void_reason ? `: ${esc(inv.void_reason)}` : ''}. The record is kept.</div>` : ''}
     <dl class="summary">
@@ -529,7 +532,7 @@ async function detailPage(id) {
     <section class="section">
       <h2>Payments</h2>
       <table class="tbl section">
-        <thead><tr><th>Payment</th><th>Due</th><th class="num">Amount</th><th class="num">Paid</th><th>Paid on</th><th>Payment ID</th></tr></thead>
+        <thead><tr><th>Payment number</th><th>Due</th><th class="num">Amount</th><th class="num">Paid</th><th>Paid on</th><th>Payment ID</th></tr></thead>
         <tbody>${lineRows}</tbody>
       </table>
     </section>

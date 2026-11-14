@@ -292,3 +292,13 @@ test('the webhook rejects bad signatures and records good ones', async (t) => {
   assert.equal((await good.json()).matched, `${id}-01`);
   assert.equal(L.getInvoice(db, id).status, 'Paid');
 });
+
+test('a new invoice keeps the number the form showed, unless it is taken', () => {
+  const db = openDb(':memory:');
+  const shown = L.nextInvoiceId(db);
+  assert.equal(invoice(db, { id: shown }), shown);
+  const again = invoice(db, { id: shown });
+  assert.notEqual(again, shown);
+  assert.match(again, /^[2-9A-HJKMNP-Z]{4}$/);
+  assert.notEqual(invoice(db, { id: 'OOPS' }), 'OOPS');
+});

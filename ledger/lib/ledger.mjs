@@ -1,5 +1,5 @@
 import { tx } from './db.mjs';
-import { randomInvoiceId, lineRef, findRefs } from './ids.mjs';
+import { randomInvoiceId, isInvoiceId, lineRef, findRefs } from './ids.mjs';
 
 export const HST_RATE = 0.13;
 export const SCHEDULES = ['one_time', 'monthly', 'annual'];
@@ -236,15 +236,23 @@ function cleanInput(input) {
   };
 }
 
+const idTaken = (db, id) => !!db.prepare('SELECT 1 FROM invoices WHERE id = ?').get(id);
+
+// A fresh, unused invoice ID. It isn't reserved until an invoice is created with it.
+export function nextInvoiceId(db) {
+  for (let tries = 0; tries <= 50; tries++) {
+    const id = randomInvoiceId();
+    if (!idTaken(db, id)) return id;
+  }
+  throw new LedgerError('Could not generate a unique invoice ID', 500);
+}
+
 export function createInvoice(db, input) {
   const v = cleanInput(input);
   return tx(db, () => {
-    let id;
-    for (let tries = 0; ; tries++) {
-      id = randomInvoiceId();
-      if (!db.prepare('SELECT 1 FROM invoices WHERE id = ?').get(id)) break;
-      if (tries > 50) throw new LedgerError('Could not generate a unique invoice ID', 500);
-    }
+    // Keep the number the form showed, unless it was taken in the meantime.
+    const wanted = String(input.id || '').toUpperCase();
+    const id = isInvoiceId(wanted) && !idTaken(db, wanted) ? wanted : nextInvoiceId(db);
     const now = nowIso();
     db.prepare(`
       INSERT INTO invoices (id, client_name, client_email, description, line_items, currency,

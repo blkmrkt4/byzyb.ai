@@ -126,6 +126,7 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
     const [a, b, c] = parts;
 
     if (method === 'GET' && a === 'config') return json(res, 200, { stripe: !!stripe, admin_email: cfg.adminEmail, today: L.todayToronto() });
+    if (method === 'GET' && a === 'next-id') return json(res, 200, { id: L.nextInvoiceId(db) });
     if (method === 'GET' && a === 'invoices' && !b) return json(res, 200, { invoices: L.listInvoices(db, q), clients: L.listClients(db) });
     if (method === 'GET' && a === 'invoices.csv') {
       const name = `invoices-${L.todayToronto()}.csv`;
