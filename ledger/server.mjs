@@ -261,7 +261,18 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
 if (import.meta.url === `file://${process.argv[1]}`) {
   const cfg = makeConfig();
   const db = openDb(cfg.dbFile);
-  http.createServer(createApp(cfg, db)).listen(cfg.port, () => {
+  const server = http.createServer(createApp(cfg, db));
+  // Railway sends SIGTERM when it replaces a deployment. Finish open requests,
+  // close the database and exit 0 so a routine restart isn't reported as a crash.
+  const stop = (sig) => {
+    console.log(`[ledger] ${sig} received, shutting down`);
+    server.close(() => { db.close(); process.exit(0); });
+    server.closeIdleConnections?.();
+    setTimeout(() => process.exit(0), 8000).unref();
+  };
+  process.once('SIGTERM', stop);
+  process.once('SIGINT', stop);
+  server.listen(cfg.port, () => {
     console.log(`[ledger] listening on :${cfg.port} · db ${cfg.dbFile} · stripe ${cfg.stripeKey ? 'on' : 'off'} · email ${cfg.resendKey ? 'resend' : 'log only'}`);
     if (!cfg.webhookSecret) console.warn('[ledger] STRIPE_WEBHOOK_SECRET is not set; webhooks will be rejected.');
   });
