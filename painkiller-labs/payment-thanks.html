@@ -29,8 +29,14 @@ h1,h2,h3,p{margin:0}
 .logo{display:block;line-height:0}
 .logo svg{height:40px;width:auto}
 .top nav{display:flex;gap:26px;font-size:13px}
-.top nav a{color:var(--soft);text-decoration:none}
+.top nav a{color:var(--soft);text-decoration:none;white-space:nowrap}
 .top nav a:hover{color:#fff}
+.menu-btn{display:none;width:44px;height:44px;margin-right:-10px;padding:0;border:0;background:none;cursor:pointer;flex-direction:column;align-items:center;justify-content:center;gap:5px}
+.menu-btn span{display:block;width:22px;height:2px;border-radius:2px;background:#fff;transition:transform .2s,opacity .2s}
+.menu-btn:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.top.open .menu-btn span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+.top.open .menu-btn span:nth-child(2){opacity:0}
+.top.open .menu-btn span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
 
 /* Hero */
 .hero{background:var(--night);color:#fff;padding:96px 0 88px}
@@ -166,7 +172,11 @@ h3{font-size:22px;font-weight:500;letter-spacing:-.02em;line-height:1.2}
 }
 @media (max-width:720px){
   .wrap{padding:0 18px}
-  .top nav{display:none}
+  .menu-btn{display:flex}
+  .top nav{display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:0;padding:4px 18px 14px;background:var(--night);border-bottom:1px solid #2A2E36;box-shadow:0 12px 24px rgba(0,0,0,.25)}
+  .top.open nav{display:flex}
+  .top nav a{padding:14px 0;font-size:17px;color:#fff;border-top:1px solid #2A2E36}
+  .top nav a:first-child{border-top:0}
   .logo svg{height:32px}
   .hero{padding:56px 0 52px}
   .lede{font-size:18px}
@@ -194,16 +204,44 @@ h3{font-size:22px;font-weight:500;letter-spacing:-.02em;line-height:1.2}
 .pbtn:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
 
 /* Pay */
-.pay-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:44px}
-.pay-card{display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:18px;padding:28px 28px 26px}
+.pbtn-lg{font-size:17px;padding:16px 28px;border-radius:11px}
+.pbtn-outline{background:#fff;color:var(--ink);border:1px solid var(--ink)}
+.pbtn-outline:hover{background:var(--ink);color:#fff}
+.feature-card{display:grid;grid-template-columns:1fr auto;gap:36px;align-items:center;margin-top:40px;background:#fff;border:1px solid var(--line);border-radius:18px;padding:36px 36px;box-shadow:inset 0 4px 0 var(--blue),0 10px 30px rgba(37,41,46,.06)}
+.feature-eyebrow{text-transform:uppercase;letter-spacing:.16em;font-size:11px;font-weight:750;color:var(--deep)}
+.feature-card h2{margin-top:10px;font-size:clamp(28px,3.4vw,38px);font-weight:620;letter-spacing:-.03em;line-height:1.1}
+.feature-desc{margin-top:14px;font-size:17px;line-height:1.55;color:var(--ink);max-width:520px}
+.feature-note{margin-top:12px;font-size:14px;color:var(--muted)}
+.feature-action{text-align:center}
+.feature-hint{margin-top:10px;font-size:13px;color:var(--muted)}
+.request{display:flex;align-items:center;justify-content:space-between;gap:28px;margin-top:18px;padding:22px 28px;border:1px dashed #C3CAD3;border-radius:18px}
+.request h2{font-size:18px;font-weight:600;letter-spacing:-.01em;line-height:1.3}
+.request p{margin-top:6px;font-size:15px;color:var(--muted);max-width:520px}
+.request .pbtn{flex-shrink:0}
+.plans-head{margin-top:64px;display:flex;justify-content:space-between;align-items:end;gap:20px}
+.plans-head h2{font-size:clamp(24px,3vw,32px)}
+.plans-head p{color:var(--muted);font-size:15px}
+.pay-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:22px}
+.pay-card{display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:18px;padding:26px 24px 24px}
 .pay-card.monthly{box-shadow:inset 0 3px 0 var(--blue)}
-.pay-card h2{font-size:19px;font-weight:500;letter-spacing:-.01em;line-height:1.3}
-.pay-card .price{margin-top:10px;color:var(--ink);font-size:34px;font-weight:620;letter-spacing:-.03em;line-height:1.1}
-.price small{font-size:16px;font-weight:400;letter-spacing:0;color:var(--muted)}
-.pay-card p{margin-top:14px;font-size:15px;color:var(--muted)}
-.pay-card p:last-of-type{padding-bottom:24px}
+.pay-card h3{font-size:19px;font-weight:500;letter-spacing:-.01em;line-height:1.3}
+.pay-card .price{margin-top:8px;color:var(--ink);font-size:32px;font-weight:620;letter-spacing:-.03em;line-height:1.1}
+.price small{font-size:15px;font-weight:400;letter-spacing:0;color:var(--muted)}
+.lead-line{margin-top:14px;font-size:15px;line-height:1.5;color:var(--ink)}
+.incl{list-style:none;margin:14px 0 0;padding:14px 0 0;border-top:1px solid var(--line)}
+.incl li{position:relative;padding-left:16px;font-size:14px;color:var(--muted);line-height:1.5}
+.incl li+li{margin-top:7px}
+.incl li::before{content:"";position:absolute;left:0;top:8px;width:6px;height:6px;border-radius:50%;background:var(--blue)}
+.terms-line{margin-top:14px;padding-bottom:22px;font-size:13px;color:var(--muted)}
 .pay-card .pbtn{margin-top:auto;align-self:flex-start}
-.portal{margin-top:34px;font-size:16px}
+.next{margin-top:56px}
+.next h2{font-size:clamp(22px,2.6vw,28px)}
+.next ol{list-style:none;counter-reset:n;margin:20px 0 0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.next li{counter-increment:n;padding-top:14px;border-top:2px solid var(--ink)}
+.next li::before{content:counter(n);display:block;font-size:13px;font-weight:700;color:var(--deep);margin-bottom:6px}
+.next b{display:block;font-weight:600;font-size:16px}
+.next span{display:block;margin-top:4px;font-size:14px;color:var(--muted)}
+.portal{margin-top:48px;font-size:16px}
 .portal a{font-weight:600;text-decoration:none}
 .portal a:hover{text-decoration:underline}
 .small-print{margin-top:22px;padding-top:18px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
@@ -225,12 +263,22 @@ h3{font-size:22px;font-weight:500;letter-spacing:-.02em;line-height:1.2}
 .legal-sec ul{margin:10px 0 0;padding-left:22px}
 .legal-sec li+li{margin-top:6px}
 
+@media (max-width:980px){
+  .pay-grid{grid-template-columns:1fr 1fr}
+}
 @media (max-width:720px){
   .page{padding:44px 0 64px}
   .page-intro{font-size:17px}
-  .pay-grid{grid-template-columns:1fr;gap:16px;margin-top:32px}
+  .feature-card{grid-template-columns:1fr;gap:22px;padding:28px 22px}
+  .feature-action{text-align:left}
+  .pbtn-lg{display:block;text-align:center}
+  .request{flex-direction:column;align-items:flex-start;gap:16px;padding:20px 22px}
+  .plans-head{display:block;margin-top:48px}
+  .plans-head p{margin-top:6px}
+  .pay-grid{grid-template-columns:1fr;gap:16px}
   .pay-card{padding:24px 22px 22px}
   .pay-card .price{font-size:30px}
+  .next ol{grid-template-columns:1fr;gap:14px}
 }
 </style>
 </head>
@@ -376,14 +424,24 @@ h3{font-size:22px;font-weight:500;letter-spacing:-.02em;line-height:1.2}
     </g>
   </g>
 </svg></a>
-    <nav aria-label="Sections">
+    <nav id="site-nav" aria-label="Sections">
       <a href="/#company">Company</a>
       <a href="/#platforms">Platforms</a>
       <a href="/#working">Partnerships &amp; Mandates</a>
       <a href="/#contact">Contact</a>
       <a href="/pay">Make a payment</a>
     </nav>
+    <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu"><span></span><span></span><span></span></button>
   </div>
+<script>
+(function(){
+  var top=document.currentScript.closest('.top'),btn=top.querySelector('.menu-btn');
+  function set(open){top.classList.toggle('open',open);btn.setAttribute('aria-expanded',open);btn.setAttribute('aria-label',open?'Close menu':'Open menu')}
+  btn.addEventListener('click',function(){set(!top.classList.contains('open'))});
+  top.querySelectorAll('nav a').forEach(function(a){a.addEventListener('click',function(){set(false)})});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')set(false)});
+})();
+</script>
 </header>
 
 <main id="top">
