@@ -241,10 +241,15 @@ h3{font-size:22px;font-weight:500;letter-spacing:-.02em;line-height:1.2}
 .next li::before{content:counter(n);display:block;font-size:13px;font-weight:700;color:var(--deep);margin-bottom:6px}
 .next b{display:block;font-weight:600;font-size:16px}
 .next span{display:block;margin-top:4px;font-size:14px;color:var(--muted)}
-.portal{margin-top:48px;font-size:16px}
-.portal a{font-weight:600;text-decoration:none}
-.portal a:hover{text-decoration:underline}
-.small-print{margin-top:22px;padding-top:18px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+.account{display:grid;grid-template-columns:1.15fr 1fr;gap:36px;margin-top:56px;background:#fff;border:1px solid var(--line);border-radius:18px;padding:32px 34px}
+.account h2{margin-top:10px;font-size:clamp(22px,2.6vw,28px)}
+.account-desc{margin-top:12px;font-size:15px;line-height:1.6;color:var(--muted)}
+.account .pbtn{margin-top:22px}
+.account-list{padding-left:32px;border-left:1px solid var(--line)}
+.account-list-title{font-size:14px;font-weight:600}
+.account-list .incl{margin-top:4px;border-top:0;padding-top:8px}
+.account-list .incl li{font-size:15px}
+.small-print{margin-top:48px;padding-top:18px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
 .small-print a{color:var(--muted)}
 
 /* Thanks */
@@ -279,6 +284,8 @@ h3{font-size:22px;font-weight:500;letter-spacing:-.02em;line-height:1.2}
   .pay-card{padding:24px 22px 22px}
   .pay-card .price{font-size:30px}
   .next ol{grid-template-columns:1fr;gap:14px}
+  .account{grid-template-columns:1fr;gap:24px;padding:26px 22px}
+  .account-list{padding-left:0;padding-top:22px;border-left:0;border-top:1px solid var(--line)}
 }
 </style>
 </head>
