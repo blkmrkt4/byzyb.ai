@@ -7,7 +7,7 @@ import { randomToken, isInvoiceId } from './ids.mjs';
 import {
   LedgerError, audit, todayToronto, nextInvoiceId, createInvoice, getInvoice, markSent, saveClientFromInvoice,
 } from './ledger.mjs';
-import { money, prepayFor } from './invoice-page.mjs';
+import { money, prepayFor, servicePeriod, periodText } from './invoice-page.mjs';
 export { prepayFor };
 
 const nowIso = () => new Date().toISOString();
@@ -64,6 +64,8 @@ export function createOffer(db, input, catalogue) {
   if (client_email && !validEmail(client_email)) throw new LedgerError('Client email doesn’t look right');
   const payments = Number(input.payments ?? 12);
   if (!Number.isInteger(payments) || payments < 1 || payments > 120) throw new LedgerError('Number of payments must be between 1 and 120');
+  const service_start = input.service_start ? String(input.service_start) : null;
+  if (service_start && (!/^\d{4}-\d{2}-\d{2}$/.test(service_start) || Number.isNaN(Date.parse(service_start)))) throw new LedgerError('The service start date isn’t a valid date');
   const free = Number(input.prepay_free_months || 0);
   if (!Number.isInteger(free) || free < 0 || free > 11) throw new LedgerError('Months free must be a whole number from 0 to 11');
   if (free && free >= payments) throw new LedgerError('Months free must be fewer than the number of months');
@@ -95,9 +97,9 @@ export function createOffer(db, input, catalogue) {
     const client = saveClientFromInvoice(db, { client_name, client_email, client_address: String(input.client_address || '').trim() });
     const now = nowIso();
     db.prepare(`INSERT INTO plan_offers (id, client_id, client_name, client_email, client_address, message, options, hst_enabled, payments,
-        prepay_free_months, public_token, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        prepay_free_months, service_start, public_token, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(id, client.id, client.name, client_email, String(input.client_address || '').trim(), String(input.message || '').trim().slice(0, 3000),
-        JSON.stringify(options), input.hst_enabled === false ? 0 : 1, payments, free, randomToken(), now, now);
+        JSON.stringify(options), input.hst_enabled === false ? 0 : 1, payments, free, service_start, randomToken(), now, now);
     audit(db, 'invoice', id, 'offer_create', { client_name: client.name, plans: options.map((o) => o.name) });
     return id;
   });
@@ -132,6 +134,8 @@ export function chooseOffer(db, token, key, today = todayToronto(), { prepay = f
     const up = prepay ? prepayFor(o, opt) : null;
     if (prepay && !up) throw new LedgerError('Paying upfront isn’t offered for that plan', 400);
     const term = `${o.payments === 12 ? 'the year' : `${o.payments} months`}`;
+    const period = servicePeriod(o, opt);
+    const covers = period ? ` (service ${periodText(period)})` : '';
     const id = createInvoice(db, up ? {
       id: o.id,
       client_name: o.client_name, client_email: o.client_email, client_address: o.client_address,
@@ -139,7 +143,7 @@ export function chooseOffer(db, token, key, today = todayToronto(), { prepay = f
       currency: opt.currency, hst_enabled: o.hst_enabled,
       schedule: 'one_time', count: 1, first_due: today, issue_date: today,
       line_items: [{
-        description: `${opt.name}: ${up.months} months, paid upfront with ${up.free} month${up.free === 1 ? '' : 's'} free (regularly ${money(up.regular_cents, opt.currency)})`,
+        description: `${opt.name}: ${up.months} months, paid upfront with ${up.free} month${up.free === 1 ? '' : 's'} free (regularly ${money(up.regular_cents, opt.currency)})${covers}`,
         amount_cents: up.amount_cents,
       }],
       stripe_product: opt.product,
@@ -152,7 +156,7 @@ export function chooseOffer(db, token, key, today = todayToronto(), { prepay = f
       // A one-time item (like a website build) is a single payment due today.
       schedule: INTERVALS[opt.interval] || 'one_time', count: opt.interval ? o.payments : 1, first_due: today, issue_date: today,
       line_items: [opt.interval ? {
-        description: `${opt.name}: ${o.payments} ${opt.interval}${o.payments === 1 ? '' : 's'} × ${money(opt.amount_cents, opt.currency)}`,
+        description: `${opt.name}: ${o.payments} ${opt.interval}${o.payments === 1 ? '' : 's'} × ${money(opt.amount_cents, opt.currency)}${covers}`,
         amount_cents: opt.amount_cents * o.payments,
       } : { description: opt.name, amount_cents: opt.amount_cents }],
       stripe_product: opt.product,

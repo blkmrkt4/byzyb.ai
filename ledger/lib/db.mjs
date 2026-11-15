@@ -282,7 +282,8 @@ function migrate(db) {
     updated_at     TEXT NOT NULL
   )`);
   // "Pay for the year, get N months free" on monthly plans, and whether the client took it.
-  for (const [col, def] of [['prepay_free_months', 'INTEGER NOT NULL DEFAULT 0'], ['chosen_prepay', 'INTEGER NOT NULL DEFAULT 0']]) {
+  // service_start: when the service began, if before the client chooses (e.g. hosting for a site already live).
+  for (const [col, def] of [['prepay_free_months', 'INTEGER NOT NULL DEFAULT 0'], ['chosen_prepay', 'INTEGER NOT NULL DEFAULT 0'], ['service_start', 'TEXT']]) {
     if (!hasColumn(db, 'plan_offers', col)) db.exec(`ALTER TABLE plan_offers ADD COLUMN ${col} ${def}`);
   }
   const orphans = db.prepare('SELECT id, client_name, client_email FROM invoices WHERE client_id IS NULL ORDER BY created_at').all();

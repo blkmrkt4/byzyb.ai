@@ -1,5 +1,6 @@
 // The client's view of an invoice at /invoice/<token>: printable, with a Pay
 // button for each payment that still owes money.
+import { addInterval } from './ledger.mjs';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -244,6 +245,16 @@ export function prepayFor(offer, opt) {
   return { months, free, amount_cents: opt.amount_cents * (months - free), regular_cents: opt.amount_cents * months, saving_cents: opt.amount_cents * free };
 }
 
+// The service period a recurring option covers when the service already started:
+// { start, end } as dates, end being the day before the term runs out.
+export function servicePeriod(offer, opt) {
+  if (!offer.service_start || !opt.interval) return null;
+  const after = addInterval(offer.service_start, opt.interval === 'year' ? 'annual' : 'monthly', offer.payments);
+  const end = new Date(Date.parse(`${after}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+  return { start: offer.service_start, end };
+}
+export const periodText = (p) => `${longDate(p.start)} to ${longDate(p.end)}`;
+
 const termWord = (months) => (months === 12 ? 'the year' : `all ${months} months`);
 const freeWord = (n) => `${n === 1 ? '1 month' : `${n} months`} free`;
 
@@ -266,7 +277,12 @@ function planPrice(o, hst) {
 export function renderPlanPage(offer, { business, token }) {
   const withdrawn = !!offer.cancelled_at;
   const fromLines = [business.name, ...String(business.address || '').split('\n'), business.email].filter(Boolean);
-  const billing = (o) => (!o.interval ? 'One payment, due the day you choose.'
+  const billing = (o) => {
+    const period = servicePeriod(offer, o);
+    if (period) return `Covers ${offer.payments} ${per(o.interval)}${offer.payments === 1 ? '' : 's'} of service, ${periodText(period)}. ${prepayFor(offer, o) ? 'Payments start when you choose.' : 'The first payment is due when you choose.'}`;
+    return billingFrom(o);
+  };
+  const billingFrom = (o) => (!o.interval ? 'One payment, due the day you choose.'
     : prepayFor(offer, o) ? `${offer.payments} months of service, starting the day you choose.`
     : `Billed ${o.interval === 'year' ? 'yearly' : 'monthly'} for ${offer.payments} ${per(o.interval)}${offer.payments === 1 ? '' : 's'}, starting the day you choose.`);
   const cards = offer.options.map((o) => {

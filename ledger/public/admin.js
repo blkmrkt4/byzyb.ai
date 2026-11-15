@@ -1614,13 +1614,18 @@ async function offerFormPage() {
         <div class="grid3">
           <label><span id="count-label">Number of payments</span> <input name="payments" type="number" min="1" max="120" value="12"></label>
         </div>
+        <div class="prepay-row">
+          <label class="check"><input type="checkbox" name="started"> The service has already started (for example, hosting for a site that’s live)</label>
+          <label class="inline-num">Started on <input name="service_start" type="date" value="${esc(config.today)}"></label>
+        </div>
         <label class="check"><input type="checkbox" name="hst_enabled" checked> Charge HST at 13% on top</label>
         <div class="prepay-row">
           <label class="check"><input type="checkbox" name="prepay_on" checked> Offer a discount for paying upfront on monthly plans</label>
           <label class="inline-num">Months free <input name="prepay_free" type="number" min="1" max="11" value="2"></label>
         </div>
         <p class="muted small" id="prepay-preview"></p>
-        <p class="muted small">The first payment is due the day they choose. With a Stripe subscription set up for them, each payment after that is charged automatically, and it stops after the last one.</p>
+        <p class="muted small" id="start-note">The service starts, and the first payment is due, the day they choose.</p>
+        <p class="muted small"> With a Stripe subscription set up for them, each payment after that is charged automatically, and it stops after the last one.</p>
       </div>
       <div id="form-error"></div>
       <div class="actions"><button class="btn" type="submit">Create plan choice</button><a class="btn btn-quiet" id="cancel-form" href="/admin/invoices" data-nav>Cancel</a></div>
@@ -1654,6 +1659,10 @@ async function offerFormPage() {
   };
   // "Pay for the year: $2,500 (2 months free)" for each monthly option, as the client will see it.
   const updatePrepay = () => {
+    f.service_start.disabled = !f.started.checked;
+    $('#start-note').textContent = f.started.checked
+      ? `The client’s page shows the service period from ${niceDate(f.service_start.value || config.today)}. The first payment is still due the day they choose.`
+      : 'The service starts, and the first payment is due, the day they choose.';
     const on = f.prepay_on.checked;
     f.prepay_free.disabled = !on;
     const n = Number(f.payments.value) || 0;
@@ -1745,6 +1754,7 @@ async function offerFormPage() {
       id: newId, client_name: f.client_name.value, client_email: f.client_email.value, client_address: f.client_address.value,
       message: f.message.value, payments: Number(f.payments.value), hst_enabled: f.hst_enabled.checked,
       prepay_free_months: f.prepay_on.checked ? Number(f.prepay_free.value) : 0,
+      service_start: f.started.checked ? f.service_start.value || null : null,
       options: [
         ...chosen.map((el) => ({ price: plans[el.dataset.i].price, name: el.querySelector('[data-k="name"]').value, details: el.querySelector('[data-k="details"]').value })),
         ...customs.map((c) => ({ custom: true, name: c.name, amount_cents: parseMoney(c.amount), interval: c.interval || null, details: c.details })),
@@ -1787,6 +1797,7 @@ async function offerPage(id) {
         <div class="plan-card"><b>${esc(x.name)}</b><div>${esc(planPrice(x))}${hst}</div>
           ${o.prepay_free_months && x.interval === 'month' && o.payments > o.prepay_free_months ? `<div class="muted small">or ${esc(money(x.amount_cents * (o.payments - o.prepay_free_months), x.currency))}${hst} paid upfront for ${o.payments === 12 ? 'the year' : `${o.payments} months`} (${o.prepay_free_months} months free)</div>` : ''}
           ${x.details ? `<ul class="small">${x.details.split('\n').filter((l) => l.trim()).map((l) => `<li>${esc(l.replace(/^[-•*]\s*/, ''))}</li>`).join('')}</ul>` : ''}</div>`).join('')}</div>
+      ${o.service_start ? `<p class="muted small section">Service started ${esc(niceDate(o.service_start))}; the client’s page shows the service period from then.</p>` : ''}
       ${o.message ? `<p class="muted small section">Message: ${esc(o.message)}</p>` : ''}
     </div>
     ${open ? '<div class="actions"><button class="btn btn-danger" id="cancel-offer">Withdraw this plan choice</button></div>' : ''}`;
