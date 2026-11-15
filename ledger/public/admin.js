@@ -1661,7 +1661,7 @@ async function offerFormPage() {
   const updatePrepay = () => {
     f.service_start.disabled = !f.started.checked;
     $('#start-note').textContent = f.started.checked
-      ? `The client’s page shows the service period from ${niceDate(f.service_start.value || config.today)}. The first payment is still due the day they choose.`
+      ? `The client’s page shows the service period from ${niceDate(f.service_start.value || config.today)}. Months already passed when they choose are billed together in their first payment, due that day; the rest follow monthly.`
       : 'The service starts, and the first payment is due, the day they choose.';
     const on = f.prepay_on.checked;
     f.prepay_free.disabled = !on;

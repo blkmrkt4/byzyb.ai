@@ -1213,18 +1213,43 @@ test('the client page offers monthly or the year upfront, and the upfront choice
   assert.match(await (await req(`/invoice/${public_token}?chosen=1`)).text(), /Thank you for choosing Website care plus, paid upfront for the year/);
 });
 
-test('a plan choice for a service that already started shows the service period', async (t) => {
+test('a plan choice for a service that already started shows the service period and bills missed months first', async (t) => {
   const O = await import('../lib/offers.mjs');
   const { db, req } = await server(t);
   const id = O.createOffer(db, { client_name: 'Cavera Insurance', hst_enabled: false, prepay_free_months: 2, service_start: '2026-10-01',
     options: [{ price: 'price_host' }, { price: 'price_build' }] }, PLANS);
   const o = O.getOffer(db, id);
   const page = await (await req(`/invoice/${o.public_token}`)).text();
-  assert.match(page, /Covers 12 months of service, October 1, 2026 to September 30, 2027\. Payments start when you choose\./);
+  assert.match(page, /Covers 12 months of service, October 1, 2026 to September 30, 2027\./);
   assert.match(page, /One payment, due the day you choose/); // the one-time build isn't affected
+
+  // Chosen on November 20: October 1 and November 1 have passed, so payment 1 covers both.
   O.chooseOffer(db, o.public_token, '1', '2026-11-20');
   const inv = L.getInvoice(db, id);
   assert.equal(inv.line_items[0].description, 'Website Hosting: 12 months × $60.00 (service October 1, 2026 to September 30, 2027)');
-  assert.equal(inv.lines[0].due_date, '2026-11-20');
+  assert.equal(inv.total_cents, 72000);
+  assert.equal(inv.lines.length, 11);
+  assert.deepEqual([inv.lines[0].amount_cents, inv.lines[0].due_date, inv.lines[0].label], [12000, '2026-11-20', '2 months: Oct 1, 2026 to Nov 30, 2026']);
+  assert.deepEqual([inv.lines[1].amount_cents, inv.lines[1].due_date], [6000, '2026-12-20']);
+  assert.equal(inv.lines.at(-1).due_date, '2027-09-20');
   assert.throws(() => O.createOffer(db, { client_name: 'X', service_start: 'soon', options: [{ price: 'price_host' }] }, PLANS), /valid date/);
+});
+
+test('missed months with HST stay whole months, and the subscription charges them once up front', async () => {
+  const O = await import('../lib/offers.mjs');
+  const db = fresh();
+  const id = O.createOffer(db, { client_name: 'Cavera Insurance', service_start: '2026-09-15', options: [{ price: 'price_host' }] }, PLANS);
+  O.chooseOffer(db, O.getOffer(db, id).public_token, '1', '2026-11-20');
+  const inv = L.getInvoice(db, id);
+  // Sep 15, Oct 15 and Nov 15 have passed: 3 × $67.80, then $67.80 a month.
+  assert.deepEqual([inv.lines[0].amount_cents, inv.lines.length, inv.lines[1].amount_cents, inv.total_cents], [20340, 10, 6780, 81360]);
+  const posts = [];
+  const stripe = {
+    get: async () => ({ data: [] }),
+    post: async (path, params) => { posts.push([path, params]); return path === '/prices' ? { id: `price_${posts.length}` } : { id: 'plink', url: 'https://buy.stripe.com/x' }; },
+  };
+  await createPaymentLink(stripe, inv, 'https://x');
+  const prices = posts.filter((p) => p[0] === '/prices').map((p) => p[1]);
+  assert.deepEqual(prices.map((p) => [p.unit_amount, !!p.recurring]), [[6780, true], [13560, false]]);
+  assert.equal(posts.find((p) => p[0] === '/payment_links')[1].line_items.length, 2);
 });

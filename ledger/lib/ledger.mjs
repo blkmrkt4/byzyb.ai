@@ -362,7 +362,9 @@ function cleanInput(input) {
     line_items: input.line_items,
     subtotal_cents: input.subtotal_cents,
     hst_enabled: input.hst_enabled !== false,
-    payments: recurring ? (input.lines?.length || Number(input.count) || 1) : 1,
+    // hst_units: how many months (or years) the total covers, when a first payment
+    // bundles several of them (a plan choice catching up on months already passed).
+    payments: recurring ? (Number(input.hst_units) || input.lines?.length || Number(input.count) || 1) : 1,
   });
   if (totals.total_cents <= 0) throw new LedgerError('Total must be more than zero');
   const product = String(input.stripe_product || '').trim();

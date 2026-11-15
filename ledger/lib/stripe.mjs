@@ -285,15 +285,29 @@ export async function createPaymentLink(stripe, inv, siteUrl) {
   // Recurring: one subscription, one charge per payment line. The ledger
   // matches each renewal to the next unpaid line and cancels the subscription
   // after the last one.
-  const amounts = new Set(lines.map((l) => l.amount_cents));
-  if (amounts.size !== 1) {
+  // Every payment the same, or a larger first one that catches up on whole
+  // months already passed: the extra is a one-time charge on the first invoice.
+  const regular = lines.at(-1).amount_cents;
+  const rest = new Set(lines.slice(1).map((l) => l.amount_cents));
+  const extra = lines[0].amount_cents - regular;
+  const ok = lines.length > 1 && rest.size === 1 && extra >= 0 && extra % regular === 0;
+  if (!ok && new Set(lines.map((l) => l.amount_cents)).size !== 1) {
     throw new Error('A Stripe subscription charges the same amount each time. Make every payment the same amount, or collect them another way.');
   }
   const interval = inv.schedule === 'monthly' ? 'month' : 'year';
   const desc = `Invoice ${inv.id} — ${lines.length} ${inv.schedule} payments (${lineRef(inv.id, 1)} to ${lineRef(inv.id, lines.length)})`;
-  const price = await recurringPrice(stripe, inv, { currency, amount: lines[0].amount_cents, interval });
+  const price = await recurringPrice(stripe, inv, { currency, amount: regular, interval });
+  const items = [{ price: price.id, quantity: 1 }];
+  if (extra > 0) {
+    const what = String(inv.description || '').split('\n')[0].trim().slice(0, 60);
+    const catchUp = await stripe.post('/prices', {
+      currency, unit_amount: extra,
+      ...productOf(inv, `${what ? `${what} · ` : ''}Invoice ${inv.id}: ${lines[0].label || 'earlier months'}`),
+    });
+    items.push({ price: catchUp.id, quantity: 1 });
+  }
   const link = await stripe.post('/payment_links', {
-    line_items: [{ price: price.id, quantity: 1 }],
+    line_items: items,
     metadata: meta,
     subscription_data: { description: desc, metadata: meta },
     after_completion: redirect,

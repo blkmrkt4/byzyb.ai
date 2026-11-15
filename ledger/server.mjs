@@ -381,7 +381,7 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
   async function handleOffer(req, res, offer, action, key, extra, headers) {
     const self = offerLink(offer);
     if (!action && req.method === 'GET') {
-      return send(res, 200, renderPlanPage(offer, { business: cfg.business, token: offer.public_token }), 'text/html; charset=utf-8', headers);
+      return send(res, 200, renderPlanPage(offer, { business: cfg.business, token: offer.public_token, today: L.todayToronto() }), 'text/html; charset=utf-8', headers);
     }
     if (action === 'choose' && req.method === 'POST' && /^\d$/.test(key || '')) {
       let out;
@@ -391,7 +391,7 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
         return redirect(res, self);
       }
       if (out.created) {
-        if (stripe && out.option.interval && !out.prepay) {
+        if (stripe && out.option.interval && !out.prepay && L.getInvoice(db, out.invoice_id).lines.length > 1) {
           const err = await makeLink(out.invoice_id);
           if (err) log.error('[ledger] subscription link after plan choice failed', out.invoice_id, err);
         }

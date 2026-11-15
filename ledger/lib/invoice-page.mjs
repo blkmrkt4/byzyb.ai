@@ -151,8 +151,17 @@ export function renderInvoicePage(inv, { business, today, token, canPay, notice 
 // every payment, instead of paying them one at a time.
 function autopay(inv, { isVoid, count }) {
   if (isVoid || !inv.stripe_link_url || inv.paid_cents || !['monthly', 'annual'].includes(inv.schedule)) return '';
-  const per = inv.lines[0];
+  const per = inv.lines.at(-1);
+  const first = inv.lines[0];
   const unit = inv.schedule === 'monthly' ? 'month' : 'year';
+  if (first.amount_cents !== per.amount_cents) {
+    return `
+  <section class="autopay noprint">
+    <div><b>Pay automatically each ${unit}</b>
+      <p class="sub">Set up your card once: the first payment of ${money(first.amount_cents, inv.currency)} is charged now, then ${money(per.amount_cents, inv.currency)} each ${unit} for the ${count - 1} payments after it, then it stops. Checkout is handled securely by Stripe.</p></div>
+    <a class="pay" href="${esc(inv.stripe_link_url)}">Set up ${unit === 'month' ? 'monthly' : 'yearly'} payments</a>
+  </section>`;
+  }
   return `
   <section class="autopay noprint">
     <div><b>Pay automatically each ${unit}</b>
@@ -254,6 +263,25 @@ export function servicePeriod(offer, opt) {
   return { start: offer.service_start, end };
 }
 export const periodText = (p) => `${longDate(p.start)} to ${longDate(p.end)}`;
+const dayBefore = (d) => new Date(Date.parse(`${d}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+const shortDate = (d) => {
+  const [y, m, day] = d.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, day)).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+};
+
+// When the service started before the client chooses, the months (or years)
+// whose payment date has already come are billed together in the first payment.
+// Returns { count, through, label } or null when nothing is behind.
+export function catchUp(offer, opt, today) {
+  if (!offer.service_start || !opt.interval) return null;
+  const sched = opt.interval === 'year' ? 'annual' : 'monthly';
+  let n = 0;
+  while (n < offer.payments && addInterval(offer.service_start, sched, n) <= today) n++;
+  if (n < 2) return null;
+  const through = dayBefore(addInterval(offer.service_start, sched, n));
+  const unit = `${opt.interval}${n === 1 ? '' : 's'}`;
+  return { count: n, through, label: `${n} ${unit}: ${shortDate(offer.service_start)} to ${shortDate(through)}` };
+}
 
 const termWord = (months) => (months === 12 ? 'the year' : `all ${months} months`);
 const freeWord = (n) => `${n === 1 ? '1 month' : `${n} months`} free`;
@@ -274,12 +302,19 @@ function planPrice(o, hst) {
 
 // The page the client sees before choosing. Choosing posts back here and
 // turns into their invoice at the same address.
-export function renderPlanPage(offer, { business, token }) {
+export function renderPlanPage(offer, { business, token, today }) {
   const withdrawn = !!offer.cancelled_at;
   const fromLines = [business.name, ...String(business.address || '').split('\n'), business.email].filter(Boolean);
   const billing = (o) => {
     const period = servicePeriod(offer, o);
-    if (period) return `Covers ${offer.payments} ${per(o.interval)}${offer.payments === 1 ? '' : 's'} of service, ${periodText(period)}. ${prepayFor(offer, o) ? 'Payments start when you choose.' : 'The first payment is due when you choose.'}`;
+    if (period) {
+      const behind = catchUp(offer, o, today);
+      const covers = `Covers ${offer.payments} ${per(o.interval)}${offer.payments === 1 ? '' : 's'} of service, ${periodText(period)}.`;
+      if (!behind) return `${covers} ${prepayFor(offer, o) ? 'Payments start when you choose.' : 'The first payment is due when you choose.'}`;
+      const paid = behind.count >= offer.payments ? 'all of it is due when you choose'
+        : `paying monthly, your first payment covers those (${money(o.amount_cents * behind.count, o.currency)}), then ${money(o.amount_cents, o.currency)} a ${per(o.interval)}`;
+      return `${covers} With ${behind.count} ${per(o.interval)}s already passed, ${paid}.`;
+    }
     return billingFrom(o);
   };
   const billingFrom = (o) => (!o.interval ? 'One payment, due the day you choose.'

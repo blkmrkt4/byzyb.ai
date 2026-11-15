@@ -5,9 +5,9 @@
 import { tx } from './db.mjs';
 import { randomToken, isInvoiceId } from './ids.mjs';
 import {
-  LedgerError, audit, todayToronto, nextInvoiceId, createInvoice, getInvoice, markSent, saveClientFromInvoice,
+  LedgerError, audit, todayToronto, nextInvoiceId, createInvoice, getInvoice, markSent, saveClientFromInvoice, addInterval,
 } from './ledger.mjs';
-import { money, prepayFor, servicePeriod, periodText } from './invoice-page.mjs';
+import { money, prepayFor, servicePeriod, periodText, catchUp } from './invoice-page.mjs';
 export { prepayFor };
 
 const nowIso = () => new Date().toISOString();
@@ -136,6 +136,15 @@ export function chooseOffer(db, token, key, today = todayToronto(), { prepay = f
     const term = `${o.payments === 12 ? 'the year' : `${o.payments} months`}`;
     const period = servicePeriod(o, opt);
     const covers = period ? ` (service ${periodText(period)})` : '';
+    // Months already passed are billed together as the first payment; the rest
+    // follow monthly (or yearly) from today, so the total still covers the whole term.
+    const behind = up ? null : catchUp(o, opt, today);
+    const sched = INTERVALS[opt.interval];
+    const each = opt.amount_cents + (o.hst_enabled ? Math.round(opt.amount_cents * 0.13) : 0);
+    const catchUpLines = behind ? [
+      { amount_cents: each * behind.count, due_date: today, label: behind.label },
+      ...Array.from({ length: o.payments - behind.count }, (_, k) => ({ amount_cents: each, due_date: addInterval(today, sched, k + 1), label: '' })),
+    ] : null;
     const id = createInvoice(db, up ? {
       id: o.id,
       client_name: o.client_name, client_email: o.client_email, client_address: o.client_address,
@@ -155,6 +164,7 @@ export function chooseOffer(db, token, key, today = todayToronto(), { prepay = f
       currency: o.options[0].currency, hst_enabled: o.hst_enabled,
       // A one-time item (like a website build) is a single payment due today.
       schedule: INTERVALS[opt.interval] || 'one_time', count: opt.interval ? o.payments : 1, first_due: today, issue_date: today,
+      ...(catchUpLines ? { lines: catchUpLines, hst_units: o.payments } : {}),
       line_items: [opt.interval ? {
         description: `${opt.name}: ${o.payments} ${opt.interval}${o.payments === 1 ? '' : 's'} × ${money(opt.amount_cents, opt.currency)}${covers}`,
         amount_cents: opt.amount_cents * o.payments,
