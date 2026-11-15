@@ -13,7 +13,7 @@ import { sendLoginEmail, sendInvoiceEmail } from './lib/email.mjs';
 import { renderInvoicePage, renderNotFound, invoiceEmail } from './lib/invoice-page.mjs';
 import {
   verifyStripeSignature, makeStripe, paymentFromEvent, createPaymentLink, cancelSubscriptionAtPeriodEnd, HANDLED_EVENTS,
-  ADJUSTMENT_EVENTS, adjustmentFromEvent, createLineCheckout, createLinePaymentLink,
+  ADJUSTMENT_EVENTS, adjustmentFromEvent, createLineCheckout, createLinePaymentLink, listProductPrices,
 } from './lib/stripe.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -199,6 +199,7 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
       if (method === 'POST' && b && !c) return json(res, 200, L.updateClient(db, b, body));
     }
     if (method === 'GET' && a === 'next-id') return json(res, 200, { id: L.nextInvoiceId(db) });
+    if (method === 'GET' && a === 'stripe-products') return json(res, 200, await stripeProducts());
     if (method === 'GET' && a === 'invoices' && !b) return json(res, 200, { invoices: L.listInvoices(db, q), clients: L.listClients(db) });
     if (method === 'GET' && a === 'invoices.csv') {
       const name = `invoices-${L.todayToronto()}.csv`;
@@ -385,6 +386,21 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
       }
     }
     return send(res, 404, renderNotFound(cfg.business), 'text/html; charset=utf-8', headers);
+  }
+
+  // Your Stripe products and prices, for starting an invoice from one. Cached briefly.
+  let productCache = null;
+  async function stripeProducts() {
+    if (!stripe) return { products: [] };
+    if (productCache && Date.now() - productCache.at < 5 * 60_000) return productCache.value;
+    try {
+      const value = { products: await listProductPrices(stripe) };
+      productCache = { at: Date.now(), value };
+      return value;
+    } catch (err) {
+      log.error('[ledger] could not list Stripe products', err.message);
+      return { products: [], error: 'Couldn’t load your Stripe products.' };
+    }
   }
 
   async function makeLink(id) {

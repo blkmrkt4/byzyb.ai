@@ -104,6 +104,11 @@ label>input,label>select,label>textarea{margin-top:5px;font-weight:400}
 .totals{margin-left:auto;max-width:300px;font-variant-numeric:tabular-nums}
 .totals div{display:flex;justify-content:space-between;padding:4px 0}
 .totals .grand{border-top:1px solid var(--line);margin-top:4px;padding-top:8px;font-weight:700;font-size:17px}
+.totals .each{color:var(--muted);font-size:14px}
+.basis{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px}
+.basis .check{flex:0 0 auto}
+.basis input{width:auto;margin:0;accent-color:var(--deep)}
+.basis[hidden]{display:none}
 .items-row{display:grid;grid-template-columns:1fr 160px 36px;gap:8px;margin-top:8px}
 .x{background:none;border:1px solid var(--line);border-radius:9px;cursor:pointer;color:var(--muted);font-size:18px;line-height:1}
 .x:hover{color:var(--bad);border-color:var(--bad)}

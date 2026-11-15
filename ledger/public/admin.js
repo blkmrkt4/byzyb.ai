@@ -290,9 +290,19 @@ async function formPage(id) {
   const invNo = inv?.id || newId;
   if (inv?.voided_at) throw new Error('A void invoice can’t be edited.');
   const full = !inv || (!inv.sent_date && !inv.paid_cents && !inv.stripe_link_id);
+  const { products = [] } = full && config.stripe ? await api('stripe-products').catch(() => ({})) : {};
+  // Monthly and yearly amounts are entered per payment ("$60 a month") unless an
+  // older invoice can't be shown that way.
+  const preRecurring = ['monthly', 'annual'].includes(pre?.schedule);
+  const preCount = pre?.lines?.length || 1;
+  const preEach = !pre?.subtotal_cents || (preRecurring && !pre.line_items?.length && pre.subtotal_cents % preCount === 0);
+  const preAmount = pre?.subtotal_cents ? (preRecurring && preEach ? pre.subtotal_cents / preCount : pre.subtotal_cents) : 0;
+  const preProduct = products.find((p) => p.product === pre?.stripe_product && (!p.interval || p.amount_cents === preAmount))
+    || products.find((p) => p.product === pre?.stripe_product);
   document.title = `${inv ? `Edit ${inv.id}` : 'New invoice'} | Painkiller Labs admin`;
 
   const state = {
+    product: pre?.stripe_product || null,
     items: pre?.line_items?.length ? pre.line_items.map((i) => ({ ...i })) : [],
     // Editing keeps the saved payments (custom amounts, labels, blank dates) until a schedule field changes.
     linesEdited: !!(inv || dup),
@@ -322,11 +332,19 @@ async function formPage(id) {
       <fieldset class="plain"${full ? '' : ' disabled hidden'}>
         <div class="subpanel stack">
           <div class="head"><h2>Amount</h2><button class="btn btn-quiet btn-sm" type="button" id="add-item">Add line item</button></div>
+          ${products.length ? `<label>Start from a Stripe product <span class="muted small">(optional)</span>
+            <select name="product"><option value="">None. I’ll enter the amount</option>${products.map((p) => `<option value="${esc(p.price)}"${p === preProduct ? ' selected' : ''}>${esc(p.name)} · ${esc(money(p.amount_cents, p.currency))}${p.interval ? ` a ${p.interval}` : ''}</option>`).join('')}</select>
+            <span class="muted small" id="product-hint"></span></label>` : ''}
           <div id="items"></div>
           <div class="grid3">
-            <label id="subtotal-wrap">Subtotal (before tax) <input name="subtotal" inputmode="decimal" value="${pre?.subtotal_cents ? centsToInput(pre.subtotal_cents) : ''}" placeholder="0.00"></label>
+            <label id="subtotal-wrap"><span id="subtotal-label">Subtotal (before tax)</span> <input name="subtotal" inputmode="decimal" value="${preAmount ? centsToInput(preAmount) : ''}" placeholder="0.00"></label>
             <label>Currency <input name="currency" value="${esc(pre?.currency || 'CAD')}" maxlength="3"></label>
             <label>Issue date <input name="issue_date" type="date" value="${esc(inv?.issue_date || config.today)}"></label>
+          </div>
+          <div class="basis" id="basis-wrap">
+            <span class="small">The amount is</span>
+            <label class="check"><input type="radio" name="basis" value="each"${preEach ? ' checked' : ''}> <span id="basis-each">per month</span></label>
+            <label class="check"><input type="radio" name="basis" value="total"${preEach ? '' : ' checked'}> the total, split across the payments</label>
           </div>
           <label class="check"><input type="checkbox" name="hst_enabled"${!pre || pre.hst_enabled !== 0 ? ' checked' : ''}> Charge HST at 13%</label>
           <div class="totals" id="totals"></div>
@@ -335,7 +353,7 @@ async function formPage(id) {
           <h2>Payment schedule</h2>
           <div class="grid3">
             <label>Schedule <select name="schedule">${Object.entries(SCHEDULE_LABEL).map(([k, v]) => `<option value="${k}"${(pre?.schedule || 'one_time') === k ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
-            <label id="count-wrap">Number of payments <input name="count" type="number" min="1" max="120" value="${pre?.lines && pre.schedule !== 'one_time' ? pre.lines.length : 12}"></label>
+            <label id="count-wrap"><span id="count-label">Number of payments</span> <input name="count" type="number" min="1" max="120" value="${pre?.lines && pre.schedule !== 'one_time' ? pre.lines.length : 12}"></label>
             <label><span id="first-due-label">First payment due</span> <input name="first_due" type="date" value="${esc(state.lines[0]?.due_date || config.today)}"></label>
           </div>
           <div id="lines"></div>
@@ -369,16 +387,25 @@ async function formPage(id) {
   f.client_name.addEventListener('change', clientLookup);
   if (pre?.client_name) clientLookup();
 
+  // Mirrors computeTotals in lib/ledger.mjs. For monthly and yearly invoices
+  // "each" means the amount entered is per payment, and HST is worked out per
+  // payment so every payment is the same.
   function totals() {
     const items = state.items.filter((i) => i.description || i.amount_cents);
-    const subtotal = items.length ? items.reduce((a, i) => a + (i.amount_cents || 0), 0) : parseMoney(f.subtotal.value);
-    const hst = f.hst_enabled.checked && subtotal ? Math.round(subtotal * 0.13) : 0;
-    return { items, subtotal, hst, total: subtotal == null ? null : subtotal + hst };
+    const recurring = ['monthly', 'annual'].includes(f.schedule.value);
+    const n = recurring ? Math.max(1, Math.min(120, Number(f.count.value) || 1)) : 1;
+    const each = recurring && f.basis.value === 'each';
+    const base = items.length ? items.reduce((a, i) => a + (i.amount_cents || 0), 0) : parseMoney(f.subtotal.value);
+    const subtotal = base == null ? null : each ? base * n : base;
+    const hstN = n > 1 && subtotal % n === 0 ? n : 1;
+    const hst = f.hst_enabled.checked && subtotal ? Math.round((subtotal / hstN) * 0.13) * hstN : 0;
+    return { items, recurring, n, each, base, subtotal, hst, total: subtotal == null ? null : subtotal + hst };
   }
+  const unitOf = () => (f.schedule.value === 'annual' ? 'year' : 'month');
 
   function renderItems() {
     $('#items').innerHTML = state.items.length
-      ? `<p class="muted small">Line items add up to the subtotal.</p>` + state.items.map((it, i) => `
+      ? `<p class="muted small" id="items-hint">Line items add up to the subtotal.</p>` + state.items.map((it, i) => `
         <div class="items-row" data-i="${i}">
           <input aria-label="Line item ${i + 1} description" data-k="description" value="${esc(it.description)}" placeholder="What it's for">
           <input aria-label="Line item ${i + 1} amount" data-k="amount" inputmode="decimal" value="${it.amount_cents ? centsToInput(it.amount_cents) : ''}" placeholder="0.00">
@@ -392,10 +419,27 @@ async function formPage(id) {
     const t = totals();
     const cur = (f.currency.value || 'CAD').toUpperCase();
     const ok = /^[A-Z]{3}$/.test(cur) ? cur : 'CAD';
+    const unit = unitOf();
+    const units = `${t.n} ${unit}${t.n === 1 ? '' : 's'}`;
+    $('#basis-wrap').hidden = !t.recurring;
+    $('#basis-each').textContent = `per ${unit} (each payment)`;
+    $('#subtotal-label').textContent = t.each ? `Amount per ${unit} (before tax)` : 'Subtotal (before tax)';
+    $('#count-label').textContent = t.recurring ? `Number of ${unit}s` : 'Number of payments';
+    if ($('#items-hint')) $('#items-hint').textContent = t.each ? `Line items add up to the amount per ${unit}.` : 'Line items add up to the subtotal.';
+    const perPayment = t.recurring && t.total && t.total % t.n === 0 ? t.total / t.n : null;
     $('#totals').innerHTML = t.total == null ? '<div class="muted">Enter an amount like 1500 or 1500.00</div>' : `
+      ${t.each ? `<div class="muted"><span>${money(t.base, ok)} × ${units}</span><span></span></div>` : ''}
       <div><span>Subtotal</span><span>${money(t.subtotal, ok)}</span></div>
       <div><span>HST 13%</span><span>${money(t.hst, ok)}</span></div>
-      <div class="grand"><span>Total</span><span>${money(t.total, ok)}</span></div>`;
+      <div class="grand"><span>Total</span><span>${money(t.total, ok)}</span></div>
+      ${perPayment ? `<div class="each"><span>Each ${unit}</span><span>${money(perPayment, ok)}</span></div>` : ''}`;
+    const hint = $('#product-hint');
+    if (hint) {
+      const p = products.find((x) => x.price === f.product.value);
+      hint.textContent = !p ? ''
+        : `Stripe will file these payments under “${p.name}”.${p.interval && perPayment && perPayment !== p.amount_cents
+          ? ` Each charge is ${money(perPayment, ok)}${t.hst ? ' with HST' : ''}, so the automatic subscription adds a ${money(perPayment, ok)} a ${unit} price to that product.` : ''}`;
+    }
   }
 
   function renderLines() {
@@ -447,6 +491,26 @@ async function formPage(id) {
       state.items.splice(e.target.closest('[data-i]').dataset.i, 1);
       renderItems(); refresh();
     });
+    for (const r of $$('input[name="basis"]')) r.addEventListener('change', () => { state.linesEdited = false; refresh(); });
+    // Picking a product fills in its price, currency, schedule and name.
+    f.product?.addEventListener('change', () => {
+      const p = products.find((x) => x.price === f.product.value);
+      state.product = p?.product || null;
+      if (p) {
+        if (!state.items.length) f.subtotal.value = centsToInput(p.amount_cents);
+        f.currency.value = p.currency;
+        if (p.interval) {
+          f.schedule.value = p.interval === 'year' ? 'annual' : 'monthly';
+          f.querySelector('input[name="basis"][value="each"]').checked = true;
+          if (f.create_stripe_link && !f.create_stripe_link.disabled) f.create_stripe_link.checked = true;
+        } else if (['monthly', 'annual'].includes(f.schedule.value)) {
+          f.schedule.value = 'one_time';
+        }
+        if (!f.description.value.trim()) f.description.value = p.description || p.name;
+        state.linesEdited = false;
+      }
+      refresh();
+    });
     for (const name of ['subtotal', 'currency', 'hst_enabled', 'schedule', 'count', 'first_due']) {
       f[name].addEventListener(name === 'hst_enabled' || name === 'schedule' ? 'change' : 'input', () => {
         if (['schedule', 'count', 'first_due'].includes(name)) state.linesEdited = false;
@@ -483,8 +547,14 @@ async function formPage(id) {
       if (!t.total) return err('Enter an amount.');
       if (state.lines.some((l) => !l.amount_cents)) return err('Every payment needs an amount.');
       if (f.schedule.value !== 'split' && state.lines.some((l) => !l.due_date)) return err('Every payment needs a due date.');
+      // Per-payment line items are saved as totals, with the per-payment price in the description.
+      const cur = f.currency.value.toUpperCase();
+      const items = t.each ? t.items.map((i) => ({
+        description: `${i.description ? `${i.description} ` : ''}(${t.n} × ${money(i.amount_cents, cur)})`,
+        amount_cents: i.amount_cents * t.n,
+      })) : t.items;
       Object.assign(body, {
-        line_items: t.items, subtotal_cents: t.subtotal, hst_enabled: f.hst_enabled.checked,
+        line_items: items, subtotal_cents: t.subtotal, hst_enabled: f.hst_enabled.checked, stripe_product: state.product,
         currency: f.currency.value.toUpperCase(), issue_date: f.issue_date.value, schedule: f.schedule.value,
         lines: state.lines.map((l) => ({ ...l, due_date: l.due_date || null })),
       });

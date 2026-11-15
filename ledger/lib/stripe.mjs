@@ -174,7 +174,7 @@ export async function createLineCheckout(stripe, inv, line, { successUrl, cancel
   const meta = { invoice_id: inv.id, payment_suffix: String(line.suffix).padStart(2, '0'), invoice_ref: ref, source: 'pk-ledger' };
   const session = await stripe.post('/checkout/sessions', {
     mode: 'payment',
-    line_items: [{ quantity: 1, price_data: { currency: inv.currency.toLowerCase(), unit_amount: line.outstanding_cents, product_data: { name } } }],
+    line_items: [{ quantity: 1, price_data: { currency: inv.currency.toLowerCase(), unit_amount: line.outstanding_cents, ...productOf(inv, name) } }],
     metadata: meta,
     payment_intent_data: { description: `Invoice ${ref} — ${inv.client_name}`, metadata: meta },
     customer_email: inv.client_email || undefined,
@@ -192,7 +192,7 @@ export async function createLinePaymentLink(stripe, inv, line, { successUrl }) {
   const meta = { invoice_id: inv.id, payment_suffix: String(line.suffix).padStart(2, '0'), invoice_ref: ref, source: 'pk-ledger' };
   const price = await stripe.post('/prices', {
     currency: inv.currency.toLowerCase(), unit_amount: line.outstanding_cents,
-    product_data: { name: `Invoice ${ref}${line.label ? ` · ${line.label}` : ''}${of}` },
+    ...productOf(inv, `Invoice ${ref}${line.label ? ` · ${line.label}` : ''}${of}`),
   });
   const link = await stripe.post('/payment_links', {
     line_items: [{ price: price.id, quantity: 1 }],
@@ -201,6 +201,47 @@ export async function createLinePaymentLink(stripe, inv, line, { successUrl }) {
     after_completion: { type: 'redirect', redirect: { url: successUrl } },
   });
   return { id: link.id, url: link.url };
+}
+
+// ---------- products ----------
+
+// Charges for an invoice tied to a Stripe product are filed under that product;
+// otherwise Stripe gets a one-off product named after the invoice.
+function productOf(inv, name) {
+  return inv.stripe_product ? { product: inv.stripe_product } : { product_data: { name } };
+}
+
+// For a subscription, reuse the product's existing price when it's the same
+// amount and interval, so Stripe shows the client on that plan. Otherwise add
+// a price to the product (for example, the same plan with HST added).
+async function recurringPrice(stripe, inv, { currency, amount, interval }) {
+  if (inv.stripe_product) {
+    const { data = [] } = await stripe.get('/prices', { product: inv.stripe_product, active: 'true', type: 'recurring', limit: 100 });
+    const same = data.find((p) => p.currency === currency && p.unit_amount === amount && p.recurring?.interval === interval && (p.recurring?.interval_count ?? 1) === 1);
+    if (same) return same;
+  }
+  return stripe.post('/prices', { currency, unit_amount: amount, recurring: { interval }, ...productOf(inv, `Invoice ${inv.id}`) });
+}
+
+// Active prices on the account, for the "Start from a Stripe product" picker.
+// Leaves out the one-off products the ledger makes for invoices.
+export async function listProductPrices(stripe) {
+  const out = [];
+  let starting_after;
+  for (let page = 0; page < 5; page++) {
+    const res = await stripe.get('/prices', { active: 'true', limit: 100, 'expand[]': 'data.product', starting_after });
+    for (const p of res.data) {
+      const prod = p.product;
+      if (!prod || typeof prod !== 'object' || !prod.active || /^Invoice /.test(prod.name) || p.unit_amount == null) continue;
+      if (p.recurring && (p.recurring.interval_count ?? 1) !== 1) continue;
+      const interval = p.recurring ? p.recurring.interval : null;
+      if (interval && !['month', 'year'].includes(interval)) continue;
+      out.push({ price: p.id, product: prod.id, name: prod.name, description: prod.description || '', amount_cents: p.unit_amount, currency: p.currency.toUpperCase(), interval });
+    }
+    if (!res.has_more) break;
+    starting_after = res.data.at(-1).id;
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name) || a.amount_cents - b.amount_cents);
 }
 
 // ---------- payment links ----------
@@ -216,7 +257,7 @@ export async function createPaymentLink(stripe, inv, siteUrl) {
     const lineMeta = { ...meta, payment_suffix: '01', invoice_ref: ref };
     const price = await stripe.post('/prices', {
       currency, unit_amount: lines[0].amount_cents,
-      product_data: { name: `Invoice ${ref}` },
+      ...productOf(inv, `Invoice ${ref}`),
     });
     const link = await stripe.post('/payment_links', {
       line_items: [{ price: price.id, quantity: 1 }],
@@ -236,10 +277,7 @@ export async function createPaymentLink(stripe, inv, siteUrl) {
   }
   const interval = inv.schedule === 'monthly' ? 'month' : 'year';
   const desc = `Invoice ${inv.id} — ${lines.length} ${inv.schedule} payments (${lineRef(inv.id, 1)} to ${lineRef(inv.id, lines.length)})`;
-  const price = await stripe.post('/prices', {
-    currency, unit_amount: lines[0].amount_cents, recurring: { interval },
-    product_data: { name: `Invoice ${inv.id}` },
-  });
+  const price = await recurringPrice(stripe, inv, { currency, amount: lines[0].amount_cents, interval });
   const link = await stripe.post('/payment_links', {
     line_items: [{ price: price.id, quantity: 1 }],
     metadata: meta,

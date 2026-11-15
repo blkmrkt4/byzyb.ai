@@ -217,6 +217,60 @@ test('payment links carry the invoice ID and suffix in metadata', async () => {
   assert.equal(calls[0][1].unit_amount, 113000);
 });
 
+// ---------- monthly plans and Stripe products ----------
+
+test('monthly HST is worked out per payment so every payment is equal', () => {
+  // $65.55 a month for 12 months: HST on the whole would be $1,022.58; per payment it's $8.52 × 12.
+  const t = L.computeTotals({ subtotal_cents: 6555 * 12, hst_enabled: true, payments: 12 });
+  assert.equal(t.hst_cents, 852 * 12);
+  assert.equal(L.computeTotals({ subtotal_cents: 6555 * 12, hst_enabled: true }).hst_cents, 10226);
+  const db = fresh();
+  const id = invoice(db, { subtotal_cents: 6555 * 12, schedule: 'monthly', count: 12, first_due: '2026-11-15' });
+  const inv = L.getInvoice(db, id);
+  assert.deepEqual([...new Set(inv.lines.map((l) => l.amount_cents))], [6555 + 852]);
+});
+
+test('an invoice remembers its Stripe product, and rejects anything that isn’t one', () => {
+  const db = fresh();
+  const id = invoice(db, { subtotal_cents: 6000 * 12, hst_enabled: false, schedule: 'monthly', count: 12, first_due: '2026-11-15', stripe_product: 'prod_Hosting1' });
+  assert.equal(L.getInvoice(db, id).stripe_product, 'prod_Hosting1');
+  assert.throws(() => invoice(db, { stripe_product: 'price_123' }), /Stripe product/);
+});
+
+test('a subscription reuses the product’s price when the amount matches', async () => {
+  const db = fresh();
+  const calls = [];
+  const stripe = {
+    get: async (path, params) => { calls.push(['GET', path, params]); return { data: [
+      { id: 'price_hosting', currency: 'cad', unit_amount: 6000, recurring: { interval: 'month', interval_count: 1 } },
+    ] }; },
+    post: async (path, params) => { calls.push(['POST', path, params]); return path === '/prices' ? { id: 'price_new' } : { id: 'plink_1', url: 'https://buy.stripe.com/x' }; },
+  };
+  const plan = (over) => L.getInvoice(db, invoice(db, { subtotal_cents: 6000 * 12, schedule: 'monthly', count: 12, first_due: '2026-11-15', stripe_product: 'prod_Hosting1', ...over }));
+
+  await createPaymentLink(stripe, plan({ hst_enabled: false }), 'https://x');
+  assert.equal(calls.find((c) => c[1] === '/payment_links')[2].line_items[0].price, 'price_hosting');
+  assert.ok(!calls.some((c) => c[0] === 'POST' && c[1] === '/prices'));
+
+  calls.length = 0;
+  await createPaymentLink(stripe, plan({ hst_enabled: true }), 'https://x');
+  const made = calls.find((c) => c[0] === 'POST' && c[1] === '/prices')[2];
+  assert.equal(made.unit_amount, 6780);
+  assert.equal(made.product, 'prod_Hosting1');
+  assert.equal(made.product_data, undefined);
+  assert.equal(calls.find((c) => c[1] === '/payment_links')[2].line_items[0].price, 'price_new');
+});
+
+test('a Pay button for a product invoice files the charge under that product', async () => {
+  const db = fresh();
+  const inv = L.getInvoice(db, invoice(db, { stripe_product: 'prod_Build1' }));
+  let sent;
+  const stripe = { post: async (path, params) => { sent = params; return { url: 'https://checkout.stripe.com/x' }; } };
+  await createLineCheckout(stripe, inv, inv.lines[0], { successUrl: 'https://x', cancelUrl: 'https://x' });
+  assert.equal(sent.line_items[0].price_data.product, 'prod_Build1');
+  assert.equal(sent.line_items[0].price_data.product_data, undefined);
+});
+
 test('Stripe signatures are checked', () => {
   const body = '{"a":1}';
   assert.ok(verifyStripeSignature(body, signStripePayload(body, 'whsec_x'), 'whsec_x'));

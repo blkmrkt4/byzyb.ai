@@ -45,12 +45,15 @@ function isDate(s) {
   return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s + 'T00:00:00Z'));
 }
 
-export function computeTotals({ line_items = [], subtotal_cents, hst_enabled = true }) {
+// payments: for a monthly or yearly invoice, HST is worked out per payment when
+// the subtotal splits evenly, so every payment is the same amount.
+export function computeTotals({ line_items = [], subtotal_cents, hst_enabled = true, payments = 1 }) {
   const items = (line_items || [])
     .map((i) => ({ description: String(i.description || '').trim(), amount_cents: cents(i.amount_cents ?? 0, 'Line item amount') }))
     .filter((i) => i.description || i.amount_cents);
   const subtotal = items.length ? items.reduce((a, i) => a + i.amount_cents, 0) : cents(subtotal_cents, 'Subtotal');
-  const hst = hst_enabled ? Math.round(subtotal * HST_RATE) : 0;
+  const n = Number.isInteger(payments) && payments > 1 && subtotal % payments === 0 ? payments : 1;
+  const hst = hst_enabled ? Math.round((subtotal / n) * HST_RATE) * n : 0;
   return { line_items: items, subtotal_cents: subtotal, hst_cents: hst, total_cents: subtotal + hst };
 }
 
@@ -352,14 +355,18 @@ function cleanInput(input) {
   if (!/^[A-Z]{3}$/.test(currency)) throw new LedgerError('Currency must be a 3-letter code');
   const issue_date = input.issue_date || todayToronto();
   if (!isDate(issue_date)) throw new LedgerError('Issue date is invalid');
+  const schedule = input.schedule || 'one_time';
+  if (!SCHEDULES.includes(schedule)) throw new LedgerError('Schedule must be one-time, split, monthly or annual');
+  const recurring = schedule === 'monthly' || schedule === 'annual';
   const totals = computeTotals({
     line_items: input.line_items,
     subtotal_cents: input.subtotal_cents,
     hst_enabled: input.hst_enabled !== false,
+    payments: recurring ? (input.lines?.length || Number(input.count) || 1) : 1,
   });
   if (totals.total_cents <= 0) throw new LedgerError('Total must be more than zero');
-  const schedule = input.schedule || 'one_time';
-  if (!SCHEDULES.includes(schedule)) throw new LedgerError('Schedule must be one-time, split, monthly or annual');
+  const product = String(input.stripe_product || '').trim();
+  if (product && !/^prod_[A-Za-z0-9]+$/.test(product)) throw new LedgerError('That isn’t a Stripe product ID');
   const lines = input.lines?.length
     ? normaliseLines(input.lines, totals.total_cents, schedule)
     : buildSchedule({ total_cents: totals.total_cents, schedule, count: input.count, first_due: input.first_due || issue_date });
@@ -375,6 +382,7 @@ function cleanInput(input) {
     schedule,
     issue_date,
     notes: String(input.notes || '').trim(),
+    stripe_product: product || null,
     ...totals,
     lines,
   };
@@ -401,10 +409,10 @@ export function createInvoice(db, input) {
     const client = saveClientFromInvoice(db, v);
     db.prepare(`
       INSERT INTO invoices (id, client_id, client_name, client_email, client_address, description, line_items, currency,
-        subtotal_cents, hst_enabled, hst_cents, total_cents, schedule, issue_date, notes, public_token, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        subtotal_cents, hst_enabled, hst_cents, total_cents, schedule, issue_date, notes, stripe_product, public_token, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(id, client.id, client.name, v.client_email, v.client_address, v.description, JSON.stringify(v.line_items), v.currency,
-        v.subtotal_cents, v.hst_enabled ? 1 : 0, v.hst_cents, v.total_cents, v.schedule, v.issue_date, v.notes, randomToken(), now, now);
+        v.subtotal_cents, v.hst_enabled ? 1 : 0, v.hst_cents, v.total_cents, v.schedule, v.issue_date, v.notes, v.stripe_product, randomToken(), now, now);
     const ins = db.prepare('INSERT INTO payment_lines (invoice_id, suffix, amount_cents, due_date, label) VALUES (?, ?, ?, ?, ?)');
     for (const l of v.lines) ins.run(id, l.suffix, l.amount_cents, l.due_date, l.label);
     audit(db, 'invoice', id, 'create', {
@@ -434,7 +442,7 @@ export function updateInvoice(db, id, input) {
       const client = saveClientFromInvoice(db, v);
       v.client_name = client.name;
       const fields = ['client_name', 'client_email', 'client_address', 'description', 'currency', 'subtotal_cents', 'hst_cents',
-        'total_cents', 'schedule', 'issue_date', 'notes'];
+        'total_cents', 'schedule', 'issue_date', 'notes', 'stripe_product'];
       for (const f of fields) if (v[f] !== inv[f]) changes[f] = { from: inv[f], to: v[f] };
       if ((v.hst_enabled ? 1 : 0) !== inv.hst_enabled) changes.hst_enabled = { from: !!inv.hst_enabled, to: v.hst_enabled };
       const newItems = JSON.stringify(v.line_items);
@@ -448,9 +456,9 @@ export function updateInvoice(db, id, input) {
       db.prepare(`
         UPDATE invoices SET client_id = ?, client_name = ?, client_email = ?, client_address = ?, description = ?, line_items = ?, currency = ?,
           subtotal_cents = ?, hst_enabled = ?, hst_cents = ?, total_cents = ?, schedule = ?, issue_date = ?,
-          notes = ?, updated_at = ? WHERE id = ?`)
+          notes = ?, stripe_product = ?, updated_at = ? WHERE id = ?`)
         .run(client.id, v.client_name, v.client_email, v.client_address, v.description, newItems, v.currency, v.subtotal_cents,
-          v.hst_enabled ? 1 : 0, v.hst_cents, v.total_cents, v.schedule, v.issue_date, v.notes, nowIso(), inv.id);
+          v.hst_enabled ? 1 : 0, v.hst_cents, v.total_cents, v.schedule, v.issue_date, v.notes, v.stripe_product, nowIso(), inv.id);
       if (linesChanged) {
         const upd = db.prepare('UPDATE payment_lines SET amount_cents = ?, due_date = ?, label = ? WHERE invoice_id = ? AND suffix = ?');
         const ins = db.prepare('INSERT INTO payment_lines (invoice_id, suffix, amount_cents, due_date, label) VALUES (?, ?, ?, ?, ?)');

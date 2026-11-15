@@ -255,7 +255,7 @@ function migrate(db) {
 
   // Saved clients. Invoices keep their own copy of the name and email (what was
   // sent), plus a link to the client record.
-  for (const [col, def] of [['client_id', 'INTEGER REFERENCES clients(id)'], ['client_address', "TEXT NOT NULL DEFAULT ''"], ['reminders_off', 'INTEGER NOT NULL DEFAULT 0']]) {
+  for (const [col, def] of [['client_id', 'INTEGER REFERENCES clients(id)'], ['client_address', "TEXT NOT NULL DEFAULT ''"], ['reminders_off', 'INTEGER NOT NULL DEFAULT 0'], ['stripe_product', 'TEXT']]) {
     if (!hasColumn(db, 'invoices', col)) db.exec(`ALTER TABLE invoices ADD COLUMN ${col} ${def}`);
   }
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_name ON clients(name COLLATE NOCASE)');
