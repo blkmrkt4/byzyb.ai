@@ -235,6 +235,18 @@ export function reminderEmail(inv, line, { business, link, today }) {
 
 // ---------- plan choice ----------
 
+// Paying a monthly plan upfront: the whole term for the price of (term − free) months.
+// Returns null when the plan choice doesn't offer it for this option.
+export function prepayFor(offer, opt) {
+  const free = offer.prepay_free_months || 0;
+  if (!free || opt.interval !== 'month' || offer.payments <= free) return null;
+  const months = offer.payments;
+  return { months, free, amount_cents: opt.amount_cents * (months - free), regular_cents: opt.amount_cents * months, saving_cents: opt.amount_cents * free };
+}
+
+const termWord = (months) => (months === 12 ? 'the year' : `all ${months} months`);
+const freeWord = (n) => `${n === 1 ? '1 month' : `${n} months`} free`;
+
 const HST_RATE = 0.13;
 const per = (interval) => (interval === 'year' ? 'year' : 'month');
 
@@ -255,6 +267,7 @@ export function renderPlanPage(offer, { business, token }) {
   const withdrawn = !!offer.cancelled_at;
   const fromLines = [business.name, ...String(business.address || '').split('\n'), business.email].filter(Boolean);
   const billing = (o) => (!o.interval ? 'One payment, due the day you choose.'
+    : prepayFor(offer, o) ? `${offer.payments} months of service, starting the day you choose.`
     : `Billed ${o.interval === 'year' ? 'yearly' : 'monthly'} for ${offer.payments} ${per(o.interval)}${offer.payments === 1 ? '' : 's'}, starting the day you choose.`);
   const cards = offer.options.map((o) => {
     const price = planPrice(o, offer.hst_enabled);
@@ -266,7 +279,14 @@ export function renderPlanPage(offer, { business, token }) {
         ${price.tax ? `<p class="sub">${esc(price.tax)}</p>` : ''}
         <p class="sub">${esc(billing(o))}</p>
         ${details.length ? `<ul>${details.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>` : ''}
-        ${withdrawn ? '' : `<form method="post" action="/invoice/${esc(token)}/choose/${esc(o.key)}"><button class="pay" type="submit">Choose ${esc(o.name)}</button></form>`}
+        ${withdrawn ? '' : (() => {
+          const up = prepayFor(offer, o);
+          if (!up) return `<form method="post" action="/invoice/${esc(token)}/choose/${esc(o.key)}"><button class="pay" type="submit">Choose ${esc(o.name)}</button></form>`;
+          return `<div class="choices">
+            <form method="post" action="/invoice/${esc(token)}/choose/${esc(o.key)}"><button class="pay" type="submit">Pay monthly: ${esc(money(o.amount_cents, o.currency))} a month</button></form>
+            <form method="post" action="/invoice/${esc(token)}/choose/${esc(o.key)}/year"><button class="pay yearly" type="submit">Pay for ${esc(termWord(up.months))}: ${esc(money(up.amount_cents, o.currency))}<span class="save">Get ${esc(freeWord(up.free))} · save ${esc(money(up.saving_cents, o.currency))}${offer.hst_enabled ? ' (+ HST)' : ''}</span></button></form>
+          </div>`;
+        })()}
       </article>`;
   }).join('');
   return `<!doctype html>
@@ -307,7 +327,8 @@ export function planEmail(offer, { business, link }) {
   const greeting = `Hi ${offer.client_name},`;
   const lines = offer.options.map((o) => {
     const p = planPrice(o, offer.hst_enabled);
-    return `${o.name}: ${p.main} ${p.unit}${offer.hst_enabled ? ' + HST' : ''}`;
+    const up = prepayFor(offer, o);
+    return `${o.name}: ${p.main} ${p.unit}${offer.hst_enabled ? ' + HST' : ''}${up ? `, or ${money(up.amount_cents, o.currency)} for ${termWord(up.months)} paid upfront (${freeWord(up.free)})` : ''}`;
   });
   const intro = offer.message || 'Here are the plan options. Have a look and choose the one that suits you.';
   const subject = `Choose your plan: ${business.shortName} invoice ${offer.id}`;
@@ -325,11 +346,14 @@ export function planEmail(offer, { business, link }) {
 }
 
 // To you, when a client picks.
-export function planChosenEmail(offer, option, { business, adminLink }) {
+export function planChosenEmail(offer, option, { business, adminLink, prepay }) {
   const p = planPrice(option, offer.hst_enabled);
-  const what = `${offer.client_name} chose ${option.name} (${p.main} ${p.unit}${offer.hst_enabled ? ' + HST' : ''}).`;
-  const subject = `${offer.client_name} chose ${option.name}`;
-  const count = option.interval ? `${offer.payments} payments` : 'one payment';
+  const tax = offer.hst_enabled ? ' + HST' : '';
+  const what = prepay
+    ? `${offer.client_name} chose ${option.name} and is paying for ${termWord(prepay.months)} upfront: ${money(prepay.amount_cents, option.currency)}${tax} (${freeWord(prepay.free)}).`
+    : `${offer.client_name} chose ${option.name} (${p.main} ${p.unit}${tax}).`;
+  const subject = `${offer.client_name} chose ${option.name}${prepay ? ', paid upfront' : ''}`;
+  const count = option.interval && !prepay ? `${offer.payments} payments` : 'one payment';
   const text = [what, '', `Invoice ${offer.id} has been created for ${count}.`, `See it: ${adminLink}`].join('\n');
   const html = `<div style="font:15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#25292E;max-width:560px">
 <p>${esc(what)}</p><p>Invoice ${esc(offer.id)} has been created for ${esc(count)}.</p>

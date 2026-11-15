@@ -1615,6 +1615,11 @@ async function offerFormPage() {
           <label><span id="count-label">Number of payments</span> <input name="payments" type="number" min="1" max="120" value="12"></label>
         </div>
         <label class="check"><input type="checkbox" name="hst_enabled" checked> Charge HST at 13% on top</label>
+        <div class="prepay-row">
+          <label class="check"><input type="checkbox" name="prepay_on" checked> Offer a discount for paying upfront on monthly plans</label>
+          <label class="inline-num">Months free <input name="prepay_free" type="number" min="1" max="11" value="2"></label>
+        </div>
+        <p class="muted small" id="prepay-preview"></p>
         <p class="muted small">The first payment is due the day they choose. With a Stripe subscription set up for them, each payment after that is charged automatically, and it stops after the last one.</p>
       </div>
       <div id="form-error"></div>
@@ -1647,7 +1652,28 @@ async function offerFormPage() {
       </div>`).join('');
     updateCount();
   };
+  // "Pay for the year: $2,500 (2 months free)" for each monthly option, as the client will see it.
+  const updatePrepay = () => {
+    const on = f.prepay_on.checked;
+    f.prepay_free.disabled = !on;
+    const n = Number(f.payments.value) || 0;
+    const free = Number(f.prepay_free.value) || 0;
+    const monthly = [
+      ...picked().map((el) => plans[el.dataset.i]).filter((p) => p.interval === 'month').map((p) => ({ name: el2name(p), amount: p.amount_cents, currency: p.currency })),
+      ...customs.filter((c) => c.interval === 'month' && parseMoney(c.amount)).map((c) => ({ name: c.name || 'Custom option', amount: parseMoney(c.amount), currency: null })),
+    ];
+    const cur = monthly.find((m) => m.currency)?.currency || 'CAD';
+    $('#prepay-preview').textContent = !on ? ''
+      : free < 1 || free >= n ? `Months free must be at least 1 and fewer than ${n} (the number of months).`
+      : !monthly.length ? 'Applies once you offer a monthly plan.'
+      : `Clients can also pay upfront: ${monthly.map((m) => `${m.name} ${money(m.amount * (n - free), cur)} for ${n === 12 ? 'the year' : `${n} months`} (instead of ${money(m.amount * n, cur)})`).join('; ')}.`;
+  };
+  const el2name = (p) => {
+    const el = $$('.plan-pick').find((x) => plans[x.dataset.i] === p);
+    return el?.querySelector('[data-k="name"]').value || p.name;
+  };
   const updateCount = () => {
+    updatePrepay();
     const units = new Set([
       ...picked().filter((el) => plans[el.dataset.i].interval).map((el) => intervalWord(plans[el.dataset.i].interval)),
       ...customs.filter((c) => c.interval).map((c) => intervalWord(c.interval)),
@@ -1670,6 +1696,9 @@ async function offerFormPage() {
     if (e.target.dataset.k === 'interval') updateCount();
   };
   $('#customs').addEventListener('input', onCustom);
+  // Any edit (plans ticked, names, amounts, months) can change the upfront prices.
+  f.addEventListener('input', () => setTimeout(updatePrepay, 0));
+  f.addEventListener('change', () => setTimeout(updatePrepay, 0));
   $('#customs').addEventListener('change', onCustom);
   $('#customs').addEventListener('click', (e) => {
     const b = e.target.closest('[data-remove]');
@@ -1700,6 +1729,7 @@ async function offerFormPage() {
     customs,
   }));
   $('#cancel-form').addEventListener('click', () => clearDraft(draftName));
+  updatePrepay();
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
     const err = (m) => { $('#form-error').innerHTML = `<div class="notice bad">${esc(m)}</div>`; };
@@ -1714,6 +1744,7 @@ async function offerFormPage() {
     const body = {
       id: newId, client_name: f.client_name.value, client_email: f.client_email.value, client_address: f.client_address.value,
       message: f.message.value, payments: Number(f.payments.value), hst_enabled: f.hst_enabled.checked,
+      prepay_free_months: f.prepay_on.checked ? Number(f.prepay_free.value) : 0,
       options: [
         ...chosen.map((el) => ({ price: plans[el.dataset.i].price, name: el.querySelector('[data-k="name"]').value, details: el.querySelector('[data-k="details"]').value })),
         ...customs.map((c) => ({ custom: true, name: c.name, amount_cents: parseMoney(c.amount), interval: c.interval || null, details: c.details })),
@@ -1754,6 +1785,7 @@ async function offerPage(id) {
       <h2>Plans offered</h2>
       <div class="plan-cards">${o.options.map((x) => `
         <div class="plan-card"><b>${esc(x.name)}</b><div>${esc(planPrice(x))}${hst}</div>
+          ${o.prepay_free_months && x.interval === 'month' && o.payments > o.prepay_free_months ? `<div class="muted small">or ${esc(money(x.amount_cents * (o.payments - o.prepay_free_months), x.currency))}${hst} paid upfront for ${o.payments === 12 ? 'the year' : `${o.payments} months`} (${o.prepay_free_months} months free)</div>` : ''}
           ${x.details ? `<ul class="small">${x.details.split('\n').filter((l) => l.trim()).map((l) => `<li>${esc(l.replace(/^[-•*]\s*/, ''))}</li>`).join('')}</ul>` : ''}</div>`).join('')}</div>
       ${o.message ? `<p class="muted small section">Message: ${esc(o.message)}</p>` : ''}
     </div>

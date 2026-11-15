@@ -7,7 +7,8 @@ import { randomToken, isInvoiceId } from './ids.mjs';
 import {
   LedgerError, audit, todayToronto, nextInvoiceId, createInvoice, getInvoice, markSent, saveClientFromInvoice,
 } from './ledger.mjs';
-import { money } from './invoice-page.mjs';
+import { money, prepayFor } from './invoice-page.mjs';
+export { prepayFor };
 
 const nowIso = () => new Date().toISOString();
 const validEmail = (s) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s);
@@ -24,7 +25,7 @@ function shape(db, r) {
   const chosen = r.chosen_key ? options.find((o) => o.key === r.chosen_key) || null : null;
   const inv = r.chosen_key ? db.prepare('SELECT id, voided_at FROM invoices WHERE id = ?').get(r.id) : null;
   const status = r.cancelled_at ? 'Withdrawn' : chosen ? 'Chosen' : r.sent_date ? 'Waiting' : 'Not sent';
-  return { ...r, hst_enabled: !!r.hst_enabled, options, chosen, invoice_id: inv?.id || null, status };
+  return { ...r, hst_enabled: !!r.hst_enabled, chosen_prepay: !!r.chosen_prepay, options, chosen, invoice_id: inv?.id || null, status };
 }
 
 export function getOffer(db, id) { return shape(db, row(db, id)); }
@@ -63,6 +64,9 @@ export function createOffer(db, input, catalogue) {
   if (client_email && !validEmail(client_email)) throw new LedgerError('Client email doesn’t look right');
   const payments = Number(input.payments ?? 12);
   if (!Number.isInteger(payments) || payments < 1 || payments > 120) throw new LedgerError('Number of payments must be between 1 and 120');
+  const free = Number(input.prepay_free_months || 0);
+  if (!Number.isInteger(free) || free < 0 || free > 11) throw new LedgerError('Months free must be a whole number from 0 to 11');
+  if (free && free >= payments) throw new LedgerError('Months free must be fewer than the number of months');
   const picked = Array.isArray(input.options) ? input.options : [];
   if (picked.length < 1) throw new LedgerError('Pick at least one plan to offer');
   if (picked.length > 4) throw new LedgerError('Offer at most four plans');
@@ -91,9 +95,9 @@ export function createOffer(db, input, catalogue) {
     const client = saveClientFromInvoice(db, { client_name, client_email, client_address: String(input.client_address || '').trim() });
     const now = nowIso();
     db.prepare(`INSERT INTO plan_offers (id, client_id, client_name, client_email, client_address, message, options, hst_enabled, payments,
-        public_token, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        prepay_free_months, public_token, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(id, client.id, client.name, client_email, String(input.client_address || '').trim(), String(input.message || '').trim().slice(0, 3000),
-        JSON.stringify(options), input.hst_enabled === false ? 0 : 1, payments, randomToken(), now, now);
+        JSON.stringify(options), input.hst_enabled === false ? 0 : 1, payments, free, randomToken(), now, now);
     audit(db, 'invoice', id, 'offer_create', { client_name: client.name, plans: options.map((o) => o.name) });
     return id;
   });
@@ -117,14 +121,30 @@ export function cancelOffer(db, id) {
 // The client picks a plan. Creates the invoice: N monthly (or yearly) payments
 // of that plan's price, first one due today, filed under its Stripe product.
 // Returns { invoice_id, option, created }; picking again is harmless.
-export function chooseOffer(db, token, key, today = todayToronto()) {
+// prepay: pay a monthly plan's whole term upfront, with the months-free discount.
+export function chooseOffer(db, token, key, today = todayToronto(), { prepay = false } = {}) {
   return tx(db, () => {
     const o = getOfferByToken(db, token);
     if (o.cancelled_at) throw new LedgerError('This plan choice was withdrawn', 410);
     if (o.chosen_key) return { invoice_id: o.id, option: o.chosen, created: false };
     const opt = o.options.find((x) => x.key === String(key));
     if (!opt) throw new LedgerError('That plan isn’t one of the choices', 400);
-    const id = createInvoice(db, {
+    const up = prepay ? prepayFor(o, opt) : null;
+    if (prepay && !up) throw new LedgerError('Paying upfront isn’t offered for that plan', 400);
+    const term = `${o.payments === 12 ? 'the year' : `${o.payments} months`}`;
+    const id = createInvoice(db, up ? {
+      id: o.id,
+      client_name: o.client_name, client_email: o.client_email, client_address: o.client_address,
+      description: `${opt.name}, paid upfront for ${term}${opt.details ? `\n${opt.details}` : ''}`,
+      currency: opt.currency, hst_enabled: o.hst_enabled,
+      schedule: 'one_time', count: 1, first_due: today, issue_date: today,
+      line_items: [{
+        description: `${opt.name}: ${up.months} months, paid upfront with ${up.free} month${up.free === 1 ? '' : 's'} free (regularly ${money(up.regular_cents, opt.currency)})`,
+        amount_cents: up.amount_cents,
+      }],
+      stripe_product: opt.product,
+      notes: `The client chose “${opt.name}” paid upfront for ${term} (${up.free} months free) from plan choice ${o.id} on ${today}.`,
+    } : {
       id: o.id,
       client_name: o.client_name, client_email: o.client_email, client_address: o.client_address,
       description: opt.details ? `${opt.name}\n${opt.details}` : opt.name,
@@ -138,11 +158,13 @@ export function chooseOffer(db, token, key, today = todayToronto()) {
       stripe_product: opt.product,
       notes: `The client chose “${opt.name}” from plan choice ${o.id} on ${today}.`,
     }, { reserved: { public_token: o.public_token } });
-    db.prepare('UPDATE plan_offers SET chosen_key = ?, chosen_at = ?, updated_at = ? WHERE id = ?').run(opt.key, nowIso(), nowIso(), o.id);
-    audit(db, 'invoice', id, 'plan_chosen', { plan: opt.name, amount_cents: opt.amount_cents, currency: opt.currency, interval: opt.interval });
+    db.prepare('UPDATE plan_offers SET chosen_key = ?, chosen_prepay = ?, chosen_at = ?, updated_at = ? WHERE id = ?').run(opt.key, up ? 1 : 0, nowIso(), nowIso(), o.id);
+    audit(db, 'invoice', id, 'plan_chosen', up
+      ? { plan: `${opt.name}, paid upfront (${up.free} months free)`, amount_cents: up.amount_cents, currency: opt.currency }
+      : { plan: opt.name, amount_cents: opt.amount_cents, currency: opt.currency, interval: opt.interval });
     // The client already has the link, so the invoice counts as sent.
     markSent(db, id, { sent_date: today, sent_to: o.sent_to || o.client_email || '', sent_via: 'other' });
-    return { invoice_id: id, option: opt, created: true };
+    return { invoice_id: id, option: opt, prepay: up, created: true };
   });
 }
 

@@ -378,23 +378,24 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
 
   // The client picked a plan: the invoice now exists at the same link. Set up
   // the Stripe subscription for it and tell the owner, then show the invoice.
-  async function handleOffer(req, res, offer, action, key, headers) {
+  async function handleOffer(req, res, offer, action, key, extra, headers) {
     const self = offerLink(offer);
     if (!action && req.method === 'GET') {
       return send(res, 200, renderPlanPage(offer, { business: cfg.business, token: offer.public_token }), 'text/html; charset=utf-8', headers);
     }
     if (action === 'choose' && req.method === 'POST' && /^\d$/.test(key || '')) {
       let out;
-      try { out = O.chooseOffer(db, offer.public_token, key); } catch (err) {
+      if (extra && extra !== 'year') return send(res, 404, renderNotFound(cfg.business), 'text/html; charset=utf-8', headers);
+      try { out = O.chooseOffer(db, offer.public_token, key, L.todayToronto(), { prepay: extra === 'year' }); } catch (err) {
         if (!(err instanceof L.LedgerError)) throw err;
         return redirect(res, self);
       }
       if (out.created) {
-        if (stripe && out.option.interval) {
+        if (stripe && out.option.interval && !out.prepay) {
           const err = await makeLink(out.invoice_id);
           if (err) log.error('[ledger] subscription link after plan choice failed', out.invoice_id, err);
         }
-        const mail = planChosenEmail(offer, out.option, { business: cfg.business, adminLink: `${cfg.publicUrl}/admin/invoices/${out.invoice_id}` });
+        const mail = planChosenEmail(offer, out.option, { prepay: out.prepay, business: cfg.business, adminLink: `${cfg.publicUrl}/admin/invoices/${out.invoice_id}` });
         sendInvoice({ to: cfg.adminEmail, ...mail, apiKey: cfg.resendKey, from: cfg.emailFrom })
           .catch((err) => log.error('[ledger] plan-chosen email failed:', err.message));
       }
@@ -418,7 +419,7 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
       try { offer = O.getOfferByToken(db, token); } catch {
         return send(res, 404, renderNotFound(cfg.business), 'text/html; charset=utf-8', headers);
       }
-      return handleOffer(req, res, offer, action, suffix, headers);
+      return handleOffer(req, res, offer, action, suffix, rest[3], headers);
     }
     const self = `${cfg.publicUrl}/invoice/${inv.public_token}`;
     if (!action && req.method === 'GET') {

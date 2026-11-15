@@ -1173,3 +1173,42 @@ test('a custom option needs no Stripe product and becomes a normal invoice', asy
   const usd = O.createOffer(db, { client_name: 'Y', options: [{ custom: true, name: 'A', amount_cents: 100 }] }, PLANS);
   assert.equal(O.getOffer(db, usd).options[0].currency, 'CAD');
 });
+
+test('paying a monthly plan upfront: the year for 10 months’ price, as one payment', async () => {
+  const O = await import('../lib/offers.mjs');
+  const db = fresh();
+  const id = O.createOffer(db, { client_name: 'Cavera Insurance', hst_enabled: false, prepay_free_months: 2, options: [{ price: 'price_host' }, { price: 'price_care' }, { price: 'price_build' }] }, PLANS);
+  const o = O.getOffer(db, id);
+  assert.deepEqual(O.prepayFor(o, o.options[1]), { months: 12, free: 2, amount_cents: 250000, regular_cents: 300000, saving_cents: 50000 });
+  assert.equal(O.prepayFor(o, o.options[2]), null); // one-time items have no upfront option
+  assert.throws(() => O.chooseOffer(db, o.public_token, '3', '2026-11-20', { prepay: true }), /isn’t offered/);
+
+  const out = O.chooseOffer(db, o.public_token, '2', '2026-11-20', { prepay: true });
+  const inv = L.getInvoice(db, out.invoice_id);
+  assert.equal(inv.schedule, 'one_time');
+  assert.equal(inv.total_cents, 250000);
+  assert.equal(inv.lines.length, 1);
+  assert.equal(inv.stripe_product, 'prod_care');
+  assert.match(inv.line_items[0].description, /12 months, paid upfront with 2 months free \(regularly \$3,000\.00\)/);
+  assert.equal(O.getOffer(db, id).chosen_prepay, true);
+
+  assert.throws(() => O.createOffer(db, { client_name: 'X', payments: 2, prepay_free_months: 2, options: [{ price: 'price_host' }] }, PLANS), /fewer than/);
+});
+
+test('the client page offers monthly or the year upfront, and the upfront choice skips the subscription', async (t) => {
+  const O = await import('../lib/offers.mjs');
+  const posts = [];
+  const stripe = { get: async () => ({ data: [] }), post: async (path, p) => { posts.push(path); return { id: 'x', url: 'https://buy.stripe.com/x' }; } };
+  const { db, req, emails } = await server(t, {}, { stripe });
+  const id = O.createOffer(db, { client_name: 'Cavera Insurance', hst_enabled: false, prepay_free_months: 2, options: [{ price: 'price_care' }] }, PLANS);
+  const { public_token } = O.getOffer(db, id);
+  const page = await (await req(`/invoice/${public_token}`)).text();
+  assert.match(page, /Pay monthly: \$250\.00 a month/);
+  assert.match(page, /Pay for the year: \$2,500\.00/);
+  assert.match(page, /Get 2 months free · save \$500\.00/);
+  assert.equal((await req(`/invoice/${public_token}/choose/1/year`, { method: 'POST' })).status, 303);
+  assert.equal(L.getInvoice(db, id).total_cents, 250000);
+  assert.deepEqual(posts, []);
+  assert.ok(emails.some((m) => m.subject === 'Cavera Insurance chose Website care plus, paid upfront'));
+  assert.match(await (await req(`/invoice/${public_token}?chosen=1`)).text(), /Thank you for choosing Website care plus, paid upfront for the year/);
+});

@@ -78,6 +78,11 @@ footer{margin-top:32px;color:var(--muted);font-size:13px}
 .plan li+li{margin-top:3px}
 .plan form{margin-top:auto;padding-top:12px}
 .plan .pay{width:100%;padding:12px 14px}
+.plan .choices{margin-top:auto;padding-top:12px;display:grid;gap:8px}
+.plan .choices form{margin:0;padding:0}
+.pay.yearly{background:#fff;color:var(--ink);border:2px solid var(--ink);display:flex;flex-direction:column;align-items:center;gap:2px}
+.pay.yearly:hover{background:var(--pale);color:var(--ink)}
+.pay .save{font-size:12px;font-weight:600;color:var(--ok)}
 .terms{margin-top:20px}
 
 @media (max-width:640px){
