@@ -75,3 +75,7 @@ auto-matches deposits to payouts and manual payments; the rest are matched by ha
   ("$60 a month × 12"), with HST worked out per payment so every payment is equal. An invoice
   can start from a Stripe product; its charges and subscription are filed under that product,
   reusing the product's price when the amount matches.
+- Plan choices shipped 2026-11-15. Invoices → New plan choice: offer a client two or more
+  monthly/yearly Stripe plans on one page (with what each includes). It holds the invoice
+  number from the start; when the client picks, the invoice is created at the same link with
+  the Stripe subscription for that plan, and the owner gets an email.

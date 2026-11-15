@@ -287,3 +287,18 @@ body.read-only .setup-list button{display:none!important}
   .tbl tbody tr.click:hover td{background:none}
   .payout summary{padding:8px 10px}
 }
+
+/* plan choices */
+.offers-waiting{margin-bottom:20px}
+.offers-waiting h2{margin-bottom:10px}
+.plan-picks{display:grid;gap:10px}
+.plan-pick{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:#fff}
+.plan-edit{display:grid;gap:10px;margin-top:12px}
+.plan-edit[hidden]{display:none}
+.plan-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:10px}
+.plan-card{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff}
+.plan-card ul{margin:8px 0 0;padding-left:18px}
+.inline-form{display:grid;gap:10px;max-width:420px}
+.inline-form[hidden]{display:none}
+.lede{margin:-6px 0 18px;max-width:75ch}
+.panel + .actions{margin-top:18px}

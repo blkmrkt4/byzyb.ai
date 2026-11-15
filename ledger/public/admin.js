@@ -135,7 +135,16 @@ async function route() {
     if (p === '/admin/invoices') return await listPage();
     if (p === '/admin/invoices/new') return await formPage(null);
     if ((m = p.match(/^\/admin\/invoices\/([A-Za-z0-9]{4})\/edit$/))) return await formPage(m[1].toUpperCase());
-    if ((m = p.match(/^\/admin\/invoices\/([A-Za-z0-9]{4})(?:-\d{2})?$/))) return await detailPage(m[1].toUpperCase());
+    if (p === '/admin/offers/new') return await offerFormPage();
+    if ((m = p.match(/^\/admin\/offers\/([A-Za-z0-9]{4})$/))) return await offerPage(m[1].toUpperCase());
+    if ((m = p.match(/^\/admin\/invoices\/([A-Za-z0-9]{4})(?:-\d{2})?$/))) {
+      // A plan choice the client hasn't picked from yet has a number but no invoice.
+      const id = m[1].toUpperCase();
+      return await detailPage(id).catch(async (err) => {
+        if (await api(`offers/${id}`).catch(() => null)) return go(`/admin/offers/${id}`, true);
+        throw err;
+      });
+    }
     app.innerHTML = `<div class="empty">Page not found. <a href="/admin/dashboard" data-nav>Go to the dashboard</a></div>`;
   } catch (err) {
     app.innerHTML = `<div class="notice bad">${esc(err.message)}</div><p><a href="/admin/invoices" data-nav>Back to invoices</a></p>`;
@@ -151,10 +160,12 @@ async function listPage() {
   const client = params.get('client') || '';
   const filterQs = new URLSearchParams(Object.entries({ q, status, client }).filter(([, v]) => v)).toString();
 
-  const [list, unmatched] = await Promise.all([
+  const [list, unmatched, { offers }] = await Promise.all([
     api(`invoices${filterQs ? `?${filterQs}` : ''}`),
     api(`payments/unmatched${params.get('ignored') === '1' ? '?ignored=1' : ''}`),
+    api('offers'),
   ]);
+  const waiting = offers.filter((o) => !o.chosen_key && !o.cancelled_at);
   document.title = 'Invoices | Painkiller Labs admin';
 
   const rows = list.invoices.map((inv) => `
@@ -174,9 +185,20 @@ async function listPage() {
       <h1>Invoices</h1>
       <div class="actions">
         <a class="btn btn-quiet" href="/admin/api/invoices.csv${filterQs ? `?${filterQs}` : ''}" download>Export CSV</a>
+        <a class="btn btn-quiet" href="/admin/offers/new" data-nav>New plan choice</a>
         <a class="btn" href="/admin/invoices/new" data-nav>New invoice</a>
       </div>
     </div>
+    ${waiting.length ? `<section class="panel offers-waiting">
+      <h2>Waiting for the client to choose a plan</h2>
+      <table class="tbl compact">
+        <thead><tr><th>Invoice</th><th>Client</th><th>Plans</th><th>Sent</th></tr></thead>
+        <tbody>${waiting.map((o) => `<tr class="click" data-offer="${esc(o.id)}">
+          <td data-label="Invoice"><a class="id" href="/admin/offers/${esc(o.id)}" data-nav>${esc(o.id)}</a></td>
+          <td data-label="Client">${esc(o.client_name)}</td>
+          <td data-label="Plans">${esc(o.options.map((x) => x.name).join(' or '))}</td>
+          <td data-label="Sent">${o.sent_date ? esc(niceDate(o.sent_date)) : '<span class="muted">Not sent</span>'}</td></tr>`).join('')}</tbody>
+      </table></section>` : ''}
     <form class="filters" id="filters" role="search">
       <label class="q">Search <input type="search" name="q" value="${esc(q)}" placeholder="Invoice ID or client"></label>
       <label>Status <select name="status"><option value="">All</option>${['Draft', 'Sent', 'Partly paid', 'Paid', 'Overdue', 'Void']
@@ -192,6 +214,7 @@ async function listPage() {
       </table>` : `<div class="empty">${filtered ? 'No invoices match.' : 'No invoices yet. <a href="/admin/invoices/new" data-nav>Create the first one</a>.'}</div>`}
     <section class="section" id="unmatched"></section>`;
 
+  $$('tr[data-offer]').forEach((tr) => tr.addEventListener('click', (e) => { if (!e.target.closest('a')) go(`/admin/offers/${tr.dataset.offer}`); }));
   const form = $('#filters');
   const apply = () => {
     const fd = new FormData(form);
@@ -593,6 +616,8 @@ const ACTION_LABEL = {
   dispute: 'Card dispute', checkout_failed: 'Client checkout failed',
   reminder: 'Reminder emailed', reminder_failed: 'Reminder failed to send',
   reminders_on: 'Automatic reminders turned on', reminders_off: 'Automatic reminders turned off',
+  offer_create: 'Plan choice created', offer_sent: 'Plan choice emailed', offer_cancel: 'Plan choice withdrawn',
+  plan_chosen: 'Client chose a plan',
 };
 const REMINDER_KIND = { before: '3 days before due', late1: '1 day overdue', late7: '7 days overdue', late21: '21 days overdue', manual: 'Sent by hand' };
 const DISPUTE_LABEL = { warning_needs_response: 'inquiry, needs a response', warning_under_review: 'inquiry under review', warning_closed: 'inquiry closed',
@@ -601,6 +626,8 @@ const DISPUTE_LABEL = { warning_needs_response: 'inquiry, needs a response', war
 function describe(h, currency) {
   const d = h.detail || {};
   const bits = [];
+  if (d.plan) bits.push(d.plan);
+  if (d.plans) bits.push(d.plans.join(' or '));
   if (d.line) bits.push(d.line);
   if (d.amount_cents != null) bits.push(money(d.amount_cents, d.currency || currency));
   if (d.method) bits.push(d.method);
@@ -1470,6 +1497,142 @@ function remindersPanel(inv, openLines) {
             <td data-label="Why">${esc(REMINDER_KIND[r.kind] || r.kind)}${r.error ? ` <span class="badge Overdue" title="${esc(r.error)}">Failed</span>` : ''}</td>
             <td data-label="To">${esc(r.sent_to)}</td></tr>`).join('')}</tbody></table>` : ''}
     </div>`;
+}
+
+// ---------- plan choices ----------
+// The client is sent a page with a few plans and picks one; that becomes the
+// invoice, with the number shown here from the start.
+
+const intervalWord = (i) => (i === 'year' ? 'year' : 'month');
+const planPrice = (o) => `${money(o.amount_cents, o.currency)} a ${intervalWord(o.interval)}`;
+const DEFAULT_OFFER_MESSAGE = 'Here are the ways we can look after your website from here. Have a look at what each one includes and choose the one that suits you.';
+
+async function offerFormPage() {
+  if (!config.stripe) throw new Error('Plan choices use your Stripe products, and Stripe isn’t connected.');
+  const [{ products = [], error }, { id: newId }, { clients: clientNames }] = await Promise.all([api('stripe-products'), api('next-id'), api('clients')]);
+  const plans = products.filter((p) => p.interval).sort((a, b) => a.amount_cents - b.amount_cents);
+  document.title = 'New plan choice | Painkiller Labs admin';
+  app.innerHTML = `
+    <a class="back" href="/admin/invoices" data-nav>← Invoices</a>
+    <div class="head"><div><h1>New plan choice</h1><p class="muted">Invoice number <span class="mono">${esc(newId)}</span></p></div></div>
+    <p class="muted lede">The client gets a page showing the plans you pick. When they choose one, invoice ${esc(newId)} is created for it at the same link and you get an email.</p>
+    ${error ? `<div class="notice bad">${esc(error)}</div>` : ''}
+    <form id="offer" class="panel stack" novalidate>
+      <div class="grid2">
+        <label>Client name <input name="client_name" required autocomplete="off" list="client-list"><span class="muted small" id="client-hint"></span></label>
+        <label>Client email <input name="client_email" type="email" autocomplete="off"></label>
+      </div>
+      <datalist id="client-list">${clientNames.map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
+      <label>Billing address <span class="muted small">(optional, shown on the invoice)</span><textarea name="client_address" rows="2"></textarea></label>
+      <label>Message at the top of the page <textarea name="message" rows="3">${esc(DEFAULT_OFFER_MESSAGE)}</textarea></label>
+      <div class="subpanel stack">
+        <h2>Plans to offer</h2>
+        ${plans.length ? `<p class="muted small">Tick the plans the client can choose between. Prices come from Stripe. Write what each includes, one point per line.</p>
+        <div class="plan-picks">${plans.map((p, i) => `
+          <div class="plan-pick" data-i="${i}">
+            <label class="check"><input type="checkbox" data-k="on"> <span><b>${esc(p.name)}</b> · ${esc(planPrice(p))} <span class="muted">${esc(p.currency)}</span></span></label>
+            <div class="plan-edit" hidden>
+              <label>Name on the page <input data-k="name" value="${esc(p.name)}" maxlength="80"></label>
+              <label>What it includes <textarea data-k="details" rows="3" placeholder="One point per line">${esc(p.description)}</textarea></label>
+            </div>
+          </div>`).join('')}</div>` : '<div class="notice warn">No monthly or yearly prices found in Stripe. Add a recurring price to a product in Stripe first.</div>'}
+        <div class="grid3">
+          <label><span id="count-label">Number of payments</span> <input name="payments" type="number" min="1" max="120" value="12"></label>
+        </div>
+        <label class="check"><input type="checkbox" name="hst_enabled" checked> Charge HST at 13% on top</label>
+        <p class="muted small">The first payment is due the day they choose. With a Stripe subscription set up for them, each payment after that is charged automatically, and it stops after the last one.</p>
+      </div>
+      <div id="form-error"></div>
+      <div class="actions"><button class="btn" type="submit">Create plan choice</button><a class="btn btn-quiet" href="/admin/invoices" data-nav>Cancel</a></div>
+    </form>`;
+  const f = $('#offer');
+  f.client_name.addEventListener('change', async () => {
+    const name = f.client_name.value.trim();
+    const { client } = name ? await api(`clients/lookup?name=${encodeURIComponent(name)}`).catch(() => ({ client: null })) : { client: null };
+    if (client) {
+      if (!f.client_email.value && client.email) f.client_email.value = client.email;
+      if (!f.client_address.value && client.address) f.client_address.value = client.address;
+    }
+    $('#client-hint').textContent = !name ? '' : client ? 'Saved client' : 'New client. They’ll be saved when you create this.';
+  });
+  const picked = () => $$('.plan-pick').filter((el) => el.querySelector('[data-k="on"]').checked);
+  const updateCount = () => {
+    const units = new Set(picked().map((el) => intervalWord(plans[el.dataset.i].interval)));
+    $('#count-label').textContent = units.size === 1 ? `Number of ${[...units][0]}s` : 'Number of payments';
+  };
+  $$('.plan-pick [data-k="on"]').forEach((cb) => cb.addEventListener('change', () => {
+    cb.closest('.plan-pick').querySelector('.plan-edit').hidden = !cb.checked;
+    updateCount();
+  }));
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const err = (m) => { $('#form-error').innerHTML = `<div class="notice bad">${esc(m)}</div>`; };
+    $('#form-error').innerHTML = '';
+    if (!f.client_name.value.trim()) return err('Client name is required.');
+    const chosen = picked();
+    if (!chosen.length) return err('Tick at least one plan to offer.');
+    const body = {
+      id: newId, client_name: f.client_name.value, client_email: f.client_email.value, client_address: f.client_address.value,
+      message: f.message.value, payments: Number(f.payments.value), hst_enabled: f.hst_enabled.checked,
+      options: chosen.map((el) => ({ price: plans[el.dataset.i].price, name: el.querySelector('[data-k="name"]').value, details: el.querySelector('[data-k="details"]').value })),
+    };
+    await busy(f.querySelector('button[type="submit"]'), async () => {
+      const { id } = await api('offers', { method: 'POST', body });
+      toast(`Plan choice ${id} created`);
+      go(`/admin/offers/${id}`, true);
+    });
+  });
+}
+
+async function offerPage(id) {
+  const o = await api(`offers/${id}`);
+  if (o.invoice_id) return go(`/admin/invoices/${o.invoice_id}`, true);
+  document.title = `${o.id} plan choice | Painkiller Labs admin`;
+  const open = !o.cancelled_at;
+  const hst = o.hst_enabled ? ' + HST' : '';
+  app.innerHTML = `
+    <a class="back" href="/admin/invoices" data-nav>← Invoices</a>
+    <div class="head"><div><h1>Plan choice <span class="mono">${esc(o.id)}</span></h1>
+      <p class="muted">${esc(o.client_name)}${o.client_email ? ` · ${esc(o.client_email)}` : ''}</p></div>
+      <span class="badge ${o.cancelled_at ? 'Draft' : o.sent_date ? 'Sent' : 'Draft'}">${o.cancelled_at ? 'Withdrawn' : o.sent_date ? 'Waiting for choice' : 'Not sent yet'}</span></div>
+    ${o.cancelled_at ? `<div class="notice bad">Withdrawn ${esc(niceDateTime(o.cancelled_at))}. The client’s link now says the options are no longer available.</div>` : ''}
+    <div class="panel stack">
+      <h2>The client’s link</h2>
+      <p class="muted small">Send this to ${esc(o.client_name)}. They see the plans below and choose one; that creates invoice ${esc(o.id)} at the same link, ${o.hst_enabled ? 'with HST, ' : ''}${esc(String(o.payments))} payments, the first due the day they choose. You’ll get an email when they do.</p>
+      <div class="linkbox"><input readonly value="${esc(o.link)}" aria-label="Client plan link"><button class="btn btn-quiet btn-sm" id="copy-offer" data-ro>Copy</button><a class="btn btn-quiet btn-sm" href="${esc(o.link)}" target="_blank" rel="noopener">Open</a>${open ? '<button class="btn btn-sm" id="email-offer">Email to client</button>' : ''}</div>
+      <form id="email-form" class="inline-form" hidden>
+        <label>Send to <input name="to" type="email" value="${esc(o.client_email)}" required></label>
+        <div class="actions"><button class="btn btn-sm" type="submit">Send email</button><button class="btn btn-quiet btn-sm" type="button" id="email-cancel">Cancel</button></div>
+      </form>
+      ${o.sent_date ? `<p class="muted small">Emailed ${esc(niceDate(o.sent_date))}${o.sent_to ? ` to ${esc(o.sent_to)}` : ''}.</p>` : ''}
+    </div>
+    <div class="panel">
+      <h2>Plans offered</h2>
+      <div class="plan-cards">${o.options.map((x) => `
+        <div class="plan-card"><b>${esc(x.name)}</b><div>${esc(planPrice(x))}${hst}</div>
+          ${x.details ? `<ul class="small">${x.details.split('\n').filter((l) => l.trim()).map((l) => `<li>${esc(l.replace(/^[-•*]\s*/, ''))}</li>`).join('')}</ul>` : ''}</div>`).join('')}</div>
+      ${o.message ? `<p class="muted small section">Message: ${esc(o.message)}</p>` : ''}
+    </div>
+    ${open ? '<div class="actions"><button class="btn btn-danger" id="cancel-offer">Withdraw this plan choice</button></div>' : ''}`;
+  $('#copy-offer').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(o.link); toast('Link copied'); } catch { $('.linkbox input').select(); }
+  });
+  const ef = $('#email-form');
+  $('#email-offer')?.addEventListener('click', () => { ef.hidden = false; ef.to.focus(); });
+  $('#email-cancel')?.addEventListener('click', () => { ef.hidden = true; });
+  ef.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await busy(ef.querySelector('button[type="submit"]'), async () => {
+      const out = await api(`offers/${o.id}/email`, { method: 'POST', body: { to: ef.to.value } });
+      toast(`Emailed to ${out.sent_to}`);
+      route();
+    });
+  });
+  $('#cancel-offer')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    if (btn.dataset.confirm !== '1') { btn.dataset.confirm = '1'; btn.textContent = 'Click again to withdraw'; return; }
+    await busy(btn, async () => { await api(`offers/${o.id}/cancel`, { method: 'POST' }); toast('Withdrawn'); route(); });
+  });
 }
 
 // ---------- clients ----------

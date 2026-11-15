@@ -9,8 +9,9 @@ import * as R from './lib/reports.mjs';
 import * as B from './lib/bank.mjs';
 import * as RM from './lib/reminders.mjs';
 import * as A from './lib/auth.mjs';
+import * as O from './lib/offers.mjs';
 import { sendLoginEmail, sendInvoiceEmail } from './lib/email.mjs';
-import { renderInvoicePage, renderNotFound, invoiceEmail } from './lib/invoice-page.mjs';
+import { renderInvoicePage, renderNotFound, invoiceEmail, renderPlanPage, planEmail, planChosenEmail } from './lib/invoice-page.mjs';
 import {
   verifyStripeSignature, makeStripe, paymentFromEvent, createPaymentLink, cancelSubscriptionAtPeriodEnd, HANDLED_EVENTS,
   ADJUSTMENT_EVENTS, adjustmentFromEvent, createLineCheckout, createLinePaymentLink, listProductPrices,
@@ -199,6 +200,17 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
       if (method === 'POST' && b && !c) return json(res, 200, L.updateClient(db, b, body));
     }
     if (method === 'GET' && a === 'next-id') return json(res, 200, { id: L.nextInvoiceId(db) });
+    if (a === 'offers') {
+      if (method === 'GET' && !b) return json(res, 200, { offers: O.listOffers(db) });
+      if (method === 'POST' && !b) {
+        const { products } = await stripeProducts();
+        if (!stripe) throw new L.LedgerError('Stripe isn’t connected, so there are no plans to offer');
+        return json(res, 201, { id: O.createOffer(db, body, products) });
+      }
+      if (method === 'GET' && b && !c) return json(res, 200, { ...O.getOffer(db, b), link: offerLink(O.getOffer(db, b)) });
+      if (method === 'POST' && b && c === 'email') return json(res, 200, await emailOffer(b, body.to));
+      if (method === 'POST' && b && c === 'cancel') { O.cancelOffer(db, b); return json(res, 200, { ok: true }); }
+    }
     if (method === 'GET' && a === 'stripe-products') return json(res, 200, await stripeProducts());
     if (method === 'GET' && a === 'invoices' && !b) return json(res, 200, { invoices: L.listInvoices(db, q), clients: L.listClients(db) });
     if (method === 'GET' && a === 'invoices.csv') {
@@ -345,6 +357,52 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
     return { sent_to: to };
   }
 
+  const offerLink = (o) => `${cfg.publicUrl}/invoice/${o.public_token}`;
+
+  async function emailOffer(id, toOverride) {
+    const o = O.getOffer(db, id);
+    if (o.cancelled_at) throw new L.LedgerError('This plan choice was withdrawn');
+    if (o.chosen_key) throw new L.LedgerError('The client has already chosen. Email the invoice instead.');
+    const to = String(toOverride || o.client_email || '').trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) throw new L.LedgerError('Add the client’s email address first');
+    const mail = planEmail(o, { business: cfg.business, link: offerLink(o) });
+    try {
+      await sendInvoice({ to, ...mail, replyTo: cfg.adminEmail, apiKey: cfg.resendKey, from: cfg.emailFrom });
+    } catch (err) {
+      log.error('[ledger] plan email failed:', err.message);
+      throw new L.LedgerError(`The email didn’t send: ${err.message}`, 502);
+    }
+    O.markOfferSent(db, o.id, { sent_to: to });
+    return { sent_to: to };
+  }
+
+  // The client picked a plan: the invoice now exists at the same link. Set up
+  // the Stripe subscription for it and tell the owner, then show the invoice.
+  async function handleOffer(req, res, offer, action, key, headers) {
+    const self = offerLink(offer);
+    if (!action && req.method === 'GET') {
+      return send(res, 200, renderPlanPage(offer, { business: cfg.business, token: offer.public_token }), 'text/html; charset=utf-8', headers);
+    }
+    if (action === 'choose' && req.method === 'POST' && /^\d$/.test(key || '')) {
+      let out;
+      try { out = O.chooseOffer(db, offer.public_token, key); } catch (err) {
+        if (!(err instanceof L.LedgerError)) throw err;
+        return redirect(res, self);
+      }
+      if (out.created) {
+        if (stripe) {
+          const err = await makeLink(out.invoice_id);
+          if (err) log.error('[ledger] subscription link after plan choice failed', out.invoice_id, err);
+        }
+        const mail = planChosenEmail(offer, out.option, { business: cfg.business, adminLink: `${cfg.publicUrl}/admin/invoices/${out.invoice_id}` });
+        sendInvoice({ to: cfg.adminEmail, ...mail, apiKey: cfg.resendKey, from: cfg.emailFrom })
+          .catch((err) => log.error('[ledger] plan-chosen email failed:', err.message));
+      }
+      return redirect(res, `${self}?chosen=1`);
+    }
+    return send(res, 404, renderNotFound(cfg.business), 'text/html; charset=utf-8', headers);
+  }
+
   // The client's invoice page and its Pay buttons. The token in the URL is the
   // only key, so these pages never show anything not on the invoice itself.
   async function handleInvoice(req, res, url, rest) {
@@ -355,11 +413,17 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
     }
     let inv;
     try { inv = L.getInvoiceByToken(db, token); } catch {
-      return send(res, 404, renderNotFound(cfg.business), 'text/html; charset=utf-8', headers);
+      // Not an invoice yet: maybe a plan choice waiting for the client to pick.
+      let offer;
+      try { offer = O.getOfferByToken(db, token); } catch {
+        return send(res, 404, renderNotFound(cfg.business), 'text/html; charset=utf-8', headers);
+      }
+      return handleOffer(req, res, offer, action, suffix, headers);
     }
     const self = `${cfg.publicUrl}/invoice/${inv.public_token}`;
     if (!action && req.method === 'GET') {
-      const n = url.searchParams.get('paid') === '1' ? 'paid' : url.searchParams.get('pay') === 'unavailable' ? 'nopay' : null;
+      const n = url.searchParams.get('paid') === '1' ? 'paid' : url.searchParams.get('pay') === 'unavailable' ? 'nopay'
+        : url.searchParams.get('chosen') === '1' ? 'chosen' : null;
       return send(res, 200, renderInvoicePage(inv, {
         business: cfg.business, today: L.todayToronto(), token: inv.public_token, canPay: !!stripe, notice: n,
       }), 'text/html; charset=utf-8', headers);

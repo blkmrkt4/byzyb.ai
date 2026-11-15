@@ -64,6 +64,22 @@ th:last-child,td:last-child{padding-right:0}
 .printonly{display:none}
 footer{margin-top:32px;color:var(--muted);font-size:13px}
 
+.autopay{margin-top:32px;display:flex;align-items:center;justify-content:space-between;gap:20px;background:var(--pale);border-radius:12px;padding:16px 18px}
+.autopay p{margin-top:2px}
+.autopay .pay{display:inline-block;text-decoration:none;flex:0 0 auto}
+
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;margin-top:28px}
+.plan{border:1px solid var(--line);border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:8px}
+.plan h3{margin:0;font-size:18px;letter-spacing:-.01em}
+.plan .price{margin:0}
+.plan .amt{font-size:28px;font-weight:700;letter-spacing:-.02em}
+.plan .per{color:var(--muted)}
+.plan ul{margin:6px 0 0;padding-left:18px;font-size:14px}
+.plan li+li{margin-top:3px}
+.plan form{margin-top:auto;padding-top:12px}
+.plan .pay{width:100%;padding:12px 14px}
+.terms{margin-top:20px}
+
 @media (max-width:640px){
   .sheet{margin:0;border:0;border-radius:0;padding:24px 16px 40px}
   .top{flex-direction:column;gap:20px}
@@ -77,6 +93,8 @@ footer{margin-top:32px;color:var(--muted);font-size:13px}
   .schedule td.act{grid-column:1 / -1;text-align:left;width:auto;margin-top:6px}
   .schedule .pay{width:100%}
   .toolbar span{display:none}
+  .autopay{flex-direction:column;align-items:stretch}
+  .autopay .pay{text-align:center}
 }
 @media print{
   @page{margin:16mm}

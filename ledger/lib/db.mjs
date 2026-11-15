@@ -259,6 +259,28 @@ function migrate(db) {
     if (!hasColumn(db, 'invoices', col)) db.exec(`ALTER TABLE invoices ADD COLUMN ${col} ${def}`);
   }
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_name ON clients(name COLLATE NOCASE)');
+
+  // A plan choice: the client is offered a few plans and picks one, which turns
+  // it into an invoice with the same number and link.
+  db.exec(`CREATE TABLE IF NOT EXISTS plan_offers (
+    id             TEXT PRIMARY KEY,
+    client_id      INTEGER REFERENCES clients(id),
+    client_name    TEXT NOT NULL,
+    client_email   TEXT NOT NULL DEFAULT '',
+    client_address TEXT NOT NULL DEFAULT '',
+    message        TEXT NOT NULL DEFAULT '',
+    options        TEXT NOT NULL,
+    hst_enabled    INTEGER NOT NULL DEFAULT 1,
+    payments       INTEGER NOT NULL DEFAULT 12,
+    public_token   TEXT NOT NULL UNIQUE,
+    sent_date      TEXT,
+    sent_to        TEXT,
+    chosen_key     TEXT,
+    chosen_at      TEXT,
+    cancelled_at   TEXT,
+    created_at     TEXT NOT NULL,
+    updated_at     TEXT NOT NULL
+  )`);
   const orphans = db.prepare('SELECT id, client_name, client_email FROM invoices WHERE client_id IS NULL ORDER BY created_at').all();
   if (orphans.length) {
     tx(db, () => {
@@ -284,7 +306,14 @@ function migrate(db) {
 }
 
 // Run fn inside a transaction. node:sqlite is synchronous, so fn must be too.
+// Inside another tx, fn just joins it (all or nothing with the outer one).
+const open = new WeakSet();
 export function tx(db, fn) {
+  if (open.has(db)) return fn();
+  open.add(db);
+  try { return run(db, fn); } finally { open.delete(db); }
+}
+function run(db, fn) {
   db.exec('BEGIN IMMEDIATE');
   try {
     const out = fn();

@@ -219,7 +219,7 @@ export function listClients(db) {
 // Finds the client by name (ignoring case) or creates them, so "Acme Dental"
 // and "acme dental" are one client with one balance. The newest email and
 // address typed on an invoice become the client's.
-function saveClientFromInvoice(db, { client_name, client_email = '', client_address = '' }) {
+export function saveClientFromInvoice(db, { client_name, client_email = '', client_address = '' }) {
   const name = String(client_name).trim();
   let c = db.prepare('SELECT * FROM clients WHERE name = ? COLLATE NOCASE').get(name);
   const now = nowIso();
@@ -388,7 +388,8 @@ function cleanInput(input) {
   };
 }
 
-const idTaken = (db, id) => !!db.prepare('SELECT 1 FROM invoices WHERE id = ?').get(id);
+// A number is taken once an invoice or a plan choice has it.
+const idTaken = (db, id) => !!db.prepare('SELECT 1 FROM invoices WHERE id = ? UNION ALL SELECT 1 FROM plan_offers WHERE id = ?').get(id, id);
 
 // A fresh, unused invoice ID. It isn't reserved until an invoice is created with it.
 export function nextInvoiceId(db) {
@@ -399,12 +400,14 @@ export function nextInvoiceId(db) {
   throw new LedgerError('Could not generate a unique invoice ID', 500);
 }
 
-export function createInvoice(db, input) {
+// reserved: a plan choice turning into its invoice, keeping its number and link.
+export function createInvoice(db, input, { reserved } = {}) {
   const v = cleanInput(input);
   return tx(db, () => {
     // Keep the number the form showed, unless it was taken in the meantime.
     const wanted = String(input.id || '').toUpperCase();
-    const id = isInvoiceId(wanted) && !idTaken(db, wanted) ? wanted : nextInvoiceId(db);
+    if (reserved && db.prepare('SELECT 1 FROM invoices WHERE id = ?').get(wanted)) throw new LedgerError(`Invoice ${wanted} already exists`, 409);
+    const id = reserved ? wanted : isInvoiceId(wanted) && !idTaken(db, wanted) ? wanted : nextInvoiceId(db);
     const now = nowIso();
     const client = saveClientFromInvoice(db, v);
     db.prepare(`
@@ -412,7 +415,7 @@ export function createInvoice(db, input) {
         subtotal_cents, hst_enabled, hst_cents, total_cents, schedule, issue_date, notes, stripe_product, public_token, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(id, client.id, client.name, v.client_email, v.client_address, v.description, JSON.stringify(v.line_items), v.currency,
-        v.subtotal_cents, v.hst_enabled ? 1 : 0, v.hst_cents, v.total_cents, v.schedule, v.issue_date, v.notes, v.stripe_product, randomToken(), now, now);
+        v.subtotal_cents, v.hst_enabled ? 1 : 0, v.hst_cents, v.total_cents, v.schedule, v.issue_date, v.notes, v.stripe_product, reserved?.public_token || randomToken(), now, now);
     const ins = db.prepare('INSERT INTO payment_lines (invoice_id, suffix, amount_cents, due_date, label) VALUES (?, ?, ?, ?, ?)');
     for (const l of v.lines) ins.run(id, l.suffix, l.amount_cents, l.due_date, l.label);
     audit(db, 'invoice', id, 'create', {

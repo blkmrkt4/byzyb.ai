@@ -1037,3 +1037,89 @@ test('unsent invoices and clients without an email get no reminders', () => {
   L.markSent(db, id, { sent_date: '2026-11-01', sent_via: 'other' });
   assert.equal(RM.dueReminders(db, '2026-11-11').length, 0);
 });
+
+// ---------- plan choices ----------
+
+const PLANS = [
+  { price: 'price_host', product: 'prod_host', name: 'Website Hosting', description: 'Hosting\nBackups', amount_cents: 6000, currency: 'CAD', interval: 'month' },
+  { price: 'price_care', product: 'prod_care', name: 'Website care plus', description: '', amount_cents: 25000, currency: 'CAD', interval: 'month' },
+  { price: 'price_build', product: 'prod_build', name: 'Website build', description: '', amount_cents: 800000, currency: 'CAD', interval: null },
+];
+
+test('a plan choice reserves its invoice number and only offers monthly or yearly Stripe prices', async () => {
+  const O = await import('../lib/offers.mjs');
+  const db = fresh();
+  const id = O.createOffer(db, { client_name: 'Cavera Insurance', options: [{ price: 'price_host' }, { price: 'price_care', details: 'Hosting\nChanges' }] }, PLANS);
+  const o = O.getOffer(db, id);
+  assert.equal(o.status, 'Not sent');
+  assert.deepEqual(o.options.map((x) => [x.name, x.amount_cents, x.details]), [['Website Hosting', 6000, 'Hosting\nBackups'], ['Website care plus', 25000, 'Hosting\nChanges']]);
+  // Nobody else can be given that number.
+  assert.equal(invoice(db, { id }) === id, false);
+  assert.throws(() => O.createOffer(db, { client_name: 'X', options: [{ price: 'price_build' }] }, PLANS), /monthly or yearly/);
+  assert.throws(() => O.createOffer(db, { client_name: 'X', options: [{ price: 'price_gone' }] }, PLANS), /isn’t an active price/);
+  assert.throws(() => O.createOffer(db, { client_name: 'X', options: [] }, PLANS), /at least one/);
+});
+
+test('the client picks a plan and it becomes their invoice at the same link', async (t) => {
+  const posts = [];
+  const stripe = {
+    get: async () => ({ has_more: false, data: [
+      { id: 'price_host', active: true, unit_amount: 6000, currency: 'cad', recurring: { interval: 'month', interval_count: 1 }, product: { id: 'prod_host', name: 'Website Hosting', description: 'Hosting', active: true } },
+      { id: 'price_care', active: true, unit_amount: 25000, currency: 'cad', recurring: { interval: 'month', interval_count: 1 }, product: { id: 'prod_care', name: 'Website care plus', active: true } },
+    ] }),
+    post: async (path, params) => { posts.push([path, params]); return path === '/prices' ? { id: 'price_new' } : { id: 'plink_1', url: 'https://buy.stripe.com/sub' }; },
+  };
+  const { db, req, emails } = await server(t, {}, { stripe });
+  const cookie = `pk_admin=${A.createSession(db, 'rh@pklabs.ca')}`;
+  const api = (path, body) => req(`/admin/api/${path}`, { method: body ? 'POST' : 'GET', headers: { cookie, 'X-Ledger': '1', 'content-type': 'application/json' }, body: body && JSON.stringify(body) });
+
+  const created = await (await api('offers', { client_name: 'Cavera Insurance', client_email: 'ap@cavera.test', payments: 12, options: [{ price: 'price_host' }, { price: 'price_care' }] })).json();
+  const id = created.id;
+  const offer = await (await api(`offers/${id}`)).json();
+  const path = new URL(offer.link).pathname;
+
+  await api(`offers/${id}/email`, {});
+  assert.equal(emails.at(-1).to, 'ap@cavera.test');
+  assert.match(emails.at(-1).text, /Website Hosting: \$60\.00 a month \+ HST/);
+
+  const page = await (await req(path)).text();
+  assert.match(page, /Choose your plan/);
+  assert.match(page, new RegExp(`>${id}<`));
+  assert.match(page, /\$67\.80 a month in total/);
+  assert.equal(L.listInvoices(db, {}).length, 0);
+
+  const r = await req(`${path}/choose/1`, { method: 'POST' });
+  assert.equal(r.status, 303);
+  assert.equal(r.headers.get('location'), `${offer.link}?chosen=1`);
+  const inv = L.getInvoice(db, id);
+  assert.equal(inv.public_token, offer.public_token);
+  assert.equal(inv.schedule, 'monthly');
+  assert.equal(inv.lines.length, 12);
+  assert.deepEqual([...new Set(inv.lines.map((l) => l.amount_cents))], [6780]);
+  assert.equal(inv.stripe_product, 'prod_host');
+  assert.equal(inv.line_items[0].description, 'Website Hosting: 12 months × $60.00');
+  assert.ok(inv.sent_date);
+  assert.equal(inv.stripe_link_url, 'https://buy.stripe.com/sub');
+  assert.equal(posts.find((p) => p[0] === '/prices')[1].product, 'prod_host');
+  assert.ok(emails.some((m) => m.subject === 'Cavera Insurance chose Website Hosting'));
+
+  const after = await (await req(`${path}?chosen=1`)).text();
+  assert.match(after, /Thank you for choosing Website Hosting/);
+  assert.match(after, /Set up monthly payments/);
+
+  // Choosing again, or the other plan, changes nothing.
+  await req(`${path}/choose/2`, { method: 'POST' });
+  assert.equal(L.getInvoice(db, id).total_cents, 6780 * 12);
+  assert.equal(L.listInvoices(db, {}).length, 1);
+});
+
+test('a withdrawn plan choice can’t be picked', async (t) => {
+  const O = await import('../lib/offers.mjs');
+  const { db, req } = await server(t);
+  const id = O.createOffer(db, { client_name: 'Cavera Insurance', options: [{ price: 'price_host' }] }, PLANS);
+  O.cancelOffer(db, id);
+  const { public_token } = O.getOffer(db, id);
+  assert.match(await (await req(`/invoice/${public_token}`)).text(), /no longer available/);
+  await req(`/invoice/${public_token}/choose/1`, { method: 'POST' });
+  assert.equal(L.listInvoices(db, {}).length, 0);
+});

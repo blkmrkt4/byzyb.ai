@@ -64,6 +64,7 @@ export function renderInvoicePage(inv, { business, today, token, canPay, notice 
 
   const fromLines = [business.name, ...String(business.address || '').split('\n'), business.email].filter(Boolean);
   const notices = [];
+  if (notice === 'chosen') notices.push(`<div class="notice ok">Thank you for choosing ${esc((inv.description || 'your plan').split('\n')[0])}. Your invoice is below.${inv.stripe_link_url ? ' Set up card payments once and each payment is charged automatically.' : ''}</div>`);
   if (notice === 'paid') notices.push('<div class="notice ok">Thank you. Your payment went through, and a receipt is on its way by email. It can take a minute to show here.</div>');
   if (notice === 'nopay') notices.push('<div class="notice warn">Online payment isn’t available right now. Please try again later, or reply to the invoice email.</div>');
   if (isVoid) notices.push('<div class="notice bad">This invoice was cancelled and doesn’t need to be paid.</div>');
@@ -129,6 +130,7 @@ export function renderInvoicePage(inv, { business, today, token, canPay, notice 
     ${!isVoid ? `<dt class="grand">Balance due</dt><dd class="grand">${money(inv.outstanding_cents, cur)}</dd>` : ''}
   </dl>
 
+  ${autopay(inv, { isVoid, count })}
   <section class="schedule">
     <h2>${count > 1 ? `Payment schedule · ${count} payments` : 'Payment'}</h2>
     <table>
@@ -142,6 +144,20 @@ export function renderInvoicePage(inv, { business, today, token, canPay, notice 
 <script src="/invoice/assets/invoice.js"></script>
 </body>
 </html>`;
+}
+
+// A monthly or yearly invoice with a Stripe subscription: one button sets up
+// every payment, instead of paying them one at a time.
+function autopay(inv, { isVoid, count }) {
+  if (isVoid || !inv.stripe_link_url || inv.paid_cents || !['monthly', 'annual'].includes(inv.schedule)) return '';
+  const per = inv.lines[0];
+  const unit = inv.schedule === 'monthly' ? 'month' : 'year';
+  return `
+  <section class="autopay noprint">
+    <div><b>Pay automatically each ${unit}</b>
+      <p class="sub">Set up your card once and each of the ${count} payments of ${money(per.amount_cents, inv.currency)} is charged on its due date, then it stops. Checkout is handled securely by Stripe.</p></div>
+    <a class="pay" href="${esc(inv.stripe_link_url)}">Set up ${unit === 'month' ? 'monthly' : 'yearly'} payments</a>
+  </section>`;
 }
 
 export function renderNotFound(business) {
@@ -214,5 +230,108 @@ export function reminderEmail(inv, line, { business, link, today }) {
 <p style="color:#616972;font-size:13px">${esc(already)} Questions? Reply to this email.</p>
 <p>${esc(business.shortName)}</p>
 </div>`;
+  return { subject, text, html };
+}
+
+// ---------- plan choice ----------
+
+const HST_RATE = 0.13;
+const per = (interval) => (interval === 'year' ? 'year' : 'month');
+
+function planPrice(o, hst) {
+  const unit = per(o.interval);
+  const withTax = o.amount_cents + Math.round(o.amount_cents * HST_RATE);
+  return {
+    main: `${money(o.amount_cents, o.currency)}`,
+    unit: `a ${unit}`,
+    tax: hst ? `+ HST: ${money(withTax, o.currency)} a ${unit} in total` : '',
+  };
+}
+
+// The page the client sees before choosing. Choosing posts back here and
+// turns into their invoice at the same address.
+export function renderPlanPage(offer, { business, token }) {
+  const withdrawn = !!offer.cancelled_at;
+  const fromLines = [business.name, ...String(business.address || '').split('\n'), business.email].filter(Boolean);
+  const units = new Set(offer.options.map((o) => per(o.interval)));
+  const term = units.size === 1
+    ? `Billed ${[...units][0] === 'month' ? 'monthly' : 'yearly'} for ${offer.payments} ${[...units][0]}${offer.payments === 1 ? '' : 's'}, starting the day you choose.`
+    : `Billed for ${offer.payments} payments, starting the day you choose.`;
+  const cards = offer.options.map((o) => {
+    const price = planPrice(o, offer.hst_enabled);
+    const details = String(o.details || '').split('\n').map((l) => l.replace(/^[-•*]\s*/, '').trim()).filter(Boolean);
+    return `
+      <article class="plan">
+        <h3>${esc(o.name)}</h3>
+        <p class="price"><span class="amt">${esc(price.main)}</span> <span class="per">${esc(price.unit)}</span></p>
+        ${price.tax ? `<p class="sub">${esc(price.tax)}</p>` : ''}
+        ${details.length ? `<ul>${details.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>` : ''}
+        ${withdrawn ? '' : `<form method="post" action="/invoice/${esc(token)}/choose/${esc(o.key)}"><button class="pay" type="submit">Choose ${esc(o.name)}</button></form>`}
+      </article>`;
+  }).join('');
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Choose your plan | ${esc(business.name)}</title>
+<link rel="stylesheet" href="/invoice/assets/invoice.css">
+</head>
+<body>
+<main class="sheet">
+  ${withdrawn ? `<div class="notice bad">These options are no longer available. Email <a href="mailto:${esc(business.email)}">${esc(business.email)}</a> if you have questions.</div>` : ''}
+  <header class="top">
+    <div>
+      <div class="brand">${esc(business.shortName)}</div>
+      <address>${fromLines.map(esc).join('<br>')}${business.hstNumber ? `<br>HST no. ${esc(business.hstNumber)}` : ''}</address>
+    </div>
+    <div class="meta">
+      <h1>Choose your plan</h1>
+      <dl>
+        <dt>Invoice number</dt><dd class="ref">${esc(offer.id)}</dd>
+        <dt>For</dt><dd>${esc(offer.client_name)}</dd>
+      </dl>
+    </div>
+  </header>
+  ${offer.message ? `<section class="desc"><p>${esc(offer.message).replace(/\n/g, '<br>')}</p></section>` : ''}
+  <section class="plans" aria-label="Plans">${cards}</section>
+  <p class="sub terms">${esc(term)} Choosing a plan creates invoice ${esc(offer.id)} for it, here at this same link, where you can pay by card.</p>
+  <footer>Questions before you choose? Email <a href="mailto:${esc(business.email)}?subject=Invoice%20${esc(offer.id)}">${esc(business.email)}</a>.</footer>
+</main>
+</body>
+</html>`;
+}
+
+export function planEmail(offer, { business, link }) {
+  const greeting = `Hi ${offer.client_name},`;
+  const lines = offer.options.map((o) => {
+    const p = planPrice(o, offer.hst_enabled);
+    return `${o.name}: ${p.main} ${p.unit}${offer.hst_enabled ? ' + HST' : ''}`;
+  });
+  const intro = offer.message || 'Here are the plan options. Have a look and choose the one that suits you.';
+  const subject = `Choose your plan: ${business.shortName} invoice ${offer.id}`;
+  const text = [greeting, '', intro, '', ...lines.map((l) => `- ${l}`), '', `See what each includes and choose: ${link}`, '',
+    `Once you choose, invoice ${offer.id} is ready on the same page and you can pay by card.`, '', 'Questions? Reply to this email.', '', business.shortName].join('\n');
+  const html = `<div style="font:15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#25292E;max-width:560px">
+<p>${esc(greeting)}</p>
+<p>${esc(intro).replace(/\n/g, '<br>')}</p>
+<ul>${lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
+<p><a href="${esc(link)}" style="display:inline-block;background:#25292E;color:#fff;padding:12px 20px;border-radius:9px;text-decoration:none;font-weight:600">See the plans and choose</a></p>
+<p style="color:#616972;font-size:13px">Once you choose, invoice ${esc(offer.id)} is ready on the same page and you can pay by card. Questions? Reply to this email.</p>
+<p>${esc(business.shortName)}</p>
+</div>`;
+  return { subject, text, html };
+}
+
+// To you, when a client picks.
+export function planChosenEmail(offer, option, { business, adminLink }) {
+  const p = planPrice(option, offer.hst_enabled);
+  const what = `${offer.client_name} chose ${option.name} (${p.main} ${p.unit}${offer.hst_enabled ? ' + HST' : ''}).`;
+  const subject = `${offer.client_name} chose ${option.name}`;
+  const text = [what, '', `Invoice ${offer.id} has been created for ${offer.payments} payments.`, `See it: ${adminLink}`].join('\n');
+  const html = `<div style="font:15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#25292E;max-width:560px">
+<p>${esc(what)}</p><p>Invoice ${esc(offer.id)} has been created for ${offer.payments} payments.</p>
+<p><a href="${esc(adminLink)}">See invoice ${esc(offer.id)}</a></p><p style="color:#616972;font-size:13px">${esc(business.shortName)} ledger</p></div>`;
   return { subject, text, html };
 }
