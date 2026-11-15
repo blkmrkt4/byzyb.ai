@@ -773,10 +773,8 @@ async function detailPage(id) {
         <h2>Client invoice</h2>
         <p class="muted small">The client's copy of invoice ${esc(inv.id)}. They can view it, print it or save it as a PDF, and pay each payment by card. Payments made there are matched automatically.</p>
         ${config.hst_number ? '' : '<div class="notice warn small">Your HST number isn’t on invoices yet. Set HST_NUMBER on the ledger service in Railway; invoices that charge HST must show it.</div>'}
-        <div class="linkbox"><input readonly value="${esc(clientLink)}" aria-label="Client invoice link"><button class="btn btn-quiet btn-sm" id="copy-client" data-ro>Copy</button><a class="btn btn-quiet btn-sm" href="${esc(clientLink)}" target="_blank" rel="noopener">Open</a>${inv.client_email
-          ? `<button class="btn btn-sm" id="email-now">${inv.sent_date ? 'Email again to' : 'Email to'} ${esc(inv.client_email)}</button></div>
-        <p class="small"><button type="button" class="text-btn" data-panel="email">Send to a different address</button></p>`
-          : '<button class="btn btn-sm" data-panel="email">Email to client</button></div>'}
+        <div class="linkbox"><input readonly value="${esc(clientLink)}" aria-label="Client invoice link"><button class="btn btn-quiet btn-sm" id="copy-client" data-ro>Copy</button><a class="btn btn-quiet btn-sm" href="${esc(clientLink)}" target="_blank" rel="noopener">Open</a><button class="btn btn-sm" id="email-invoice">${inv.sent_date ? 'Write another email' : 'Write email'}</button></div>
+        <div id="composer" hidden></div>
       </div>`}
     ${isVoid ? '' : remindersPanel(inv, openLines)}
     ${inv.stripe_link_url ? `
@@ -885,16 +883,9 @@ async function detailPage(id) {
   };
   $$('button[data-panel]').forEach((b) => b.addEventListener('click', () => openPanel(panels[b.dataset.panel]())));
   $$('button[data-due]').forEach((b) => b.addEventListener('click', () => openPanel(panels.due(b.dataset.due))));
-  // With an address on file, one click sends; "Send to a different address" opens the form.
-  $('#email-now')?.addEventListener('click', async (e) => {
-    const btn = e.currentTarget;
-    const label = btn.textContent;
-    btn.textContent = 'Sending…';
-    const out = await busy(btn, () => api(`invoices/${inv.id}/email`, { method: 'POST', body: { to: inv.client_email } }));
-    if (!document.body.contains(btn)) return;
-    btn.textContent = label;
-    if (out) { toast(`Invoice emailed to ${out.sent_to}`); route(); }
-  });
+  $('#email-invoice')?.addEventListener('click', () => openComposer($('#composer'), {
+    draftPath: `invoices/${inv.id}/email-draft`, sendPath: `invoices/${inv.id}/email`, button: `View and pay invoice ${inv.id}`, onSent: route,
+  }));
   $('#copy-client')?.addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(clientLink); toast('Invoice link copied'); } catch { $('#copy-client').previousElementSibling.select(); }
   });
@@ -1577,6 +1568,43 @@ function remindersPanel(inv, openLines) {
     </div>`;
 }
 
+// ---------- emails to clients ----------
+// Opens the email with the standard wording filled in, for you to edit, then sends it.
+async function openComposer(box, { draftPath, sendPath, button, onSent }) {
+  box.hidden = false;
+  box.innerHTML = '<p class="muted small">Getting the email ready…</p>';
+  const d = await api(draftPath).catch((err) => { box.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`; return null; });
+  if (!d) return;
+  box.innerHTML = `
+    <form class="composer stack" novalidate>
+      <h3 class="small-h">Email to send</h3>
+      <label>To <input type="email" name="to" required value="${esc(d.to)}" placeholder="name@example.com"></label>
+      <label>Subject <input name="subject" maxlength="200" value="${esc(d.subject)}"></label>
+      <label>Message <textarea name="message" rows="11">${esc(d.message)}</textarea></label>
+      <p class="muted small">Edit anything you like. Under your message the email adds a “${esc(button)}” button that opens their page. A line starting with “- ” shows as a bullet.</p>
+      <div id="composer-error"></div>
+      <div class="actions"><button class="btn" type="submit">Send</button><button class="btn btn-quiet" type="button" data-cancel>Cancel</button></div>
+    </form>`;
+  const f = box.querySelector('form');
+  box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  f.message.focus();
+  f.message.setSelectionRange(0, 0);
+  f.querySelector('[data-cancel]').addEventListener('click', () => { box.hidden = true; box.innerHTML = ''; });
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.to.value.trim())) {
+      box.querySelector('#composer-error').innerHTML = '<div class="notice bad">Enter the email address to send to.</div>';
+      return;
+    }
+    const btn = f.querySelector('button[type="submit"]');
+    btn.textContent = 'Sending…';
+    const out = await busy(btn, () => api(sendPath, { method: 'POST', body: { to: f.to.value.trim(), subject: f.subject.value, message: f.message.value } }));
+    if (!out) { btn.textContent = 'Send'; return; }
+    toast(`Emailed to ${out.sent_to}`);
+    onSent();
+  });
+}
+
 // ---------- plan choices ----------
 // The client is sent a page with a few plans and picks one; that becomes the
 // invoice, with the number shown here from the start.
@@ -1627,17 +1655,19 @@ async function offerFormPage() {
         <div class="grid3">
           <label><span id="count-label">Number of payments</span> <input name="payments" type="number" min="1" max="120" value="12"></label>
         </div>
-        <div class="prepay-row">
-          <label class="check"><input type="checkbox" name="started"> The service has already started (for example, hosting for a site that’s live)</label>
-          <label class="inline-num">Started on <input name="service_start" type="date" value="${esc(config.today)}"></label>
-        </div>
+        <fieldset class="start-pick">
+          <legend>Billing starts</legend>
+          <label class="check"><input type="radio" name="start_mode" value="choose" checked> The day they choose</label>
+          <label class="check"><input type="radio" name="start_mode" value="date"> On this date:</label>
+          <input class="date-pick" name="service_start" type="date" aria-label="Billing start date">
+        </fieldset>
+        <p class="small start-note" id="start-note"></p>
         <label class="check"><input type="checkbox" name="hst_enabled" checked> Charge HST at 13% on top</label>
         <div class="prepay-row">
           <label class="check"><input type="checkbox" name="prepay_on" checked> Offer a discount for paying upfront on monthly plans</label>
           <label class="inline-num">Months free <input name="prepay_free" type="number" min="1" max="11" value="2"></label>
         </div>
         <p class="muted small" id="prepay-preview"></p>
-        <p class="muted small" id="start-note">The service starts, and the first payment is due, the day they choose.</p>
         <p class="muted small"> With a Stripe subscription set up for them, each payment after that is charged automatically, and it stops after the last one.</p>
       </div>
       <div id="form-error"></div>
@@ -1671,11 +1701,36 @@ async function offerFormPage() {
     updateCount();
   };
   // "Pay for the year: $2,500 (2 months free)" for each monthly option, as the client will see it.
+  // Spells out what the start date means for the first payment, as of today.
+  const updateStart = () => {
+    const dated = f.start_mode.value === 'date' && f.service_start.value;
+    const note = $('#start-note');
+    if (f.start_mode.value === 'date' && !f.service_start.value) { note.textContent = 'Pick the date billing starts.'; return; }
+    if (!dated) { note.textContent = 'Their first payment is due the day they choose, then monthly from there.'; return; }
+    const start = f.service_start.value;
+    const n = Number(f.payments.value) || 12;
+    const end = addDaysTo(addInterval(start, 'monthly', n), -1);
+    const period = `${niceDate(start)} to ${niceDate(end)}`;
+    if (start > config.today) { note.textContent = `Covers ${period}. Their first payment is due ${niceDate(start)}, then monthly. If they set up automatic payments, their card isn’t charged until then.`; return; }
+    let due = 0;
+    while (due < n && addInterval(start, 'monthly', due) <= config.today) due++;
+    if (due <= 1) { note.textContent = `Covers ${period}. Their first payment is due the day they choose, then monthly.`; return; }
+    const first = [...picked().map((el) => plans[el.dataset.i]), ...customs.map((c) => ({ amount_cents: parseMoney(c.amount), interval: c.interval, currency: null }))]
+      .find((p) => p.interval === 'month' && p.amount_cents);
+    const eg = first ? ` (for example ${money(first.amount_cents * due, first.currency || 'CAD')} for a ${money(first.amount_cents, first.currency || 'CAD')} plan)` : '';
+    note.textContent = `Covers ${period}. ${niceDate(start)} has passed, so if they choose today, the ${due} months already due are billed together in their first payment${eg}, then monthly. Paying for the year upfront isn’t affected.`;
+  };
+  // Clicking the date picks "On this date" and opens the calendar.
+  f.service_start.addEventListener('click', () => {
+    f.querySelector('input[name="start_mode"][value="date"]').checked = true;
+    try { f.service_start.showPicker(); } catch { /* older browsers open it themselves */ }
+    updatePrepay();
+  });
+  f.querySelector('input[name="start_mode"][value="date"]').addEventListener('change', () => {
+    if (!f.service_start.value) try { f.service_start.showPicker(); } catch { /* fine */ }
+  });
   const updatePrepay = () => {
-    f.service_start.disabled = !f.started.checked;
-    $('#start-note').textContent = f.started.checked
-      ? `The client’s page shows the service period from ${niceDate(f.service_start.value || config.today)}. Months already passed when they choose are billed together in their first payment, due that day; the rest follow monthly.`
-      : 'The service starts, and the first payment is due, the day they choose.';
+    updateStart();
     const on = f.prepay_on.checked;
     f.prepay_free.disabled = !on;
     const n = Number(f.payments.value) || 0;
@@ -1759,6 +1814,7 @@ async function offerFormPage() {
     if (!f.client_name.value.trim()) return err('Client name is required.');
     const chosen = picked();
     if (!chosen.length && !customs.length) return err('Tick a plan or add a custom option to offer.');
+    if (f.start_mode.value === 'date' && !f.service_start.value) return err('Pick the date billing starts, or choose “The day they choose”.');
     for (const c of customs) {
       if (!c.name.trim()) return err('Give each custom option a name.');
       if (!parseMoney(c.amount)) return err(`Enter an amount for “${c.name.trim()}”, like 45 or 45.00.`);
@@ -1767,7 +1823,7 @@ async function offerFormPage() {
       id: newId, client_name: f.client_name.value, client_email: f.client_email.value, client_address: f.client_address.value,
       message: f.message.value, payments: Number(f.payments.value), hst_enabled: f.hst_enabled.checked,
       prepay_free_months: f.prepay_on.checked ? Number(f.prepay_free.value) : 0,
-      service_start: f.started.checked ? f.service_start.value || null : null,
+      service_start: f.start_mode.value === 'date' ? f.service_start.value || null : null,
       options: [
         ...chosen.map((el) => ({ price: plans[el.dataset.i].price, name: el.querySelector('[data-k="name"]').value, details: el.querySelector('[data-k="details"]').value })),
         ...customs.map((c) => ({ custom: true, name: c.name, amount_cents: parseMoney(c.amount), interval: c.interval || null, details: c.details })),
@@ -1797,12 +1853,8 @@ async function offerPage(id) {
     <div class="panel stack">
       <h2>The client’s link</h2>
       <p class="muted small">Send this to ${esc(o.client_name)}. They see the plans below and choose one; that creates invoice ${esc(o.id)} at the same link, ${o.hst_enabled ? 'with HST, ' : ''}${esc(String(o.payments))} payments, the first due the day they choose. You’ll get an email when they do.</p>
-      <div class="linkbox"><input readonly value="${esc(o.link)}" aria-label="Client plan link"><button class="btn btn-quiet btn-sm" id="copy-offer" data-ro>Copy</button><a class="btn btn-quiet btn-sm" href="${esc(o.link)}" target="_blank" rel="noopener">Open</a>${open ? `<button class="btn btn-sm" id="email-offer">${o.client_email ? (o.sent_date ? `Email again to ${esc(o.client_email)}` : `Email to ${esc(o.client_email)}`) : 'Email to client'}</button>` : ''}</div>
-      ${open && o.client_email ? '<p class="small"><button type="button" class="text-btn" id="email-other">Send to a different address</button></p>' : ''}
-      <form id="email-form" class="inline-form" hidden>
-        <label>Send to <input name="to" type="email" value="${esc(o.client_email)}" required></label>
-        <div class="actions"><button class="btn btn-sm" type="submit">Send email</button><button class="btn btn-quiet btn-sm" type="button" id="email-cancel">Cancel</button></div>
-      </form>
+      <div class="linkbox"><input readonly value="${esc(o.link)}" aria-label="Client plan link"><button class="btn btn-quiet btn-sm" id="copy-offer" data-ro>Copy</button><a class="btn btn-quiet btn-sm" href="${esc(o.link)}" target="_blank" rel="noopener">Open</a>${open ? `<button class="btn btn-sm" id="email-offer">${o.sent_date ? 'Write another email' : 'Write email'}</button>` : ''}</div>
+      <div id="composer" hidden></div>
       ${o.sent_date ? `<div class="notice ok">Emailed ${esc(niceDate(o.sent_date))}${o.sent_to ? ` to ${esc(o.sent_to)}` : ''}. You’ll get an email when they choose.</div>` : ''}
     </div>
     <div class="panel">
@@ -1818,28 +1870,9 @@ async function offerPage(id) {
   $('#copy-offer').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(o.link); toast('Link copied'); } catch { $('.linkbox input').select(); }
   });
-  const ef = $('#email-form');
-  const sendTo = (btn, to) => busy(btn, async () => {
-    btn.textContent = 'Sending…';
-    const out = await api(`offers/${o.id}/email`, { method: 'POST', body: { to } });
-    toast(`Emailed to ${out.sent_to}`);
-    route();
-  }).finally(() => { if (document.body.contains(btn)) btn.textContent = btn.dataset.label; });
-  // With an address on file, one click sends; otherwise ask for one.
-  $('#email-offer')?.addEventListener('click', (e) => {
-    const btn = e.currentTarget;
-    btn.dataset.label = btn.textContent;
-    if (o.client_email) return sendTo(btn, o.client_email);
-    ef.hidden = false; ef.to.focus();
-  });
-  $('#email-other')?.addEventListener('click', () => { ef.hidden = false; ef.to.select(); });
-  $('#email-cancel')?.addEventListener('click', () => { ef.hidden = true; });
-  ef.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btn = ef.querySelector('button[type="submit"]');
-    btn.dataset.label = btn.textContent;
-    await sendTo(btn, ef.to.value);
-  });
+  $('#email-offer')?.addEventListener('click', () => openComposer($('#composer'), {
+    draftPath: `offers/${o.id}/email-draft`, sendPath: `offers/${o.id}/email`, button: 'See the plans and choose', onSent: route,
+  }));
   $('#cancel-offer')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget;
     if (btn.dataset.confirm !== '1') { btn.dataset.confirm = '1'; btn.textContent = 'Click again to withdraw'; return; }

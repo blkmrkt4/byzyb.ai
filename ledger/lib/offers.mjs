@@ -163,7 +163,9 @@ export function chooseOffer(db, token, key, today = todayToronto(), { prepay = f
       description: opt.details ? `${opt.name}\n${opt.details}` : opt.name,
       currency: o.options[0].currency, hst_enabled: o.hst_enabled,
       // A one-time item (like a website build) is a single payment due today.
-      schedule: INTERVALS[opt.interval] || 'one_time', count: opt.interval ? o.payments : 1, first_due: today, issue_date: today,
+      // A start date still to come is when the first payment is due.
+      schedule: INTERVALS[opt.interval] || 'one_time', count: opt.interval ? o.payments : 1,
+      first_due: opt.interval && o.service_start && o.service_start > today ? o.service_start : today, issue_date: today,
       ...(catchUpLines ? { lines: catchUpLines, hst_units: o.payments } : {}),
       line_items: [opt.interval ? {
         description: `${opt.name}: ${o.payments} ${opt.interval}${o.payments === 1 ? '' : 's'} × ${money(opt.amount_cents, opt.currency)}${covers}`,

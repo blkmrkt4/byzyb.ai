@@ -260,7 +260,9 @@ export async function listProductPrices(stripe) {
 
 // ---------- payment links ----------
 
-export async function createPaymentLink(stripe, inv, siteUrl) {
+// today: the date in Toronto, so a first payment due later starts the
+// subscription with a free trial until then.
+export async function createPaymentLink(stripe, inv, siteUrl, { today = new Date().toISOString().slice(0, 10) } = {}) {
   const lines = inv.lines;
   const meta = { invoice_id: inv.id, source: 'pk-ledger' };
   const currency = inv.currency.toLowerCase();
@@ -306,10 +308,12 @@ export async function createPaymentLink(stripe, inv, siteUrl) {
     });
     items.push({ price: catchUp.id, quantity: 1 });
   }
+  const first = lines[0].due_date;
+  const waitDays = !extra && first && first > today ? Math.round((Date.parse(`${first}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000) : 0;
   const link = await stripe.post('/payment_links', {
     line_items: items,
     metadata: meta,
-    subscription_data: { description: desc, metadata: meta },
+    subscription_data: { description: desc, metadata: meta, ...(waitDays >= 1 ? { trial_period_days: Math.min(waitDays, 730) } : {}) },
     after_completion: redirect,
   });
   return { link_id: link.id, url: link.url };

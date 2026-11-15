@@ -181,7 +181,27 @@ export function renderNotFound(business) {
 
 // ---------- email ----------
 
-export function invoiceEmail(inv, { business, link }) {
+// Client emails are your editable message, then a button to their page that
+// can't be edited away, then a short line of fine print.
+function composeEmail({ subject, message, link, button, fine }) {
+  const msg = String(message || '').replace(/\r\n/g, '\n').trim();
+  const text = [msg, '', `${button}: ${link}`, '', fine].join('\n');
+  // Blank lines make paragraphs; a paragraph whose lines all start with "- " is a list.
+  const paras = msg.split(/\n{2,}/).map((p) => {
+    const lines = p.split('\n');
+    if (lines.every((l) => /^\s*[-•]\s+/.test(l))) return `<ul>${lines.map((l) => `<li>${esc(l.replace(/^\s*[-•]\s+/, ''))}</li>`).join('')}</ul>`;
+    return `<p>${lines.map(esc).join('<br>')}</p>`;
+  }).join('\n');
+  const html = `<div style="font:15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#25292E;max-width:560px">
+${paras}
+<p><a href="${esc(link)}" style="display:inline-block;background:#25292E;color:#fff;padding:12px 20px;border-radius:9px;text-decoration:none;font-weight:600">${esc(button)}</a></p>
+<p style="color:#616972;font-size:13px">${esc(fine)}</p>
+</div>`;
+  return { subject: String(subject || '').trim(), text, html };
+}
+
+// The standard wording, for you to edit before it goes.
+export function invoiceEmailDraft(inv, { business }) {
   const cur = inv.currency;
   const open = inv.lines.filter((l) => l.outstanding_cents > 0);
   const first = open[0];
@@ -193,21 +213,20 @@ export function invoiceEmail(inv, { business, link }) {
       ? `It's paid in ${count} payments. ${paymentName(first, count)} (${first.ref}), ${money(first.outstanding_cents, cur)}, is ${due}.`
       : `${money(first.outstanding_cents, cur)} is ${due}.`;
   }
-  const subject = `Invoice ${inv.id} from ${business.shortName}: ${money(inv.total_cents, cur)}`;
-  const greeting = `Hi ${inv.client_name},`;
   const what = `Here's invoice ${inv.id}${inv.description ? ` for ${inv.description.split('\n')[0]}` : ''}. The total is ${money(inv.total_cents, cur)} ${cur}${inv.hst_enabled ? ' including HST' : ''}.`;
-  const text = [greeting, '', what, when, '', `View and pay the invoice: ${link}`, '',
-    'You can pay by card on that page, or print it or save it as a PDF for your records.', '',
-    `Questions? Reply to this email.`, '', business.shortName].filter((l) => l !== null).join('\n');
-  const html = `<div style="font:15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#25292E;max-width:560px">
-<p>${esc(greeting)}</p>
-<p>${esc(what)}</p>
-${when ? `<p>${esc(when)}</p>` : ''}
-<p><a href="${esc(link)}" style="display:inline-block;background:#25292E;color:#fff;padding:12px 20px;border-radius:9px;text-decoration:none;font-weight:600">View and pay invoice ${esc(inv.id)}</a></p>
-<p style="color:#616972;font-size:13px">You can pay by card on that page, or print it or save it as a PDF for your records. Questions? Reply to this email.</p>
-<p>${esc(business.shortName)}</p>
-</div>`;
-  return { subject, text, html };
+  return {
+    subject: `Invoice ${inv.id} from ${business.shortName}: ${money(inv.total_cents, cur)}`,
+    message: [`Hi ${inv.client_name},`, '', [what, when].filter(Boolean).join(' '), '', 'Thanks,', business.shortName].join('\n'),
+  };
+}
+
+export function invoiceEmail(inv, { business, link, subject, message }) {
+  const d = invoiceEmailDraft(inv, { business });
+  return composeEmail({
+    subject: subject || d.subject, message: message || d.message, link,
+    button: `View and pay invoice ${inv.id}`,
+    fine: 'You can pay by card on that page, or print it or save it as a PDF for your records. Questions? Reply to this email.',
+  });
 }
 
 // A reminder about one payment. kind: before (due soon), late1/late7/late21
@@ -307,6 +326,9 @@ export function renderPlanPage(offer, { business, token, today }) {
   const fromLines = [business.name, ...String(business.address || '').split('\n'), business.email].filter(Boolean);
   const billing = (o) => {
     const period = servicePeriod(offer, o);
+    if (period && offer.service_start > today) {
+      return `Covers ${offer.payments} ${per(o.interval)}${offer.payments === 1 ? '' : 's'} of service, ${periodText(period)}. ${prepayFor(offer, o) ? 'Paying monthly, the first payment is due' : 'The first payment is due'} ${longDate(offer.service_start)}.`;
+    }
     if (period) {
       const behind = catchUp(offer, o, today);
       const covers = `Covers ${offer.payments} ${per(o.interval)}${offer.payments === 1 ? '' : 's'} of service, ${periodText(period)}.`;
@@ -374,26 +396,26 @@ export function renderPlanPage(offer, { business, token, today }) {
 </html>`;
 }
 
-export function planEmail(offer, { business, link }) {
-  const greeting = `Hi ${offer.client_name},`;
+export function planEmailDraft(offer, { business }) {
   const lines = offer.options.map((o) => {
     const p = planPrice(o, offer.hst_enabled);
     const up = prepayFor(offer, o);
-    return `${o.name}: ${p.main} ${p.unit}${offer.hst_enabled ? ' + HST' : ''}${up ? `, or ${money(up.amount_cents, o.currency)} for ${termWord(up.months)} paid upfront (${freeWord(up.free)})` : ''}`;
+    return `- ${o.name}: ${p.main} ${p.unit}${offer.hst_enabled ? ' + HST' : ''}${up ? `, or ${money(up.amount_cents, o.currency)} for ${termWord(up.months)} paid upfront (${freeWord(up.free)})` : ''}`;
   });
   const intro = offer.message || 'Here are the plan options. Have a look and choose the one that suits you.';
-  const subject = `Choose your plan: ${business.shortName} invoice ${offer.id}`;
-  const text = [greeting, '', intro, '', ...lines.map((l) => `- ${l}`), '', `See what each includes and choose: ${link}`, '',
-    `Once you choose, invoice ${offer.id} is ready on the same page and you can pay by card.`, '', 'Questions? Reply to this email.', '', business.shortName].join('\n');
-  const html = `<div style="font:15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#25292E;max-width:560px">
-<p>${esc(greeting)}</p>
-<p>${esc(intro).replace(/\n/g, '<br>')}</p>
-<ul>${lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
-<p><a href="${esc(link)}" style="display:inline-block;background:#25292E;color:#fff;padding:12px 20px;border-radius:9px;text-decoration:none;font-weight:600">See the plans and choose</a></p>
-<p style="color:#616972;font-size:13px">Once you choose, invoice ${esc(offer.id)} is ready on the same page and you can pay by card. Questions? Reply to this email.</p>
-<p>${esc(business.shortName)}</p>
-</div>`;
-  return { subject, text, html };
+  return {
+    subject: `Choose your plan: ${business.shortName} invoice ${offer.id}`,
+    message: [`Hi ${offer.client_name},`, '', intro, '', ...lines, '', 'Thanks,', business.shortName].join('\n'),
+  };
+}
+
+export function planEmail(offer, { business, link, subject, message }) {
+  const d = planEmailDraft(offer, { business });
+  return composeEmail({
+    subject: subject || d.subject, message: message || d.message, link,
+    button: 'See the plans and choose',
+    fine: `Once you choose, invoice ${offer.id} is ready on the same page and you can pay by card. Questions? Reply to this email.`,
+  });
 }
 
 // To you, when a client picks.

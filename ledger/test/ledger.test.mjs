@@ -1253,3 +1253,43 @@ test('missed months with HST stay whole months, and the subscription charges the
   assert.deepEqual(prices.map((p) => [p.unit_amount, !!p.recurring]), [[6780, true], [13560, false]]);
   assert.equal(posts.find((p) => p[0] === '/payment_links')[1].line_items.length, 2);
 });
+
+test('you can edit an email before it goes, and the link to their page is always added', async (t) => {
+  const { db, req, emails } = await server(t, { resendKey: 're_test' });
+  const cookie = `pk_admin=${A.createSession(db, 'rh@pklabs.ca')}`;
+  const api = (path, body) => req(`/admin/api/${path}`, { method: body ? 'POST' : 'GET', headers: { cookie, 'X-Ledger': '1', 'content-type': 'application/json' }, body: body && JSON.stringify(body) });
+  const id = invoice(db, { client_name: 'Cavera Insurance', client_email: 'chris@cavera.test' });
+  const draft = await (await api(`invoices/${id}/email-draft`)).json();
+  assert.equal(draft.to, 'chris@cavera.test');
+  assert.match(draft.message, /^Hi Cavera Insurance,\n\nHere's invoice/);
+
+  const message = 'Hey Chris, how are you doing? Hope you had a great weekend.\n\n- Hosting\n- Backups\n\nThanks,\nRH';
+  const r = await api(`invoices/${id}/email`, { to: 'chris@cavera.test', subject: 'Your hosting invoice', message });
+  assert.equal(r.status, 200);
+  const sent = emails.at(-1);
+  assert.equal(sent.subject, 'Your hosting invoice');
+  assert.match(sent.text, /^Hey Chris, how are you doing\?/);
+  assert.match(sent.text, new RegExp(`View and pay invoice ${id}: http`));
+  assert.match(sent.html, /<ul><li>Hosting<\/li><li>Backups<\/li><\/ul>/);
+  assert.match(sent.html, /\/invoice\//);
+
+  // Leaving them blank sends the standard wording.
+  await api(`invoices/${id}/email`, { to: 'chris@cavera.test', subject: '', message: '' });
+  assert.match(emails.at(-1).text, /^Hi Cavera Insurance,/);
+});
+
+test('a billing start date still to come: first payment that day, and the card isn’t charged until then', async () => {
+  const O = await import('../lib/offers.mjs');
+  const db = fresh();
+  const id = O.createOffer(db, { client_name: 'Cavera Insurance', hst_enabled: false, service_start: '2026-12-01', options: [{ price: 'price_host' }] }, PLANS);
+  O.chooseOffer(db, O.getOffer(db, id).public_token, '1', '2026-11-20');
+  const inv = L.getInvoice(db, id);
+  assert.deepEqual([inv.lines.length, inv.lines[0].due_date, inv.lines[1].due_date], [12, '2026-12-01', '2027-01-01']);
+  let link;
+  const stripe = { get: async () => ({ data: [] }), post: async (path, p) => { if (path === '/payment_links') link = p; return { id: 'x', url: 'u' }; } };
+  await createPaymentLink(stripe, inv, 'https://x', { today: '2026-11-20' });
+  assert.equal(link.subscription_data.trial_period_days, 11);
+  // Due today: charged straight away, no trial.
+  await createPaymentLink(stripe, inv, 'https://x', { today: '2026-12-01' });
+  assert.equal(link.subscription_data.trial_period_days, undefined);
+});

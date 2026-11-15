@@ -11,7 +11,7 @@ import * as RM from './lib/reminders.mjs';
 import * as A from './lib/auth.mjs';
 import * as O from './lib/offers.mjs';
 import { sendLoginEmail, sendInvoiceEmail } from './lib/email.mjs';
-import { renderInvoicePage, renderNotFound, invoiceEmail, renderPlanPage, planEmail, planChosenEmail } from './lib/invoice-page.mjs';
+import { renderInvoicePage, renderNotFound, invoiceEmail, invoiceEmailDraft, renderPlanPage, planEmail, planEmailDraft, planChosenEmail } from './lib/invoice-page.mjs';
 import {
   verifyStripeSignature, makeStripe, paymentFromEvent, createPaymentLink, cancelSubscriptionAtPeriodEnd, HANDLED_EVENTS,
   ADJUSTMENT_EVENTS, adjustmentFromEvent, createLineCheckout, createLinePaymentLink, listProductPrices,
@@ -208,7 +208,11 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
         return json(res, 201, { id: O.createOffer(db, body, products) });
       }
       if (method === 'GET' && b && !c) return json(res, 200, { ...O.getOffer(db, b), link: offerLink(O.getOffer(db, b)) });
-      if (method === 'POST' && b && c === 'email') return json(res, 200, await emailOffer(b, body.to));
+      if (method === 'POST' && b && c === 'email') return json(res, 200, await emailOffer(b, body.to, edits(body)));
+      if (method === 'GET' && b && c === 'email-draft') {
+        const o = O.getOffer(db, b);
+        return json(res, 200, { to: o.client_email, ...planEmailDraft(o, { business: cfg.business }) });
+      }
       if (method === 'POST' && b && c === 'cancel') { O.cancelOffer(db, b); return json(res, 200, { ok: true }); }
     }
     if (method === 'GET' && a === 'stripe-products') return json(res, 200, await stripeProducts());
@@ -224,12 +228,16 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
       return json(res, 201, { id, link_error: linkError });
     }
     if (method === 'GET' && a === 'invoices' && b && !c) return json(res, 200, L.getInvoice(db, b));
+    if (method === 'GET' && a === 'invoices' && b && c === 'email-draft') {
+      const inv = L.getInvoice(db, b);
+      return json(res, 200, { to: inv.client_email, ...invoiceEmailDraft(inv, { business: cfg.business }) });
+    }
     if (method === 'POST' && a === 'invoices' && b) {
       if (c === 'edit') return json(res, 200, L.updateInvoice(db, b, body));
       if (c === 'send') { L.markSent(db, b, body); return json(res, 200, { ok: true }); }
       if (c === 'void') { L.voidInvoice(db, b, body.reason); return json(res, 200, { ok: true }); }
       if (c === 'payments') return json(res, 201, { id: L.recordManualPayment(db, body) });
-      if (c === 'email') return json(res, 200, await emailInvoice(b, body.to));
+      if (c === 'email') return json(res, 200, await emailInvoice(b, body.to, edits(body)));
       if (c === 'remind') return json(res, 200, await RM.sendManualReminder(db, b, body, reminderOpts));
       if (c === 'reminders') { RM.setInvoiceReminders(db, b, !!body.on); return json(res, 200, { ok: true }); }
       if (c === 'lines' && parts[3] && parts[4] === 'due') {
@@ -340,13 +348,19 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
     return json(res, 404, { error: 'Not found' });
   }
 
-  async function emailInvoice(id, toOverride) {
+  // Your edits to the email, kept within sensible sizes.
+  const edits = (body) => ({
+    subject: String(body.subject || '').trim().slice(0, 200) || undefined,
+    message: String(body.message || '').trim().slice(0, 6000) || undefined,
+  });
+
+  async function emailInvoice(id, toOverride, edited = {}) {
     const inv = L.getInvoice(db, id);
     if (inv.voided_at) throw new L.LedgerError('A void invoice can’t be emailed');
     const to = String(toOverride || inv.client_email || '').trim();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) throw new L.LedgerError('Add the client’s email address first');
     const link = `${cfg.publicUrl}/invoice/${inv.public_token}`;
-    const mail = invoiceEmail(inv, { business: cfg.business, link });
+    const mail = invoiceEmail(inv, { business: cfg.business, link, ...edited });
     try {
       await sendInvoice({ to, ...mail, replyTo: cfg.adminEmail, apiKey: cfg.resendKey, from: cfg.emailFrom });
     } catch (err) {
@@ -359,13 +373,13 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
 
   const offerLink = (o) => `${cfg.publicUrl}/invoice/${o.public_token}`;
 
-  async function emailOffer(id, toOverride) {
+  async function emailOffer(id, toOverride, edited = {}) {
     const o = O.getOffer(db, id);
     if (o.cancelled_at) throw new L.LedgerError('This plan choice was withdrawn');
     if (o.chosen_key) throw new L.LedgerError('The client has already chosen. Email the invoice instead.');
     const to = String(toOverride || o.client_email || '').trim();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) throw new L.LedgerError('Add the client’s email address first');
-    const mail = planEmail(o, { business: cfg.business, link: offerLink(o) });
+    const mail = planEmail(o, { business: cfg.business, link: offerLink(o), ...edited });
     try {
       await sendInvoice({ to, ...mail, replyTo: cfg.adminEmail, apiKey: cfg.resendKey, from: cfg.emailFrom });
     } catch (err) {
@@ -474,7 +488,7 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
     if (inv.voided_at) return 'Invoice is void.';
     if (inv.stripe_link_url) return 'This invoice already has a payment link.';
     try {
-      L.setStripeLink(db, id, await createPaymentLink(stripe, inv, cfg.siteUrl));
+      L.setStripeLink(db, id, await createPaymentLink(stripe, inv, cfg.siteUrl, { today: L.todayToronto() }));
       return null;
     } catch (err) {
       L.audit(db, 'invoice', id, 'stripe_link_failed', { error: err.message });
