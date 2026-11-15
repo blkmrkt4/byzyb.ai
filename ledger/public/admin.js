@@ -773,7 +773,10 @@ async function detailPage(id) {
         <h2>Client invoice</h2>
         <p class="muted small">The client's copy of invoice ${esc(inv.id)}. They can view it, print it or save it as a PDF, and pay each payment by card. Payments made there are matched automatically.</p>
         ${config.hst_number ? '' : '<div class="notice warn small">Your HST number isn’t on invoices yet. Set HST_NUMBER on the ledger service in Railway; invoices that charge HST must show it.</div>'}
-        <div class="linkbox"><input readonly value="${esc(clientLink)}" aria-label="Client invoice link"><button class="btn btn-quiet btn-sm" id="copy-client" data-ro>Copy</button><a class="btn btn-quiet btn-sm" href="${esc(clientLink)}" target="_blank" rel="noopener">Open</a><button class="btn btn-sm" data-panel="email">Email to client</button></div>
+        <div class="linkbox"><input readonly value="${esc(clientLink)}" aria-label="Client invoice link"><button class="btn btn-quiet btn-sm" id="copy-client" data-ro>Copy</button><a class="btn btn-quiet btn-sm" href="${esc(clientLink)}" target="_blank" rel="noopener">Open</a>${inv.client_email
+          ? `<button class="btn btn-sm" id="email-now">${inv.sent_date ? 'Email again to' : 'Email to'} ${esc(inv.client_email)}</button></div>
+        <p class="small"><button type="button" class="text-btn" data-panel="email">Send to a different address</button></p>`
+          : '<button class="btn btn-sm" data-panel="email">Email to client</button></div>'}
       </div>`}
     ${isVoid ? '' : remindersPanel(inv, openLines)}
     ${inv.stripe_link_url ? `
@@ -882,6 +885,16 @@ async function detailPage(id) {
   };
   $$('button[data-panel]').forEach((b) => b.addEventListener('click', () => openPanel(panels[b.dataset.panel]())));
   $$('button[data-due]').forEach((b) => b.addEventListener('click', () => openPanel(panels.due(b.dataset.due))));
+  // With an address on file, one click sends; "Send to a different address" opens the form.
+  $('#email-now')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const label = btn.textContent;
+    btn.textContent = 'Sending…';
+    const out = await busy(btn, () => api(`invoices/${inv.id}/email`, { method: 'POST', body: { to: inv.client_email } }));
+    if (!document.body.contains(btn)) return;
+    btn.textContent = label;
+    if (out) { toast(`Invoice emailed to ${out.sent_to}`); route(); }
+  });
   $('#copy-client')?.addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(clientLink); toast('Invoice link copied'); } catch { $('#copy-client').previousElementSibling.select(); }
   });
@@ -1784,12 +1797,13 @@ async function offerPage(id) {
     <div class="panel stack">
       <h2>The client’s link</h2>
       <p class="muted small">Send this to ${esc(o.client_name)}. They see the plans below and choose one; that creates invoice ${esc(o.id)} at the same link, ${o.hst_enabled ? 'with HST, ' : ''}${esc(String(o.payments))} payments, the first due the day they choose. You’ll get an email when they do.</p>
-      <div class="linkbox"><input readonly value="${esc(o.link)}" aria-label="Client plan link"><button class="btn btn-quiet btn-sm" id="copy-offer" data-ro>Copy</button><a class="btn btn-quiet btn-sm" href="${esc(o.link)}" target="_blank" rel="noopener">Open</a>${open ? '<button class="btn btn-sm" id="email-offer">Email to client</button>' : ''}</div>
+      <div class="linkbox"><input readonly value="${esc(o.link)}" aria-label="Client plan link"><button class="btn btn-quiet btn-sm" id="copy-offer" data-ro>Copy</button><a class="btn btn-quiet btn-sm" href="${esc(o.link)}" target="_blank" rel="noopener">Open</a>${open ? `<button class="btn btn-sm" id="email-offer">${o.client_email ? (o.sent_date ? `Email again to ${esc(o.client_email)}` : `Email to ${esc(o.client_email)}`) : 'Email to client'}</button>` : ''}</div>
+      ${open && o.client_email ? '<p class="small"><button type="button" class="text-btn" id="email-other">Send to a different address</button></p>' : ''}
       <form id="email-form" class="inline-form" hidden>
         <label>Send to <input name="to" type="email" value="${esc(o.client_email)}" required></label>
         <div class="actions"><button class="btn btn-sm" type="submit">Send email</button><button class="btn btn-quiet btn-sm" type="button" id="email-cancel">Cancel</button></div>
       </form>
-      ${o.sent_date ? `<p class="muted small">Emailed ${esc(niceDate(o.sent_date))}${o.sent_to ? ` to ${esc(o.sent_to)}` : ''}.</p>` : ''}
+      ${o.sent_date ? `<div class="notice ok">Emailed ${esc(niceDate(o.sent_date))}${o.sent_to ? ` to ${esc(o.sent_to)}` : ''}. You’ll get an email when they choose.</div>` : ''}
     </div>
     <div class="panel">
       <h2>Plans offered</h2>
@@ -1805,15 +1819,26 @@ async function offerPage(id) {
     try { await navigator.clipboard.writeText(o.link); toast('Link copied'); } catch { $('.linkbox input').select(); }
   });
   const ef = $('#email-form');
-  $('#email-offer')?.addEventListener('click', () => { ef.hidden = false; ef.to.focus(); });
+  const sendTo = (btn, to) => busy(btn, async () => {
+    btn.textContent = 'Sending…';
+    const out = await api(`offers/${o.id}/email`, { method: 'POST', body: { to } });
+    toast(`Emailed to ${out.sent_to}`);
+    route();
+  }).finally(() => { if (document.body.contains(btn)) btn.textContent = btn.dataset.label; });
+  // With an address on file, one click sends; otherwise ask for one.
+  $('#email-offer')?.addEventListener('click', (e) => {
+    const btn = e.currentTarget;
+    btn.dataset.label = btn.textContent;
+    if (o.client_email) return sendTo(btn, o.client_email);
+    ef.hidden = false; ef.to.focus();
+  });
+  $('#email-other')?.addEventListener('click', () => { ef.hidden = false; ef.to.select(); });
   $('#email-cancel')?.addEventListener('click', () => { ef.hidden = true; });
   ef.addEventListener('submit', async (e) => {
     e.preventDefault();
-    await busy(ef.querySelector('button[type="submit"]'), async () => {
-      const out = await api(`offers/${o.id}/email`, { method: 'POST', body: { to: ef.to.value } });
-      toast(`Emailed to ${out.sent_to}`);
-      route();
-    });
+    const btn = ef.querySelector('button[type="submit"]');
+    btn.dataset.label = btn.textContent;
+    await sendTo(btn, ef.to.value);
   });
   $('#cancel-offer')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget;
