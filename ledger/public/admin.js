@@ -1604,7 +1604,13 @@ async function offerFormPage() {
               <label>Name on the page <input data-k="name" value="${esc(p.name)}" maxlength="80"></label>
               <label>What it includes <textarea data-k="details" rows="3" placeholder="One point per line">${esc(p.description)}</textarea></label>
             </div>
-          </div>`).join('')}</div>` : '<div class="notice warn">No active prices found in Stripe. Add a product with a price in Stripe first.</div>'}
+          </div>`).join('')}</div>` : '<div class="notice warn">No active prices found in Stripe. You can still offer custom options below.</div>'}
+        <div class="stack">
+          <h3 class="small-h">Custom options</h3>
+          <p class="muted small">For a price that isn’t in Stripe, such as hosting at a special rate. It’s charged in the same currency as the Stripe plans you ticked (CAD if none).</p>
+          <div id="customs" class="plan-picks"></div>
+          <div><button type="button" class="btn btn-quiet btn-sm" id="add-custom">Add a custom option</button></div>
+        </div>
         <div class="grid3">
           <label><span id="count-label">Number of payments</span> <input name="payments" type="number" min="1" max="120" value="12"></label>
         </div>
@@ -1625,14 +1631,52 @@ async function offerFormPage() {
     $('#client-hint').textContent = !name ? '' : client ? 'Saved client' : 'New client. They’ll be saved when you create this.';
   });
   const picked = () => $$('.plan-pick').filter((el) => el.querySelector('[data-k="on"]').checked);
+  // Custom options live in this list; the inputs write straight into it.
+  const customs = [];
+  const renderCustoms = () => {
+    $('#customs').innerHTML = customs.map((c, i) => `
+      <div class="custom-pick" data-c="${i}">
+        <div class="custom-head"><b>Custom option ${i + 1}</b><button type="button" class="btn btn-quiet btn-sm" data-remove="${i}">Remove</button></div>
+        <div class="grid3">
+          <label>Name on the page <input data-k="name" value="${esc(c.name)}" maxlength="80" placeholder="e.g. Website Hosting"></label>
+          <label>Amount (before tax) <input data-k="amount" inputmode="decimal" value="${esc(c.amount)}" placeholder="0.00"></label>
+          <label>Billed <select data-k="interval">${[['month', 'Monthly'], ['year', 'Yearly'], ['', 'One-time']]
+            .map(([v, l]) => `<option value="${v}"${c.interval === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        </div>
+        <label>What it includes <textarea data-k="details" rows="3" placeholder="One point per line">${esc(c.details)}</textarea></label>
+      </div>`).join('');
+    updateCount();
+  };
   const updateCount = () => {
-    const units = new Set(picked().filter((el) => plans[el.dataset.i].interval).map((el) => intervalWord(plans[el.dataset.i].interval)));
+    const units = new Set([
+      ...picked().filter((el) => plans[el.dataset.i].interval).map((el) => intervalWord(plans[el.dataset.i].interval)),
+      ...customs.filter((c) => c.interval).map((c) => intervalWord(c.interval)),
+    ]);
     $('#count-label').textContent = units.size === 1 ? `Number of ${[...units][0]}s` : 'Number of payments';
   };
   $$('.plan-pick [data-k="on"]').forEach((cb) => cb.addEventListener('change', () => {
     cb.closest('.plan-pick').querySelector('.plan-edit').hidden = !cb.checked;
     updateCount();
   }));
+  $('#add-custom').addEventListener('click', () => {
+    customs.push({ name: '', amount: '', interval: 'month', details: '' });
+    renderCustoms();
+    $$('#customs [data-k="name"]').at(-1).focus();
+  });
+  const onCustom = (e) => {
+    const row = e.target.closest('[data-c]');
+    if (!row || !e.target.dataset.k) return;
+    customs[row.dataset.c][e.target.dataset.k] = e.target.value;
+    if (e.target.dataset.k === 'interval') updateCount();
+  };
+  $('#customs').addEventListener('input', onCustom);
+  $('#customs').addEventListener('change', onCustom);
+  $('#customs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-remove]');
+    if (!b) return;
+    customs.splice(Number(b.dataset.remove), 1);
+    renderCustoms();
+  });
   const pickInputs = (el) => ({ on: el.querySelector('[data-k="on"]'), name: el.querySelector('[data-k="name"]'), details: el.querySelector('[data-k="details"]') });
   if (draft) {
     fillFields(f, draft.fields);
@@ -1643,7 +1687,8 @@ async function offerFormPage() {
       i.on.checked = saved.on; i.name.value = saved.name; i.details.value = saved.details;
       el.querySelector('.plan-edit').hidden = !saved.on;
     }
-    updateCount();
+    customs.push(...(draft.customs || []));
+    renderCustoms();
     showDraftNotice(f, draft, 'plan choice', draftName);
   }
   autosave(f, () => saveDraft(draftName, {
@@ -1652,6 +1697,7 @@ async function offerFormPage() {
       const i = pickInputs(el);
       return [plans[el.dataset.i].price, { on: i.on.checked, name: i.name.value, details: i.details.value }];
     })),
+    customs,
   }));
   $('#cancel-form').addEventListener('click', () => clearDraft(draftName));
   f.addEventListener('submit', async (e) => {
@@ -1660,11 +1706,18 @@ async function offerFormPage() {
     $('#form-error').innerHTML = '';
     if (!f.client_name.value.trim()) return err('Client name is required.');
     const chosen = picked();
-    if (!chosen.length) return err('Tick at least one plan to offer.');
+    if (!chosen.length && !customs.length) return err('Tick a plan or add a custom option to offer.');
+    for (const c of customs) {
+      if (!c.name.trim()) return err('Give each custom option a name.');
+      if (!parseMoney(c.amount)) return err(`Enter an amount for “${c.name.trim()}”, like 45 or 45.00.`);
+    }
     const body = {
       id: newId, client_name: f.client_name.value, client_email: f.client_email.value, client_address: f.client_address.value,
       message: f.message.value, payments: Number(f.payments.value), hst_enabled: f.hst_enabled.checked,
-      options: chosen.map((el) => ({ price: plans[el.dataset.i].price, name: el.querySelector('[data-k="name"]').value, details: el.querySelector('[data-k="details"]').value })),
+      options: [
+        ...chosen.map((el) => ({ price: plans[el.dataset.i].price, name: el.querySelector('[data-k="name"]').value, details: el.querySelector('[data-k="details"]').value })),
+        ...customs.map((c) => ({ custom: true, name: c.name, amount_cents: parseMoney(c.amount), interval: c.interval || null, details: c.details })),
+      ],
     };
     await busy(f.querySelector('button[type="submit"]'), async () => {
       const { id } = await api('offers', { method: 'POST', body });

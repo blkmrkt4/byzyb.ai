@@ -220,7 +220,9 @@ async function recurringPrice(stripe, inv, { currency, amount, interval }) {
     const same = data.find((p) => p.currency === currency && p.unit_amount === amount && p.recurring?.interval === interval && (p.recurring?.interval_count ?? 1) === 1);
     if (same) return same;
   }
-  return stripe.post('/prices', { currency, unit_amount: amount, recurring: { interval }, ...productOf(inv, `Invoice ${inv.id}`) });
+  // What the client sees at checkout: what it's for, then the invoice number.
+  const what = String(inv.description || '').split('\n')[0].trim().slice(0, 60);
+  return stripe.post('/prices', { currency, unit_amount: amount, recurring: { interval }, ...productOf(inv, what ? `${what} · Invoice ${inv.id}` : `Invoice ${inv.id}`) });
 }
 
 // Which business a Stripe product belongs to, shown in front of its name in

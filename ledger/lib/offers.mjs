@@ -41,9 +41,21 @@ export function listOffers(db, { open = false } = {}) {
   return db.prepare(`SELECT * FROM plan_offers ${where} ORDER BY created_at DESC`).all().map((r) => shape(db, r));
 }
 
-// options: [{ price, name?, details? }]. Amount, currency, interval and product
-// come from the matching Stripe price in `catalogue` (from listProductPrices),
-// so what the client sees is what Stripe charges.
+// options: [{ price, name?, details? }] for a Stripe price: amount, currency,
+// interval and product come from the matching price in `catalogue` (from
+// listProductPrices), so what the client sees is what Stripe charges.
+// Or [{ custom: true, name, amount_cents, interval: 'month' | 'year' | null, details? }]
+// for anything else, in input.currency; Stripe gets a price made for the invoice.
+function customOption(o, currency) {
+  const name = String(o.name || '').trim().slice(0, 80);
+  if (!name) throw new LedgerError('Give each custom option a name');
+  const amount = Number(o.amount_cents);
+  if (!Number.isInteger(amount) || amount <= 0) throw new LedgerError(`Enter an amount for “${name}”`);
+  const interval = o.interval || null;
+  if (interval && !INTERVALS[interval]) throw new LedgerError(`“${name}” must be monthly, yearly or one-time`);
+  return { price: null, product: null, custom: true, name, details: String(o.details || '').trim().slice(0, 1500), amount_cents: amount, currency, interval };
+}
+
 export function createOffer(db, input, catalogue) {
   const client_name = String(input.client_name || '').trim();
   if (!client_name) throw new LedgerError('Client name is required');
@@ -54,7 +66,11 @@ export function createOffer(db, input, catalogue) {
   const picked = Array.isArray(input.options) ? input.options : [];
   if (picked.length < 1) throw new LedgerError('Pick at least one plan to offer');
   if (picked.length > 4) throw new LedgerError('Offer at most four plans');
+  const fromStripe = picked.filter((o) => !o.custom).map((o) => catalogue.find((c) => c.price === o.price)).filter(Boolean);
+  const currency = String(fromStripe[0]?.currency || input.currency || 'CAD').toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency)) throw new LedgerError('Currency must be a 3-letter code');
   const options = picked.map((o, i) => {
+    if (o.custom) return { key: String(i + 1), ...customOption(o, currency) };
     const p = catalogue.find((c) => c.price === o.price);
     if (!p) throw new LedgerError('One of those plans isn’t an active price in Stripe any more. Reload and pick again.');
     return {
@@ -65,7 +81,8 @@ export function createOffer(db, input, catalogue) {
     };
   });
   if (new Set(options.map((o) => o.currency)).size > 1) throw new LedgerError('All the plans need to be in the same currency');
-  if (new Set(options.map((o) => o.price)).size !== options.length) throw new LedgerError('Each plan can only be offered once');
+  const prices = options.filter((o) => o.price).map((o) => o.price);
+  if (new Set(prices).size !== prices.length) throw new LedgerError('Each plan can only be offered once');
 
   return tx(db, () => {
     const wanted = String(input.id || '').toUpperCase();

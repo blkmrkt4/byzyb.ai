@@ -1148,3 +1148,28 @@ test('Stripe products are labelled by business, PK Labs first', async () => {
   const list = await listProductPrices(stripe);
   assert.deepEqual(list.map((p) => [p.brand, p.name]), [['PK Labs', 'Website Hosting'], ['EZSay', 'Individual'], ['Side project', 'Thing']]);
 });
+
+test('a custom option needs no Stripe product and becomes a normal invoice', async () => {
+  const O = await import('../lib/offers.mjs');
+  const db = fresh();
+  const id = O.createOffer(db, { client_name: 'Cavera Insurance', hst_enabled: false, payments: 6, options: [
+    { price: 'price_host' },
+    { custom: true, name: 'Hosting, friends rate', amount_cents: 4500, interval: 'month', details: 'Hosting\nBackups' },
+  ] }, PLANS);
+  const o = O.getOffer(db, id);
+  assert.deepEqual(o.options.map((x) => [x.name, x.amount_cents, x.currency, x.product]), [['Website Hosting', 6000, 'CAD', 'prod_host'], ['Hosting, friends rate', 4500, 'CAD', null]]);
+  const out = O.chooseOffer(db, o.public_token, '2', '2026-11-20');
+  const inv = L.getInvoice(db, out.invoice_id);
+  assert.equal(inv.schedule, 'monthly');
+  assert.equal(inv.lines.length, 6);
+  assert.deepEqual([...new Set(inv.lines.map((l) => l.amount_cents))], [4500]);
+  assert.equal(inv.stripe_product, null);
+  assert.equal(inv.line_items[0].description, 'Hosting, friends rate: 6 months × $45.00');
+
+  assert.throws(() => O.createOffer(db, { client_name: 'X', options: [{ custom: true, name: '', amount_cents: 100 }] }, PLANS), /name/);
+  assert.throws(() => O.createOffer(db, { client_name: 'X', options: [{ custom: true, name: 'A', amount_cents: 0 }] }, PLANS), /amount/);
+  assert.throws(() => O.createOffer(db, { client_name: 'X', options: [{ custom: true, name: 'A', amount_cents: 100, interval: 'week' }] }, PLANS), /monthly, yearly or one-time/);
+  // On its own, a custom option is in CAD; next to a USD plan it follows that plan.
+  const usd = O.createOffer(db, { client_name: 'Y', options: [{ custom: true, name: 'A', amount_cents: 100 }] }, PLANS);
+  assert.equal(O.getOffer(db, usd).options[0].currency, 'CAD');
+});
