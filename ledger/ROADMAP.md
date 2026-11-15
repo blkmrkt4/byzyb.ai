@@ -71,3 +71,7 @@ auto-matches deposits to payouts and manual payments; the rest are matched by ha
   Settings; 3 days before due, then 1, 7 and 21 days late, 9 am to 6 pm Toronto; per-invoice
   opt-out and "Send a reminder now". Duplicate invoice from any invoice page. The first admins
   come from the ADMIN_EMAILS variable, used only when the access list is empty.
+- Monthly plans shipped 2026-11-15. Monthly and yearly invoices take the amount per payment
+  ("$60 a month × 12"), with HST worked out per payment so every payment is equal. An invoice
+  can start from a Stripe product; its charges and subscription are filed under that product,
+  reusing the product's price when the amount matches.
