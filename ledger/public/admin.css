@@ -302,3 +302,5 @@ body.read-only .setup-list button{display:none!important}
 .inline-form[hidden]{display:none}
 .lede{margin:-6px 0 18px;max-width:75ch}
 .panel + .actions{margin-top:18px}
+.draft-notice{margin-bottom:14px}
+.draft-notice .link-btn{color:var(--deep);font-weight:650;text-decoration:underline;opacity:1}

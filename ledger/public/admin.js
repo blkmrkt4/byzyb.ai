@@ -72,6 +72,57 @@ async function busy(btn, fn) {
   try { return await fn(); } catch (err) { toast(err.message, true); return undefined; } finally { if (btn) btn.disabled = false; }
 }
 
+// ---------- drafts ----------
+// A half-filled form is kept in this browser as you type, so leaving the page
+// to check something doesn't lose it. Cleared when the form is saved or cancelled.
+
+const DRAFT_DAYS = 14;
+const draftKey = (name) => `ledger-draft:${config.me?.email || ''}:${name}`;
+function loadDraft(name) {
+  try {
+    const d = JSON.parse(localStorage.getItem(draftKey(name)) || 'null');
+    return d && Date.now() - d.at < DRAFT_DAYS * DAY_MS ? d : null;
+  } catch { return null; }
+}
+function saveDraft(name, data) {
+  try { localStorage.setItem(draftKey(name), JSON.stringify({ ...data, at: Date.now() })); } catch { /* storage full or blocked: nothing to do */ }
+}
+function clearDraft(name) {
+  try { localStorage.removeItem(draftKey(name)); } catch { /* ignore */ }
+}
+// Named fields only; anything else a form keeps in its own state.
+function formFields(f) {
+  const out = {};
+  for (const el of f.elements) {
+    if (!el.name || el.type === 'submit' || el.type === 'button') continue;
+    if (el.type === 'checkbox') out[el.name] = el.checked;
+    else if (el.type === 'radio') { if (el.checked) out[el.name] = el.value; } else out[el.name] = el.value;
+  }
+  return out;
+}
+function fillFields(f, vals = {}) {
+  for (const el of f.elements) {
+    if (!el.name || !(el.name in vals)) continue;
+    if (el.type === 'checkbox') el.checked = !!vals[el.name];
+    else if (el.type === 'radio') el.checked = el.value === vals[el.name];
+    else el.value = vals[el.name];
+  }
+}
+// Saves after the first real edit, then on every change after that.
+function autosave(f, save) {
+  let dirty = false;
+  const now = () => { dirty = true; save(); };
+  f.addEventListener('input', now);
+  f.addEventListener('change', now);
+  // Buttons like "Add line item" change the form without an input event.
+  f.addEventListener('click', () => { if (dirty) setTimeout(save, 0); });
+}
+function showDraftNotice(f, draft, what, name) {
+  const when = new Date(draft.at).toLocaleString('en-CA', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Toronto' });
+  f.insertAdjacentHTML('beforebegin', `<div class="notice draft-notice">Picked up where you left off: this ${esc(what)} was saved in this browser on ${esc(when.replace(/\.$/, ''))}. <button type="button" class="link-btn" id="discard-draft">Start over</button></div>`);
+  $('#discard-draft').addEventListener('click', () => { clearDraft(name); route(); });
+}
+
 // Mirrors lib/ledger.mjs so the form can preview the schedule.
 function addInterval(date, schedule, n) {
   if (n === 0 || schedule === 'one_time' || schedule === 'split') return date;
@@ -309,7 +360,9 @@ async function formPage(id) {
   // A duplicate keeps the gap between issue date and each due date.
   const shift = dup ? daysFrom(dup.issue_date, config.today) : 0;
   const { clients: clientNames } = await api('clients');
-  const newId = inv ? null : (await api('next-id')).id;
+  const draftName = inv ? `edit:${inv.id}` : `new${location.search}`;
+  const draft = loadDraft(draftName);
+  const newId = inv ? null : draft?.id || (await api('next-id')).id;
   const invNo = inv?.id || newId;
   if (inv?.voided_at) throw new Error('A void invoice can’t be edited.');
   const full = !inv || (!inv.sent_date && !inv.paid_cents && !inv.stripe_link_id);
@@ -387,10 +440,20 @@ async function formPage(id) {
       <p class="muted small">The client pays from their invoice page, with a Pay button for each payment. You can email it once the invoice is created.</p>
       <div id="form-error"></div>
       <div class="actions"><button class="btn" type="submit">${inv ? 'Save changes' : 'Create invoice'}</button>
-        <a class="btn btn-quiet" href="${inv ? `/admin/invoices/${inv.id}` : '/admin/invoices'}" data-nav>Cancel</a></div>
+        <a class="btn btn-quiet" id="cancel-form" href="${inv ? `/admin/invoices/${inv.id}` : '/admin/invoices'}" data-nav>Cancel</a></div>
     </form>`;
 
   const f = $('#inv');
+  if (draft) {
+    fillFields(f, draft.fields);
+    Object.assign(state, draft.state || {});
+    showDraftNotice(f, draft, inv ? 'edit' : 'invoice', draftName);
+  }
+  autosave(f, () => saveDraft(draftName, {
+    id: newId, fields: formFields(f),
+    state: { items: state.items, lines: state.lines, linesEdited: state.linesEdited, product: state.product },
+  }));
+  $('#cancel-form').addEventListener('click', () => clearDraft(draftName));
 
   // Picking a saved client fills in their email and address if those are empty.
   async function clientLookup() {
@@ -408,7 +471,7 @@ async function formPage(id) {
     }
   }
   f.client_name.addEventListener('change', clientLookup);
-  if (pre?.client_name) clientLookup();
+  if (f.client_name.value.trim()) clientLookup();
 
   // Mirrors computeTotals in lib/ledger.mjs. For monthly and yearly invoices
   // "each" means the amount entered is per payment, and HST is worked out per
@@ -589,10 +652,12 @@ async function formPage(id) {
     try {
       if (inv) {
         const out = await api(`invoices/${inv.id}/edit`, { method: 'POST', body });
+        clearDraft(draftName);
         toast(out.changed.length ? 'Saved' : 'No changes');
         go(`/admin/invoices/${inv.id}`, true);
       } else {
         const out = await api('invoices', { method: 'POST', body });
+        clearDraft(draftName);
         toast(out.id === newId ? `Invoice ${out.id} created` : `Invoice ${out.id} created (${newId} was taken, so it got a new number)`);
         if (out.link_error) setTimeout(() => toast(`Invoice created, but the Stripe link failed: ${out.link_error}`, true), 400);
         go(`/admin/invoices/${out.id}`, true);
@@ -1509,7 +1574,10 @@ const DEFAULT_OFFER_MESSAGE = 'Here are the ways we can look after your website 
 
 async function offerFormPage() {
   if (!config.stripe) throw new Error('Plan choices use your Stripe products, and Stripe isn’t connected.');
-  const [{ products = [], error }, { id: newId }, { clients: clientNames }] = await Promise.all([api('stripe-products'), api('next-id'), api('clients')]);
+  const draftName = 'offer-new';
+  const draft = loadDraft(draftName);
+  const [{ products = [], error }, { id: freshId }, { clients: clientNames }] = await Promise.all([api('stripe-products'), api('next-id'), api('clients')]);
+  const newId = draft?.id || freshId;
   const plans = products.filter((p) => p.interval).sort((a, b) => a.amount_cents - b.amount_cents);
   document.title = 'New plan choice | Painkiller Labs admin';
   app.innerHTML = `
@@ -1543,7 +1611,7 @@ async function offerFormPage() {
         <p class="muted small">The first payment is due the day they choose. With a Stripe subscription set up for them, each payment after that is charged automatically, and it stops after the last one.</p>
       </div>
       <div id="form-error"></div>
-      <div class="actions"><button class="btn" type="submit">Create plan choice</button><a class="btn btn-quiet" href="/admin/invoices" data-nav>Cancel</a></div>
+      <div class="actions"><button class="btn" type="submit">Create plan choice</button><a class="btn btn-quiet" id="cancel-form" href="/admin/invoices" data-nav>Cancel</a></div>
     </form>`;
   const f = $('#offer');
   f.client_name.addEventListener('change', async () => {
@@ -1564,6 +1632,27 @@ async function offerFormPage() {
     cb.closest('.plan-pick').querySelector('.plan-edit').hidden = !cb.checked;
     updateCount();
   }));
+  const pickInputs = (el) => ({ on: el.querySelector('[data-k="on"]'), name: el.querySelector('[data-k="name"]'), details: el.querySelector('[data-k="details"]') });
+  if (draft) {
+    fillFields(f, draft.fields);
+    for (const el of $$('.plan-pick')) {
+      const saved = draft.picks?.[plans[el.dataset.i].price];
+      if (!saved) continue;
+      const i = pickInputs(el);
+      i.on.checked = saved.on; i.name.value = saved.name; i.details.value = saved.details;
+      el.querySelector('.plan-edit').hidden = !saved.on;
+    }
+    updateCount();
+    showDraftNotice(f, draft, 'plan choice', draftName);
+  }
+  autosave(f, () => saveDraft(draftName, {
+    id: newId, fields: formFields(f),
+    picks: Object.fromEntries($$('.plan-pick').map((el) => {
+      const i = pickInputs(el);
+      return [plans[el.dataset.i].price, { on: i.on.checked, name: i.name.value, details: i.details.value }];
+    })),
+  }));
+  $('#cancel-form').addEventListener('click', () => clearDraft(draftName));
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
     const err = (m) => { $('#form-error').innerHTML = `<div class="notice bad">${esc(m)}</div>`; };
@@ -1578,6 +1667,7 @@ async function offerFormPage() {
     };
     await busy(f.querySelector('button[type="submit"]'), async () => {
       const { id } = await api('offers', { method: 'POST', body });
+      clearDraft(draftName);
       toast(`Plan choice ${id} created`);
       go(`/admin/offers/${id}`, true);
     });
