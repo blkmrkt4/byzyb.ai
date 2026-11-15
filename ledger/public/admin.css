@@ -144,6 +144,8 @@ label>input,label>select,label>textarea{margin-top:5px;font-weight:400}
   .bar-in{flex-wrap:wrap;row-gap:0;padding-top:8px}
   .brand{flex:1}
   .admin-nav{order:3;flex-basis:100%;overflow-x:auto;padding-bottom:8px}
+  .me{display:none}
+  .toggle-row{flex-direction:column}
 }
 
 /* Utilities */
@@ -153,7 +155,7 @@ fieldset.plain>*+*{margin-top:14px}
 .mono-h{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.04em;margin-right:6px}
 .tbl input{padding:6px 9px;font-size:14px}
 .tbl td.num input{text-align:right;max-width:140px}
-.tbl .link-btn{color:var(--deep);text-decoration:underline;margin-left:6px}
+.subpanel p .link-btn,.tbl .link-btn{color:var(--deep);text-decoration:underline;margin-left:6px}
 .tbl .link-btn:hover{color:var(--bad)}
 
 /* Dashboard */
@@ -206,6 +208,18 @@ a.tile:hover{border-color:var(--ink)}
 .tbl.report tr.group td{background:#F4F6F9;font-weight:650}
 .statement-head{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap}
 .print-head{display:none}
+
+/* Read-only people: hide everything that changes data. The server refuses those requests anyway. */
+body.read-only #app :is(button, a.btn):not([data-ro]):not([download]):not([target="_blank"]),
+body.read-only #app :is(.match-row, form.import, .ignore-form),
+body.read-only .setup-list button{display:none!important}
+.me{color:var(--soft);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+.toggle-row{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
+.toggle-row p{margin:4px 0 0}
+.small-h{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:6px 0 8px}
+.merge-row{display:flex;gap:8px;align-items:center}
+.merge-row select{max-width:360px}
+.tbl td select{width:auto;font-size:14px;padding:6px 8px}
 
 /* Bank */
 .payouts{display:grid;gap:8px}

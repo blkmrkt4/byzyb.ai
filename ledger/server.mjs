@@ -7,6 +7,7 @@ import { openDb } from './lib/db.mjs';
 import * as L from './lib/ledger.mjs';
 import * as R from './lib/reports.mjs';
 import * as B from './lib/bank.mjs';
+import * as RM from './lib/reminders.mjs';
 import * as A from './lib/auth.mjs';
 import { sendLoginEmail, sendInvoiceEmail } from './lib/email.mjs';
 import { renderInvoicePage, renderNotFound, invoiceEmail } from './lib/invoice-page.mjs';
@@ -26,6 +27,8 @@ export function makeConfig(env = process.env) {
     siteUrl: (env.SITE_URL || 'https://www.painkiller-labs.com').replace(/\/$/, ''),
     dbFile: env.DB_FILE || path.join(env.DATA_DIR || path.join(here, 'data'), 'ledger.db'),
     adminEmail: env.ADMIN_EMAIL || 'rh@pklabs.ca',
+    // Admins added the first time the ledger starts with an empty access list.
+    bootstrapAdmins: (env.ADMIN_EMAILS || env.ADMIN_EMAIL || 'rh@pklabs.ca').split(/[\s,;]+/).filter(Boolean),
     emailFrom: env.EMAIL_FROM || 'Painkiller Labs <admin@painkiller-labs.com>',
     resendKey: env.RESEND_API_KEY || '',
     stripeKey: env.STRIPE_SECRET_KEY || '',
@@ -112,6 +115,11 @@ function authPage(heading, inner) {
 
 export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEmail = sendLoginEmail, sendInvoice = sendInvoiceEmail, log = console } = {}) {
   const shell = fs.readFileSync(path.join(here, 'public', 'admin.html'), 'utf8');
+  A.seedUsers(db, cfg.bootstrapAdmins);
+  const reminderOpts = {
+    business: cfg.business, publicUrl: cfg.publicUrl,
+    send: (m) => sendInvoice({ ...m, replyTo: cfg.adminEmail, apiKey: cfg.resendKey, from: cfg.emailFrom }),
+  };
 
   async function handleWebhook(req, res) {
     const raw = await readBody(req, 2_000_000);
@@ -143,8 +151,9 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
     return json(res, 200, { received: true, ...out });
   }
 
-  async function handleApi(req, res, url, parts) {
+  async function handleApi(req, res, url, parts, user) {
     const method = req.method;
+    const isAdmin = user.role === 'admin';
     // A custom header can't be sent cross-site without a CORS preflight, which
     // this server never allows, so it blocks cross-site form posts.
     if (method !== 'GET' && req.headers['x-ledger'] !== '1') return json(res, 403, { error: 'Missing X-Ledger header' });
@@ -152,9 +161,14 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
     const limit = a === 'bank' && b === 'import' ? 8_000_000 : 1_000_000;
     const body = method === 'GET' ? {} : JSON.parse((await readBody(req, limit)) || '{}');
     const q = Object.fromEntries(url.searchParams);
+    // Read-only people can look at everything except the access list, and change nothing.
+    if (!isAdmin && (method !== 'GET' || ['users', 'settings'].includes(a))) {
+      return json(res, 403, { error: 'You have read-only access. Ask an admin to make this change.' });
+    }
 
     if (method === 'GET' && a === 'config') {
       return json(res, 200, {
+        me: user, reminders: RM.remindersEnabled(db),
         stripe: !!stripe, email: !!cfg.resendKey, admin_email: cfg.adminEmail, today: L.todayToronto(),
         public_url: cfg.publicUrl, hst_number: cfg.business.hstNumber,
       });
@@ -166,7 +180,24 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
     }
     if (method === 'GET' && a === 'reports') return reportsApi(res, b, q);
     if (a === 'bank' || a === 'bank.csv') return bankApi(req, res, method, parts, body, q);
-    if (method === 'GET' && a === 'clients') return json(res, 200, { clients: L.listClients(db) });
+    if (a === 'users') {
+      if (method === 'GET' && !b) return json(res, 200, { users: A.listUsers(db), roles: A.ROLES, me: user.email });
+      if (method === 'POST' && !b) return json(res, 201, { user: A.addUser(db, body, user.email) });
+      if (method === 'POST' && b && c === 'remove') { A.removeUser(db, b, user.email); return json(res, 200, { ok: true }); }
+      if (method === 'POST' && b && !c) return json(res, 200, { user: A.updateUser(db, b, body, user.email) });
+    }
+    if (a === 'settings') {
+      if (method === 'GET' && !b) return json(res, 200, { reminders: RM.remindersEnabled(db), stages: RM.STAGES, due_today: RM.dueReminders(db), email: !!cfg.resendKey });
+      if (method === 'POST' && b === 'reminders') { RM.setRemindersEnabled(db, !!body.enabled); return json(res, 200, { ok: true }); }
+    }
+    if (a === 'clients') {
+      if (method === 'GET' && !b) return json(res, 200, { clients: L.listClients(db) });
+      if (method === 'GET' && b === 'all') return json(res, 200, { clients: L.clientsOverview(db) });
+      if (method === 'GET' && b === 'lookup') return json(res, 200, { client: L.findClientByName(db, q.name) });
+      if (method === 'GET' && b) return json(res, 200, L.getClient(db, b));
+      if (method === 'POST' && b && c === 'merge') return json(res, 200, L.mergeClients(db, b, body.into));
+      if (method === 'POST' && b && !c) return json(res, 200, L.updateClient(db, b, body));
+    }
     if (method === 'GET' && a === 'next-id') return json(res, 200, { id: L.nextInvoiceId(db) });
     if (method === 'GET' && a === 'invoices' && !b) return json(res, 200, { invoices: L.listInvoices(db, q), clients: L.listClients(db) });
     if (method === 'GET' && a === 'invoices.csv') {
@@ -186,6 +217,8 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
       if (c === 'void') { L.voidInvoice(db, b, body.reason); return json(res, 200, { ok: true }); }
       if (c === 'payments') return json(res, 201, { id: L.recordManualPayment(db, body) });
       if (c === 'email') return json(res, 200, await emailInvoice(b, body.to));
+      if (c === 'remind') return json(res, 200, await RM.sendManualReminder(db, b, body, reminderOpts));
+      if (c === 'reminders') { RM.setInvoiceReminders(db, b, !!body.on); return json(res, 200, { ok: true }); }
       if (c === 'lines' && parts[3] && parts[4] === 'due') {
         L.setLineDueDate(db, b, parts[3], body.due_date);
         return json(res, 200, { ok: true });
@@ -389,19 +422,19 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
     if (p === '/admin/login' && req.method === 'GET') {
       const sent = url.searchParams.get('sent') === '1';
       return send(res, 200, authPage('Sign in', sent
-        ? `<p>If that address is the admin's, a sign-in link is on its way. It works once and expires in 15 minutes.</p><p><a href="/admin/login">Send another link</a></p>`
-        : `<p>We'll email a one-time sign-in link to the admin address.</p>
+        ? `<p>If that address is on the access list, a sign-in link is on its way. It works once and expires in 15 minutes.</p><p><a href="/admin/login">Send another link</a></p>`
+        : `<p>Enter your email. If you're on the access list, we'll send you a one-time sign-in link.</p>
            <form method="post" action="/admin/login" class="stack">
-             <label>Email <input type="email" name="email" required autocomplete="email" value="${esc(cfg.adminEmail)}"></label>
+             <label>Email <input type="email" name="email" required autocomplete="email" autofocus></label>
              <button class="btn" type="submit">Email me a sign-in link</button>
            </form>`));
     }
     if (p === '/admin/login' && req.method === 'POST') {
       const email = new URLSearchParams(await readBody(req, 10_000)).get('email');
-      const raw = A.issueLoginToken(db, email, cfg.adminEmail);
-      if (raw) {
-        const link = `${cfg.publicUrl}/admin/auth?token=${encodeURIComponent(raw)}`;
-        try { await sendEmail({ to: cfg.adminEmail, link, apiKey: cfg.resendKey, from: cfg.emailFrom }); }
+      const issued = A.issueLoginToken(db, email);
+      if (issued) {
+        const link = `${cfg.publicUrl}/admin/auth?token=${encodeURIComponent(issued.raw)}`;
+        try { await sendEmail({ to: issued.email, link, apiKey: cfg.resendKey, from: cfg.emailFrom }); }
         catch (err) { log.error('[ledger] sign-in email failed:', err.message); }
       }
       return redirect(res, '/admin/login?sent=1');
@@ -424,7 +457,8 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
       return redirect(res, '/admin/dashboard', { 'Set-Cookie': A.sessionCookie(session, cfg.secureCookies) });
     }
     if (p === '/admin/dev-login' && cfg.devLogin && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress)) {
-      return redirect(res, '/admin/dashboard', { 'Set-Cookie': A.sessionCookie(A.createSession(db), false) });
+      const who = A.getUser(db, url.searchParams.get('as') || '') || db.prepare("SELECT email FROM users WHERE role = 'admin' AND removed_at IS NULL LIMIT 1").get();
+      return redirect(res, '/admin/dashboard', { 'Set-Cookie': A.sessionCookie(A.createSession(db, who.email), false) });
     }
     if (p === '/admin/logout' && req.method === 'POST') {
       A.endSession(db, req);
@@ -432,12 +466,12 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
     }
 
     if (p === '/admin' || p.startsWith('/admin/')) {
-      const authed = A.sessionValid(db, req);
+      const user = A.sessionUser(db, req);
       if (p.startsWith('/admin/api/')) {
-        if (!authed) return json(res, 401, { error: 'Signed out' });
-        return handleApi(req, res, url, p.slice('/admin/api/'.length).split('/').map(decodeURIComponent));
+        if (!user) return json(res, 401, { error: 'Signed out' });
+        return L.actor.run(user, () => handleApi(req, res, url, p.slice('/admin/api/'.length).split('/').map(decodeURIComponent), user));
       }
-      if (!authed) return redirect(res, '/admin/login');
+      if (!user) return redirect(res, '/admin/login');
       if (p === '/admin') return redirect(res, '/admin/dashboard');
       return send(res, 200, shell);
     }
@@ -474,4 +508,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log(`[ledger] listening on :${cfg.port} · db ${cfg.dbFile} · stripe ${cfg.stripeKey ? 'on' : 'off'} · email ${cfg.resendKey ? 'resend' : 'log only'}`);
     if (!cfg.webhookSecret) console.warn('[ledger] STRIPE_WEBHOOK_SECRET is not set; webhooks will be rejected.');
   });
+  // Payment reminders: checked hourly, sent only when switched on and during the working day.
+  const reminderOpts = {
+    business: cfg.business, publicUrl: cfg.publicUrl,
+    send: (m) => sendInvoiceEmail({ ...m, replyTo: cfg.adminEmail, apiKey: cfg.resendKey, from: cfg.emailFrom }),
+  };
+  const tick = () => L.actor.run({ email: 'automatic reminders' }, () => RM.runReminders(db, reminderOpts))
+    .then((r) => { if (r.sent || r.failed) console.log('[ledger] reminders', r); })
+    .catch((err) => console.error('[ledger] reminders run failed', err));
+  setTimeout(tick, 2 * 60_000).unref();
+  setInterval(tick, 60 * 60_000).unref();
 }

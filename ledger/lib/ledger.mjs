@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { tx } from './db.mjs';
 import { randomInvoiceId, randomToken, isInvoiceId, lineRef, findRefs } from './ids.mjs';
 
@@ -23,9 +24,13 @@ export function todayToronto(d = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto' }).format(d);
 }
 
+// Who is making the current request, so the history can say who did what.
+// The server runs each signed-in request inside actor.run({ email }, ...).
+export const actor = new AsyncLocalStorage();
+
 export function audit(db, entity, entityId, action, detail = {}) {
-  db.prepare('INSERT INTO audit_log (at, entity, entity_id, action, detail) VALUES (?, ?, ?, ?, ?)')
-    .run(nowIso(), entity, String(entityId), action, JSON.stringify(detail));
+  db.prepare('INSERT INTO audit_log (at, entity, entity_id, action, detail, actor) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(nowIso(), entity, String(entityId), action, JSON.stringify(detail), actor.getStore()?.email ?? null);
 }
 
 // ---------- money and schedule ----------
@@ -185,6 +190,10 @@ export function getInvoice(db, id, today = todayToronto()) {
       payments: payments.filter((p) => p.payment_line_id === l.id).map(publicPayment),
     })),
     history: history.map((h) => ({ ...h, detail: JSON.parse(h.detail) })),
+    reminders: db.prepare(`
+      SELECT r.id, r.kind, r.sent_to, r.sent_at, r.error, pl.suffix FROM reminders r
+        JOIN payment_lines pl ON pl.id = r.line_id WHERE r.invoice_id = ? ORDER BY r.id DESC`).all(inv.id)
+      .map((r) => ({ ...r, ref: lineRef(inv.id, r.suffix) })),
   };
 }
 
@@ -195,8 +204,112 @@ export function getInvoiceByToken(db, token, today = todayToronto()) {
   return getInvoice(db, row.id, today);
 }
 
+// Client names for pickers: saved clients plus any name still on an invoice.
 export function listClients(db) {
-  return db.prepare('SELECT DISTINCT client_name FROM invoices ORDER BY client_name COLLATE NOCASE').all().map((r) => r.client_name);
+  return db.prepare(`
+    SELECT name FROM clients WHERE archived_at IS NULL
+    UNION SELECT client_name FROM invoices ORDER BY 1 COLLATE NOCASE`).all().map((r) => r.name);
+}
+
+// ---------- saved clients ----------
+
+// Finds the client by name (ignoring case) or creates them, so "Acme Dental"
+// and "acme dental" are one client with one balance. The newest email and
+// address typed on an invoice become the client's.
+function saveClientFromInvoice(db, { client_name, client_email = '', client_address = '' }) {
+  const name = String(client_name).trim();
+  let c = db.prepare('SELECT * FROM clients WHERE name = ? COLLATE NOCASE').get(name);
+  const now = nowIso();
+  if (!c) {
+    const r = db.prepare('INSERT INTO clients (name, email, address, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+      .run(name, client_email, client_address, now, now);
+    audit(db, 'client', Number(r.lastInsertRowid), 'client_create', { name });
+    return db.prepare('SELECT * FROM clients WHERE id = ?').get(Number(r.lastInsertRowid));
+  }
+  const email = client_email || c.email;
+  const address = client_address || c.address;
+  if (email !== c.email || address !== c.address || c.archived_at) {
+    db.prepare('UPDATE clients SET email = ?, address = ?, archived_at = NULL, updated_at = ? WHERE id = ?').run(email, address, now, c.id);
+    c = { ...c, email, address, archived_at: null };
+  }
+  return c;
+}
+
+export function clientsOverview(db, today = todayToronto()) {
+  const invs = listInvoices(db, {}, today);
+  const clients = db.prepare('SELECT * FROM clients WHERE archived_at IS NULL ORDER BY name COLLATE NOCASE').all();
+  return clients.map((c) => {
+    const mine = invs.filter((i) => i.client_id === c.id);
+    const owed = {};
+    for (const i of mine) if (!i.voided_at && i.outstanding_cents) owed[i.currency] = (owed[i.currency] || 0) + i.outstanding_cents;
+    return {
+      ...c,
+      invoices: mine.filter((i) => !i.voided_at).length,
+      open: mine.filter((i) => !i.voided_at && i.outstanding_cents > 0).length,
+      overdue: mine.some((i) => i.status === 'Overdue'),
+      owed,
+      last_invoice: mine.map((i) => i.issue_date).sort().at(-1) || null,
+    };
+  });
+}
+
+export function getClient(db, id, today = todayToronto()) {
+  const c = db.prepare('SELECT * FROM clients WHERE id = ?').get(Number(id));
+  if (!c) throw new LedgerError('Client not found', 404);
+  const invoices = listInvoices(db, {}, today).filter((i) => i.client_id === c.id);
+  const history = db.prepare("SELECT * FROM audit_log WHERE entity = 'client' AND entity_id = ? ORDER BY id DESC").all(String(c.id))
+    .map((h) => ({ ...h, detail: JSON.parse(h.detail) }));
+  return { ...c, invoices, history };
+}
+
+export function findClientByName(db, name) {
+  return db.prepare('SELECT * FROM clients WHERE name = ? COLLATE NOCASE AND archived_at IS NULL').get(String(name || '').trim()) || null;
+}
+
+// Renaming a client renames them on their invoices too, so reports and
+// statements keep them together.
+export function updateClient(db, id, input) {
+  return tx(db, () => {
+    const c = db.prepare('SELECT * FROM clients WHERE id = ?').get(Number(id));
+    if (!c) throw new LedgerError('Client not found', 404);
+    const next = {
+      name: input.name === undefined ? c.name : String(input.name).trim(),
+      email: input.email === undefined ? c.email : String(input.email).trim(),
+      address: input.address === undefined ? c.address : String(input.address).trim(),
+      notes: input.notes === undefined ? c.notes : String(input.notes).trim(),
+    };
+    if (!next.name) throw new LedgerError('Client name is required');
+    if (next.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(next.email)) throw new LedgerError('That email address doesn’t look right');
+    const clash = db.prepare('SELECT id FROM clients WHERE name = ? COLLATE NOCASE AND id != ?').get(next.name, c.id);
+    if (clash) throw new LedgerError(`Another client is already called ${next.name}. Merge them instead.`);
+    const changes = {};
+    for (const k of Object.keys(next)) if (next[k] !== c[k]) changes[k] = { from: c[k], to: next[k] };
+    if (!Object.keys(changes).length) return { changed: [] };
+    db.prepare('UPDATE clients SET name = ?, email = ?, address = ?, notes = ?, updated_at = ? WHERE id = ?')
+      .run(next.name, next.email, next.address, next.notes, nowIso(), c.id);
+    if (changes.name) db.prepare('UPDATE invoices SET client_name = ? WHERE client_id = ?').run(next.name, c.id);
+    audit(db, 'client', c.id, 'client_edit', changes);
+    return { changed: Object.keys(changes) };
+  });
+}
+
+// Moves every invoice from one client to another and archives the first.
+export function mergeClients(db, fromId, intoId) {
+  return tx(db, () => {
+    const from = db.prepare('SELECT * FROM clients WHERE id = ?').get(Number(fromId));
+    const into = db.prepare('SELECT * FROM clients WHERE id = ? AND archived_at IS NULL').get(Number(intoId));
+    if (!from || !into) throw new LedgerError('Client not found', 404);
+    if (from.id === into.id) throw new LedgerError('Choose a different client to merge into');
+    const moved = db.prepare('UPDATE invoices SET client_id = ?, client_name = ? WHERE client_id = ?').run(into.id, into.name, from.id).changes;
+    // The archived record gives up its name so it can't clash later.
+    db.prepare('UPDATE clients SET archived_at = ?, name = ?, updated_at = ? WHERE id = ?')
+      .run(nowIso(), `${from.name} (merged into ${into.name} #${from.id})`, nowIso(), from.id);
+    if (!into.email && from.email) db.prepare('UPDATE clients SET email = ? WHERE id = ?').run(from.email, into.id);
+    if (!into.address && from.address) db.prepare('UPDATE clients SET address = ? WHERE id = ?').run(from.address, into.id);
+    audit(db, 'client', into.id, 'client_merge', { from: from.name, invoices: moved });
+    audit(db, 'client', from.id, 'client_merged_into', { into: into.name, invoices: moved });
+    return { moved };
+  });
 }
 
 // Payment lines that can still take money, for assigning unmatched payments.
@@ -255,6 +368,7 @@ function cleanInput(input) {
   return {
     client_name,
     client_email: String(input.client_email || '').trim(),
+    client_address: String(input.client_address || '').trim(),
     description: String(input.description || '').trim(),
     currency,
     hst_enabled: input.hst_enabled !== false,
@@ -284,23 +398,24 @@ export function createInvoice(db, input) {
     const wanted = String(input.id || '').toUpperCase();
     const id = isInvoiceId(wanted) && !idTaken(db, wanted) ? wanted : nextInvoiceId(db);
     const now = nowIso();
+    const client = saveClientFromInvoice(db, v);
     db.prepare(`
-      INSERT INTO invoices (id, client_name, client_email, description, line_items, currency,
+      INSERT INTO invoices (id, client_id, client_name, client_email, client_address, description, line_items, currency,
         subtotal_cents, hst_enabled, hst_cents, total_cents, schedule, issue_date, notes, public_token, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(id, v.client_name, v.client_email, v.description, JSON.stringify(v.line_items), v.currency,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(id, client.id, client.name, v.client_email, v.client_address, v.description, JSON.stringify(v.line_items), v.currency,
         v.subtotal_cents, v.hst_enabled ? 1 : 0, v.hst_cents, v.total_cents, v.schedule, v.issue_date, v.notes, randomToken(), now, now);
     const ins = db.prepare('INSERT INTO payment_lines (invoice_id, suffix, amount_cents, due_date, label) VALUES (?, ?, ?, ?, ?)');
     for (const l of v.lines) ins.run(id, l.suffix, l.amount_cents, l.due_date, l.label);
     audit(db, 'invoice', id, 'create', {
-      client_name: v.client_name, total_cents: v.total_cents, currency: v.currency,
+      client_name: client.name, total_cents: v.total_cents, currency: v.currency,
       schedule: v.schedule, payments: v.lines.length,
     });
     return id;
   });
 }
 
-const ALWAYS_EDITABLE = ['client_name', 'client_email', 'description', 'notes'];
+const ALWAYS_EDITABLE = ['client_name', 'client_email', 'client_address', 'description', 'notes'];
 
 export function updateInvoice(db, id, input) {
   const inv = requireInvoice(db, id);
@@ -316,7 +431,9 @@ export function updateInvoice(db, id, input) {
     const changes = {};
     if (fullyEditable) {
       const v = cleanInput({ ...input, issue_date: input.issue_date || inv.issue_date });
-      const fields = ['client_name', 'client_email', 'description', 'currency', 'subtotal_cents', 'hst_cents',
+      const client = saveClientFromInvoice(db, v);
+      v.client_name = client.name;
+      const fields = ['client_name', 'client_email', 'client_address', 'description', 'currency', 'subtotal_cents', 'hst_cents',
         'total_cents', 'schedule', 'issue_date', 'notes'];
       for (const f of fields) if (v[f] !== inv[f]) changes[f] = { from: inv[f], to: v[f] };
       if ((v.hst_enabled ? 1 : 0) !== inv.hst_enabled) changes.hst_enabled = { from: !!inv.hst_enabled, to: v.hst_enabled };
@@ -329,10 +446,10 @@ export function updateInvoice(db, id, input) {
         throw new LedgerError('Payments can’t be removed once created. Void the invoice and create a new one instead.');
       }
       db.prepare(`
-        UPDATE invoices SET client_name = ?, client_email = ?, description = ?, line_items = ?, currency = ?,
+        UPDATE invoices SET client_id = ?, client_name = ?, client_email = ?, client_address = ?, description = ?, line_items = ?, currency = ?,
           subtotal_cents = ?, hst_enabled = ?, hst_cents = ?, total_cents = ?, schedule = ?, issue_date = ?,
           notes = ?, updated_at = ? WHERE id = ?`)
-        .run(v.client_name, v.client_email, v.description, newItems, v.currency, v.subtotal_cents,
+        .run(client.id, v.client_name, v.client_email, v.client_address, v.description, newItems, v.currency, v.subtotal_cents,
           v.hst_enabled ? 1 : 0, v.hst_cents, v.total_cents, v.schedule, v.issue_date, v.notes, nowIso(), inv.id);
       if (linesChanged) {
         const upd = db.prepare('UPDATE payment_lines SET amount_cents = ?, due_date = ?, label = ? WHERE invoice_id = ? AND suffix = ?');
@@ -353,6 +470,11 @@ export function updateInvoice(db, id, input) {
         if (val !== inv[f]) { changes[f] = { from: inv[f], to: val }; sets.push(`${f} = ?`); vals.push(val); }
       }
       if (sets.length) db.prepare(`UPDATE invoices SET ${sets.join(', ')}, updated_at = ? WHERE id = ?`).run(...vals, nowIso(), inv.id);
+      if (changes.client_name || changes.client_email || changes.client_address) {
+        const after = requireInvoice(db, inv.id);
+        const client = saveClientFromInvoice(db, after);
+        db.prepare('UPDATE invoices SET client_id = ?, client_name = ? WHERE id = ?').run(client.id, client.name, inv.id);
+      }
     }
     if (Object.keys(changes).length) audit(db, 'invoice', inv.id, 'edit', changes);
     return { changed: Object.keys(changes), fullyEditable };

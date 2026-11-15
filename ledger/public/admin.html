@@ -14,9 +14,12 @@
     <nav class="admin-nav" aria-label="Admin">
       <a href="/admin/dashboard" data-nav>Dashboard</a>
       <a href="/admin/invoices" data-nav>Invoices</a>
+      <a href="/admin/clients" data-nav>Clients</a>
       <a href="/admin/reports" data-nav>Reports</a>
       <a href="/admin/bank" data-nav>Bank</a>
+      <a href="/admin/settings" data-nav data-admin-only hidden>Settings</a>
     </nav>
+    <span class="me" id="me"></span>
     <form method="post" action="/admin/logout"><button class="link-btn" type="submit">Sign out</button></form>
   </div>
 </header>

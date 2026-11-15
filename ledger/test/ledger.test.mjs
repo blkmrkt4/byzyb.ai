@@ -466,7 +466,7 @@ test('a paid or void invoice has no Pay buttons', async (t) => {
 test('emailing an invoice sends the client link and marks it sent', async (t) => {
   const { req, db, emails } = await server(t);
   const id = split(db, { client_email: 'pat@acme.test' });
-  const cookie = `pk_admin=${A.createSession(db)}`;
+  const cookie = `pk_admin=${A.createSession(db, 'rh@pklabs.ca')}`;
   const r = await req(`/admin/api/invoices/${id}/email`, { method: 'POST', body: '{}', headers: { cookie, 'x-ledger': '1' } });
   assert.equal(r.status, 200);
   const mail = emails.at(-1);
@@ -616,7 +616,7 @@ test('a client statement keeps a running balance', () => {
 
 test('the dashboard API includes the setup checklist, and items can be ticked off', async (t) => {
   const { req, db } = await server(t);
-  const cookie = `pk_admin=${A.createSession(db)}`;
+  const cookie = `pk_admin=${A.createSession(db, 'rh@pklabs.ca')}`;
   const get = async () => (await (await req('/admin/api/dashboard', { headers: { cookie } })).json()).setup;
   assert.deepEqual((await get()).map((s) => [s.key, s.done]), [['webhook_events', false], ['checkout', false], ['bank_read', false], ['hst_number', false]]);
   await req('/admin/api/setup/webhook_events', { method: 'POST', body: '{"done":true}', headers: { cookie, 'x-ledger': '1' } });
@@ -790,7 +790,7 @@ test('two identical deposits that could each be either payment are left for you 
 
 test('the bank API syncs, imports and matches', async (t) => {
   const { req, db } = await server(t, {}, { stripe: fakeStripe() });
-  const cookie = `pk_admin=${A.createSession(db)}`;
+  const cookie = `pk_admin=${A.createSession(db, 'rh@pklabs.ca')}`;
   const post = (p, body) => req(`/admin/api/${p}`, { method: 'POST', body: JSON.stringify(body), headers: { cookie, 'x-ledger': '1' } });
   const r = await (await req('/admin/api/bank?from=2026-11-01&to=2026-11-30', { headers: { cookie } })).json();
   assert.equal(r.sync_error, null);
@@ -806,4 +806,180 @@ test('the bank API syncs, imports and matches', async (t) => {
   const et = lines.find((l) => l.description.startsWith('E-TRANSFER'));
   assert.equal((await post(`bank/lines/${et.id}/ignore`, { note: 'personal' })).status, 200);
   assert.equal((await post('bank/import', { csv: 'nothing here' })).status, 400);
+});
+
+// ---------- access list ----------
+
+import * as RM from '../lib/reminders.mjs';
+
+test('only people on the access list get sign-in links, each to their own address', async (t) => {
+  const { req, db, emails } = await server(t, { bootstrapAdmins: ['Boss@pklabs.test', 'ps@pklabs.test'] });
+  // The list was empty, so the bootstrap admins were added.
+  assert.deepEqual(A.listUsers(db).map((u) => [u.email, u.role]), [['boss@pklabs.test', 'admin'], ['ps@pklabs.test', 'admin']]);
+  const post = (p, body) => req(p, { method: 'POST', body: new URLSearchParams(body), headers: { 'content-type': 'application/x-www-form-urlencoded' } });
+  await post('/admin/login', { email: 'rh@pklabs.ca' }); // not on this list
+  await post('/admin/login', { email: ' PS@pklabs.test ' });
+  assert.equal(emails.length, 1);
+  assert.equal(emails[0].to, 'ps@pklabs.test');
+  // Starting again with people already on the list doesn't add anyone.
+  assert.equal(A.seedUsers(db, ['new@x.test']), 0);
+});
+
+test('read-only people can look but not change anything or see the access list', async (t) => {
+  const { req, db } = await server(t);
+  A.addUser(db, { email: 'viewer@pklabs.test', role: 'viewer' }, 'rh@pklabs.ca');
+  const cookie = `pk_admin=${A.createSession(db, 'viewer@pklabs.test')}`;
+  const get = (p) => req(`/admin/api/${p}`, { headers: { cookie } });
+  const post = (p, body = {}) => req(`/admin/api/${p}`, { method: 'POST', body: JSON.stringify(body), headers: { cookie, 'x-ledger': '1' } });
+  assert.equal((await get('invoices')).status, 200);
+  assert.equal((await get('dashboard')).status, 200);
+  assert.equal((await (await get('config')).json()).me.role, 'viewer');
+  assert.equal((await get('users')).status, 403);
+  const r = await post('invoices', { client_name: 'X', subtotal_cents: 100 });
+  assert.equal(r.status, 403);
+  assert.match((await r.json()).error, /read-only/);
+  assert.equal(L.listInvoices(db).length, 0);
+});
+
+test('admins add, change and remove people; removal signs them out at once', async (t) => {
+  const { req, db } = await server(t);
+  const admin = `pk_admin=${A.createSession(db, 'rh@pklabs.ca')}`;
+  const post = (p, body = {}, cookie = admin) => req(`/admin/api/${p}`, { method: 'POST', body: JSON.stringify(body), headers: { cookie, 'x-ledger': '1' } });
+  assert.equal((await post('users', { email: 'Pat@Example.test', name: 'Pat', role: 'viewer' })).status, 201);
+  assert.equal((await post('users', { email: 'pat@example.test' })).status, 400); // already there
+  assert.equal((await post('users', { email: 'nope' })).status, 400);
+  const pat = `pk_admin=${A.createSession(db, 'pat@example.test')}`;
+  assert.equal((await post('invoices', { client_name: 'X', subtotal_cents: 100 }, pat)).status, 403);
+  await post('users/pat@example.test', { role: 'admin' });
+  assert.equal((await post('invoices', { client_name: 'X', subtotal_cents: 100 }, pat)).status, 201); // takes effect straight away
+  await post('users/pat@example.test/remove');
+  assert.equal((await req('/admin/api/invoices', { headers: { cookie: pat } })).status, 401);
+  assert.equal(A.getUser(db, 'pat@example.test'), null);
+  // The history says who did it.
+  const inv = L.getInvoice(db, L.listInvoices(db)[0].id);
+  assert.equal(inv.history[0].actor, 'pat@example.test');
+});
+
+test('you can’t lock everyone out', async () => {
+  const db = fresh();
+  A.seedUsers(db, ['a@x.test']);
+  assert.throws(() => A.removeUser(db, 'a@x.test', 'a@x.test'), /yourself/);
+  assert.throws(() => A.updateUser(db, 'a@x.test', { role: 'viewer' }, 'a@x.test'), /your own/);
+  A.addUser(db, { email: 'b@x.test', role: 'viewer' }, 'a@x.test');
+  assert.throws(() => A.updateUser(db, 'a@x.test', { role: 'viewer' }, 'b@x.test'), /at least one admin/);
+  assert.throws(() => A.addUser(db, { email: 'c@x.test', role: 'owner' }, 'a@x.test'), /admin.*viewer/);
+  A.removeUser(db, 'b@x.test', 'a@x.test');
+  assert.equal(A.addUser(db, { email: 'b@x.test', role: 'admin' }, 'a@x.test').role, 'admin'); // can be added back
+  assert.equal(A.issueLoginToken(db, 'nobody@x.test'), null);
+  const tok = A.issueLoginToken(db, 'B@x.test');
+  assert.equal(tok.email, 'b@x.test');
+  A.removeUser(db, 'b@x.test', 'a@x.test');
+  assert.equal(A.redeemLoginToken(db, tok.raw), null); // a removed person's link stops working
+});
+
+// ---------- saved clients ----------
+
+test('invoices for the same client name share one saved client, whatever the case', () => {
+  const db = fresh();
+  const a = invoice(db, { client_name: 'Acme Dental', client_email: '' });
+  const b = invoice(db, { client_name: '  acme dental ', client_email: 'ap@acme.test', client_address: '1 Main St\nToronto' });
+  const ia = L.getInvoice(db, a), ib = L.getInvoice(db, b);
+  assert.equal(ia.client_id, ib.client_id);
+  assert.equal(ib.client_name, 'Acme Dental');
+  const c = L.getClient(db, ia.client_id);
+  assert.equal(c.email, 'ap@acme.test');
+  assert.equal(c.address, '1 Main St\nToronto');
+  assert.equal(c.invoices.length, 2);
+  assert.deepEqual(L.clientsOverview(db)[0].owed, { CAD: 226000 });
+  assert.equal(L.findClientByName(db, 'ACME DENTAL').id, c.id);
+});
+
+test('renaming a client renames their invoices; merging moves them over', () => {
+  const db = fresh();
+  const a = invoice(db, { client_name: 'Acme' });
+  const b = invoice(db, { client_name: 'Acme Dental Inc' });
+  const ca = L.getInvoice(db, a).client_id, cb = L.getInvoice(db, b).client_id;
+  assert.throws(() => L.updateClient(db, ca, { name: 'acme dental inc' }), /Merge/);
+  L.updateClient(db, ca, { name: 'Acme Dental' });
+  assert.equal(L.getInvoice(db, a).client_name, 'Acme Dental');
+  assert.equal(L.mergeClients(db, cb, ca).moved, 1);
+  assert.equal(L.getInvoice(db, b).client_name, 'Acme Dental');
+  assert.equal(L.clientsOverview(db).length, 1);
+  assert.deepEqual(L.listClients(db), ['Acme Dental']);
+  // The old name can be used again for a new client.
+  invoice(db, { client_name: 'Acme Dental Inc' });
+  assert.equal(L.clientsOverview(db).length, 2);
+});
+
+test('an older database gets a saved client for each invoice name', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ledger-'));
+  const file = path.join(dir, 'old.db');
+  let db = openDb(file);
+  invoice(db, { client_name: 'Bloor Physio', client_email: 'a@bloor.test' });
+  invoice(db, { client_name: 'bloor physio' });
+  db.exec('UPDATE invoices SET client_id = NULL; DELETE FROM clients;');
+  db.close();
+  db = openDb(file);
+  const rows = db.prepare('SELECT client_id, client_name FROM invoices').all();
+  assert.equal(new Set(rows.map((r) => r.client_id)).size, 1);
+  assert.ok(rows.every((r) => r.client_name === 'Bloor Physio'));
+  assert.equal(db.prepare('SELECT email FROM clients').get().email, 'a@bloor.test');
+  db.close();
+});
+
+// ---------- reminders ----------
+
+function remindBook() {
+  const db = fresh();
+  const id = invoice(db, { client_name: 'Late Co', client_email: 'ap@late.test', schedule: 'split', count: 2, first_due: '2026-11-10', issue_date: '2026-11-01' });
+  L.setLineDueDate(db, id, 2, '2026-12-20');
+  L.markSent(db, id, { sent_date: '2026-11-01', sent_to: 'ap@late.test', sent_via: 'email' });
+  const sent = [];
+  const opts = { business: { shortName: 'Painkiller Labs' }, publicUrl: 'https://x.test', send: async (m) => { sent.push(m); } };
+  return { db, id, sent, opts };
+}
+
+test('reminders go out at each stage once, only when switched on and in working hours', async () => {
+  const { db, id, sent, opts } = remindBook();
+  const at = (d, h = 14) => new Date(`${d}T${String(h + 5).padStart(2, '0')}:00:00Z`); // Toronto is UTC-5 in winter
+  assert.deepEqual(await RM.runReminders(db, opts, { now: at('2026-11-11') }), { skipped: 'off' });
+  RM.setRemindersEnabled(db, true);
+  assert.deepEqual(await RM.runReminders(db, opts, { now: at('2026-11-11', 7) }), { skipped: 'outside working hours' });
+  // The deposit was due Nov 10: a day late.
+  assert.deepEqual(RM.dueReminders(db, '2026-11-11').map((r) => [r.ref, r.kind]), [[`${id}-01`, 'late1']]);
+  await RM.runReminders(db, opts, { now: at('2026-11-11') });
+  await RM.runReminders(db, opts, { now: at('2026-11-12') });
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].subject, /Overdue/);
+  assert.equal(sent[0].to, 'ap@late.test');
+  // A week late, then the final payment 3 days before it's due.
+  await RM.runReminders(db, opts, { now: at('2026-11-17') });
+  await RM.runReminders(db, opts, { now: at('2026-12-17') });
+  assert.deepEqual(sent.map((m) => m.subject.split(':')[0]), ['Overdue', 'Overdue', 'Reminder']);
+  // Way past the last stage: no more emails.
+  assert.equal(RM.dueReminders(db, '2027-01-30').filter((r) => r.ref === `${id}-01`).length, 0);
+  // Paid or switched off for this invoice: nothing.
+  RM.setInvoiceReminders(db, id, false);
+  assert.equal(RM.dueReminders(db, '2026-12-22').length, 0);
+  assert.equal(L.getInvoice(db, id).reminders.length, 3);
+});
+
+test('a reminder can be sent by hand, and a failed send is recorded and retried later', async () => {
+  const { db, id, opts } = remindBook();
+  const out = await RM.sendManualReminder(db, id, {}, opts);
+  assert.deepEqual(out, { sent_to: 'ap@late.test', ref: `${id}-01` });
+  // A manual reminder holds off the automatic one for a few days.
+  assert.equal(RM.dueReminders(db, '2026-11-11').length, 0);
+  const broken = { ...opts, send: async () => { throw new Error('Resend 500'); } };
+  await assert.rejects(RM.sendManualReminder(db, id, { suffix: 2 }, broken), /didn’t send: Resend 500/);
+  assert.equal(L.getInvoice(db, id).reminders[0].error, 'Resend 500');
+  assert.ok(L.getInvoice(db, id).history.some((h) => h.action === 'reminder_failed'));
+});
+
+test('unsent invoices and clients without an email get no reminders', () => {
+  const db = fresh();
+  invoice(db, { client_name: 'Draft Co', first_due: '2026-11-10' });
+  const id = invoice(db, { client_name: 'No Email Co', client_email: '', first_due: '2026-11-10' });
+  L.markSent(db, id, { sent_date: '2026-11-01', sent_via: 'other' });
+  assert.equal(RM.dueReminders(db, '2026-11-11').length, 0);
 });

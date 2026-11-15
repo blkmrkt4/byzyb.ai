@@ -1,5 +1,5 @@
 // Painkiller Labs admin. Plain JavaScript, no build step.
-// Routes: /admin/dashboard, /admin/reports, /admin/bank, /admin/invoices, /admin/invoices/new, /admin/invoices/:id, /admin/invoices/:id/edit
+// Routes: /admin/dashboard, /admin/reports, /admin/bank, /admin/clients, /admin/clients/:id, /admin/settings, /admin/invoices, /admin/invoices/new, /admin/invoices/:id, /admin/invoices/:id/edit
 
 const app = document.getElementById('app');
 const toastEl = document.getElementById('toast');
@@ -28,6 +28,10 @@ function parseMoney(v) {
   return Number(whole) * 100 + Number(frac.padEnd(2, '0'));
 }
 const centsToInput = (c) => (c / 100).toFixed(2);
+const DAY_MS = 86_400_000;
+const addDaysTo = (d, n) => new Date(Date.parse(`${d}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
+const daysFrom = (a, b) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / DAY_MS);
+const readOnly = () => config.me?.role !== 'admin';
 
 function niceDate(d) {
   if (!d) return '';
@@ -121,6 +125,13 @@ async function route() {
     if (p === '/admin/dashboard' || p === '/admin') return await dashboardPage();
     if (p === '/admin/reports') return await reportsPage();
     if (p === '/admin/bank') return await bankPage();
+    if (readOnly() && (p.endsWith('/new') || p.endsWith('/edit') || p === '/admin/settings')) {
+      app.innerHTML = '<div class="empty">You have read-only access, so you can’t open this page. Ask an admin if you need to make changes. <a href="/admin/dashboard" data-nav>Go to the dashboard</a></div>';
+      return;
+    }
+    if (p === '/admin/clients') return await clientsPage();
+    if ((m = p.match(/^\/admin\/clients\/(\d+)$/))) return await clientPage(m[1]);
+    if (p === '/admin/settings') return await settingsPage();
     if (p === '/admin/invoices') return await listPage();
     if (p === '/admin/invoices/new') return await formPage(null);
     if ((m = p.match(/^\/admin\/invoices\/([A-Za-z0-9]{4})\/edit$/))) return await formPage(m[1].toUpperCase());
@@ -172,7 +183,7 @@ async function listPage() {
         .map((s) => `<option${s === status ? ' selected' : ''}>${s}</option>`).join('')}</select></label>
       <label>Client <select name="client"><option value="">All</option>${list.clients
         .map((c) => `<option${c === client ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
-      <button class="btn btn-quiet" type="button" id="clear"${filtered ? '' : ' hidden'}>Clear</button>
+      <button class="btn btn-quiet" type="button" id="clear" data-ro${filtered ? '' : ' hidden'}>Clear</button>
     </form>
     ${list.invoices.length ? `
       <table class="tbl">
@@ -267,6 +278,14 @@ function renderUnmatched({ payments, open_lines }, showIgnored) {
 
 async function formPage(id) {
   const inv = id ? await api(`invoices/${id}`) : null;
+  const params = new URLSearchParams(location.search);
+  // "Duplicate" starts a new invoice from an old one; "New invoice" on a client page starts from the client.
+  const dup = !inv && params.get('from') ? await api(`invoices/${encodeURIComponent(params.get('from'))}`) : null;
+  const fromClient = !inv && !dup && params.get('client') ? await api(`clients/${encodeURIComponent(params.get('client'))}`) : null;
+  const pre = inv || dup || (fromClient ? { client_name: fromClient.name, client_email: fromClient.email, client_address: fromClient.address } : null);
+  // A duplicate keeps the gap between issue date and each due date.
+  const shift = dup ? daysFrom(dup.issue_date, config.today) : 0;
+  const { clients: clientNames } = await api('clients');
   const newId = inv ? null : (await api('next-id')).id;
   const invNo = inv?.id || newId;
   if (inv?.voided_at) throw new Error('A void invoice can’t be edited.');
@@ -274,10 +293,13 @@ async function formPage(id) {
   document.title = `${inv ? `Edit ${inv.id}` : 'New invoice'} | Painkiller Labs admin`;
 
   const state = {
-    items: inv?.line_items?.length ? inv.line_items.map((i) => ({ ...i })) : [],
+    items: pre?.line_items?.length ? pre.line_items.map((i) => ({ ...i })) : [],
     // Editing keeps the saved payments (custom amounts, labels, blank dates) until a schedule field changes.
-    linesEdited: !!inv,
-    lines: inv ? inv.lines.map((l) => ({ amount_cents: l.amount_cents, due_date: l.due_date || '', label: l.label || '' })) : [],
+    linesEdited: !!(inv || dup),
+    lines: inv || dup ? (inv || dup).lines.map((l) => ({
+      amount_cents: l.amount_cents, label: l.label || '',
+      due_date: (dup ? l.due_date && addDaysTo(l.due_date, shift) : l.due_date) || '',
+    })) : [],
   };
   const lockedNote = inv && !full
     ? `<div class="notice warn">This invoice has been ${inv.sent_date ? 'sent' : ''}${inv.sent_date && (inv.paid_cents || inv.stripe_link_id) ? ' or ' : ''}${inv.paid_cents ? 'paid' : inv.stripe_link_id ? 'given a Stripe link' : ''}, so only the client, description and notes can change. To change amounts, void it and create a new one.</div>`
@@ -287,35 +309,39 @@ async function formPage(id) {
     <a class="back" href="${inv ? `/admin/invoices/${inv.id}` : '/admin/invoices'}" data-nav>← ${inv ? inv.id : 'Invoices'}</a>
     <div class="head"><div><h1>${inv ? 'Edit invoice' : 'New invoice'}</h1><p class="muted">Invoice number <span class="mono">${esc(invNo)}</span></p></div></div>
     ${lockedNote}
+    ${dup ? `<div class="notice">Copied from invoice <a class="mono" href="/admin/invoices/${esc(dup.id)}" data-nav>${esc(dup.id)}</a>. Due dates have moved forward by the same number of days. Check the dates and amounts before you create it.</div>` : ''}
     <form id="inv" class="panel stack" novalidate>
       <div class="grid2">
-        <label>Client name <input name="client_name" required value="${esc(inv?.client_name)}" autocomplete="off"></label>
-        <label>Client email <input name="client_email" type="email" value="${esc(inv?.client_email)}" autocomplete="off"></label>
+        <label>Client name <input name="client_name" required value="${esc(pre?.client_name)}" autocomplete="off" list="client-list">
+          <span class="muted small" id="client-hint"></span></label>
+        <label>Client email <input name="client_email" type="email" value="${esc(pre?.client_email)}" autocomplete="off"></label>
       </div>
-      <label>Description of the work <textarea name="description" rows="3">${esc(inv?.description)}</textarea></label>
+      <datalist id="client-list">${clientNames.map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
+      <label>Billing address <span class="muted small">(optional, shown on the invoice)</span><textarea name="client_address" rows="2">${esc(pre?.client_address)}</textarea></label>
+      <label>Description of the work <textarea name="description" rows="3">${esc(pre?.description)}</textarea></label>
       <fieldset class="plain"${full ? '' : ' disabled hidden'}>
         <div class="subpanel stack">
           <div class="head"><h2>Amount</h2><button class="btn btn-quiet btn-sm" type="button" id="add-item">Add line item</button></div>
           <div id="items"></div>
           <div class="grid3">
-            <label id="subtotal-wrap">Subtotal (before tax) <input name="subtotal" inputmode="decimal" value="${inv ? centsToInput(inv.subtotal_cents) : ''}" placeholder="0.00"></label>
-            <label>Currency <input name="currency" value="${esc(inv?.currency || 'CAD')}" maxlength="3"></label>
+            <label id="subtotal-wrap">Subtotal (before tax) <input name="subtotal" inputmode="decimal" value="${pre?.subtotal_cents ? centsToInput(pre.subtotal_cents) : ''}" placeholder="0.00"></label>
+            <label>Currency <input name="currency" value="${esc(pre?.currency || 'CAD')}" maxlength="3"></label>
             <label>Issue date <input name="issue_date" type="date" value="${esc(inv?.issue_date || config.today)}"></label>
           </div>
-          <label class="check"><input type="checkbox" name="hst_enabled"${!inv || inv.hst_enabled ? ' checked' : ''}> Charge HST at 13%</label>
+          <label class="check"><input type="checkbox" name="hst_enabled"${!pre || pre.hst_enabled !== 0 ? ' checked' : ''}> Charge HST at 13%</label>
           <div class="totals" id="totals"></div>
         </div>
         <div class="subpanel stack">
           <h2>Payment schedule</h2>
           <div class="grid3">
-            <label>Schedule <select name="schedule">${Object.entries(SCHEDULE_LABEL).map(([k, v]) => `<option value="${k}"${(inv?.schedule || 'one_time') === k ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
-            <label id="count-wrap">Number of payments <input name="count" type="number" min="1" max="120" value="${inv && inv.schedule !== 'one_time' ? inv.lines.length : 12}"></label>
-            <label><span id="first-due-label">First payment due</span> <input name="first_due" type="date" value="${esc(inv?.lines?.[0]?.due_date || config.today)}"></label>
+            <label>Schedule <select name="schedule">${Object.entries(SCHEDULE_LABEL).map(([k, v]) => `<option value="${k}"${(pre?.schedule || 'one_time') === k ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+            <label id="count-wrap">Number of payments <input name="count" type="number" min="1" max="120" value="${pre?.lines && pre.schedule !== 'one_time' ? pre.lines.length : 12}"></label>
+            <label><span id="first-due-label">First payment due</span> <input name="first_due" type="date" value="${esc(state.lines[0]?.due_date || config.today)}"></label>
           </div>
           <div id="lines"></div>
         </div>
       </fieldset>
-      <label>Notes <span class="muted small">(private, not shown to the client)</span><textarea name="notes" rows="2">${esc(inv?.notes)}</textarea></label>
+      <label>Notes <span class="muted small">(private, not shown to the client)</span><textarea name="notes" rows="2">${esc(pre?.notes)}</textarea></label>
       ${!inv ? `<label class="check" id="sub-wrap"><input type="checkbox" name="create_stripe_link"${config.stripe ? '' : ' disabled'}> Also set up automatic card payments (a Stripe subscription that charges each payment on schedule)${config.stripe ? '' : ' <span class="muted small">(Stripe isn’t connected)</span>'}</label>` : ''}
       <p class="muted small">The client pays from their invoice page, with a Pay button for each payment. You can email it once the invoice is created.</p>
       <div id="form-error"></div>
@@ -324,6 +350,24 @@ async function formPage(id) {
     </form>`;
 
   const f = $('#inv');
+
+  // Picking a saved client fills in their email and address if those are empty.
+  async function clientLookup() {
+    const name = f.client_name.value.trim();
+    const hint = $('#client-hint');
+    if (!name) { hint.textContent = ''; return; }
+    const { client } = await api(`clients/lookup?name=${encodeURIComponent(name)}`).catch(() => ({ client: null }));
+    if (f.client_name.value.trim() !== name) return;
+    if (client) {
+      if (!f.client_email.value && client.email) f.client_email.value = client.email;
+      if (!f.client_address.value && client.address) f.client_address.value = client.address;
+      hint.textContent = client.name === name ? 'Saved client' : `Saved client: ${client.name}`;
+    } else {
+      hint.textContent = 'New client. They’ll be saved when you create the invoice.';
+    }
+  }
+  f.client_name.addEventListener('change', clientLookup);
+  if (pre?.client_name) clientLookup();
 
   function totals() {
     const items = state.items.filter((i) => i.description || i.amount_cents);
@@ -430,7 +474,7 @@ async function formPage(id) {
     $('#form-error').innerHTML = '';
     if (!f.client_name.value.trim()) return err('Client name is required.');
     const body = {
-      client_name: f.client_name.value, client_email: f.client_email.value,
+      client_name: f.client_name.value, client_email: f.client_email.value, client_address: f.client_address.value,
       description: f.description.value, notes: f.notes.value,
     };
     if (full) {
@@ -477,7 +521,10 @@ const ACTION_LABEL = {
   match: 'Payment matched', unmatch: 'Payment unassigned', ignore: 'Payment ignored', restore: 'Payment restored',
   record_manual: 'Manual payment recorded', due_date: 'Due date changed', refund: 'Refunded in Stripe',
   dispute: 'Card dispute', checkout_failed: 'Client checkout failed',
+  reminder: 'Reminder emailed', reminder_failed: 'Reminder failed to send',
+  reminders_on: 'Automatic reminders turned on', reminders_off: 'Automatic reminders turned off',
 };
+const REMINDER_KIND = { before: '3 days before due', late1: '1 day overdue', late7: '7 days overdue', late21: '21 days overdue', manual: 'Sent by hand' };
 const DISPUTE_LABEL = { warning_needs_response: 'inquiry, needs a response', warning_under_review: 'inquiry under review', warning_closed: 'inquiry closed',
   needs_response: 'needs a response', under_review: 'under review', won: 'won, money kept', lost: 'lost, money returned', prevented: 'prevented' };
 
@@ -492,6 +539,8 @@ function describe(h, currency) {
   if (d.status) bits.push(DISPUTE_LABEL[d.status] || d.status);
   if (d.reason) bits.push(d.reason);
   if (d.note) bits.push(d.note);
+  if (d.kind) bits.push(REMINDER_KIND[d.kind] || d.kind);
+  if (d.sent_to && !d.sent_via) bits.push(`to ${d.sent_to}`);
   if (d.error) bits.push(d.error);
   if (h.action === 'edit') bits.push(`Changed: ${Object.keys(d).join(', ').replaceAll('_cents', '').replaceAll('_', ' ')}`);
   return bits.join(' · ');
@@ -537,7 +586,7 @@ async function detailPage(id) {
   app.innerHTML = `
     <a class="back" href="/admin/invoices" data-nav>← Invoices</a>
     <div class="head">
-      <div><h1>Invoice <span class="mono-h">${esc(inv.id)}</span> ${badge(inv.status)}</h1><p class="muted">${esc(inv.client_name)}${inv.client_email ? ` · ${esc(inv.client_email)}` : ''}</p></div>
+      <div><h1>Invoice <span class="mono-h">${esc(inv.id)}</span> ${badge(inv.status)}</h1><p class="muted">${inv.client_id ? `<a href="/admin/clients/${inv.client_id}" data-nav>${esc(inv.client_name)}</a>` : esc(inv.client_name)}${inv.client_email ? ` · ${esc(inv.client_email)}` : ''}</p></div>
     </div>
     ${isVoid ? `<div class="notice bad">Voided ${esc(niceDateTime(inv.voided_at))}${inv.void_reason ? `: ${esc(inv.void_reason)}` : ''}. The record is kept.</div>` : ''}
     <dl class="summary">
@@ -552,21 +601,24 @@ async function detailPage(id) {
       <button class="btn btn-quiet" data-panel="pay"${openLines.length ? '' : ' disabled'}>Record a manual payment</button>
       ${!inv.stripe_link_url && config.stripe && ['monthly', 'annual'].includes(inv.schedule) ? '<button class="btn btn-quiet" id="make-link">Set up automatic payments</button>' : ''}
       <a class="btn btn-quiet" href="/admin/invoices/${esc(inv.id)}/edit" data-nav>Edit</a>
+      <a class="btn btn-quiet" href="/admin/invoices/new?from=${esc(inv.id)}" data-nav>Duplicate</a>
       <button class="btn btn-danger" data-panel="void">Void</button>
     </div>
     <div id="panel"></div>`}
+    ${isVoid ? `<div class="actions"><a class="btn btn-quiet" href="/admin/invoices/new?from=${esc(inv.id)}" data-nav>Duplicate as a new invoice</a></div>` : ''}
     ${isVoid ? '' : `
       <div class="panel">
         <h2>Client invoice</h2>
         <p class="muted small">The client's copy of invoice ${esc(inv.id)}. They can view it, print it or save it as a PDF, and pay each payment by card. Payments made there are matched automatically.</p>
         ${config.hst_number ? '' : '<div class="notice warn small">Your HST number isn’t on invoices yet. Set HST_NUMBER on the ledger service in Railway; invoices that charge HST must show it.</div>'}
-        <div class="linkbox"><input readonly value="${esc(clientLink)}" aria-label="Client invoice link"><button class="btn btn-quiet btn-sm" id="copy-client">Copy</button><a class="btn btn-quiet btn-sm" href="${esc(clientLink)}" target="_blank" rel="noopener">Open</a><button class="btn btn-sm" data-panel="email">Email to client</button></div>
+        <div class="linkbox"><input readonly value="${esc(clientLink)}" aria-label="Client invoice link"><button class="btn btn-quiet btn-sm" id="copy-client" data-ro>Copy</button><a class="btn btn-quiet btn-sm" href="${esc(clientLink)}" target="_blank" rel="noopener">Open</a><button class="btn btn-sm" data-panel="email">Email to client</button></div>
       </div>`}
+    ${isVoid ? '' : remindersPanel(inv, openLines)}
     ${inv.stripe_link_url ? `
       <div class="panel">
         <h2>Stripe payment link</h2>
         <p class="muted small">${inv.schedule === 'one_time' || inv.schedule === 'split' ? 'One payment' : `A ${inv.schedule === 'monthly' ? 'monthly' : 'yearly'} subscription for ${inv.lines.length} payments; it stops after the last one`}. Payments through this link are matched automatically.</p>
-        <div class="linkbox"><input readonly value="${esc(inv.stripe_link_url)}" aria-label="Stripe payment link"><button class="btn btn-quiet btn-sm" id="copy-link">Copy</button><a class="btn btn-quiet btn-sm" href="${esc(inv.stripe_link_url)}" target="_blank" rel="noopener">Open</a></div>
+        <div class="linkbox"><input readonly value="${esc(inv.stripe_link_url)}" aria-label="Stripe payment link"><button class="btn btn-quiet btn-sm" id="copy-link" data-ro>Copy</button><a class="btn btn-quiet btn-sm" href="${esc(inv.stripe_link_url)}" target="_blank" rel="noopener">Open</a></div>
       </div>` : ''}
     <section class="section">
       <h2>Payments</h2>
@@ -593,7 +645,7 @@ async function detailPage(id) {
       <h2>History</h2>
       <ul class="history">${inv.history.map((h) => `
         <li><div>${esc(ACTION_LABEL[h.action] || h.action)}${describe(h, cur) ? ` <span class="muted">· ${esc(describe(h, cur))}</span>` : ''}</div>
-          <div class="when">${esc(niceDateTime(h.at))}</div></li>`).join('')}</ul>
+          <div class="when">${esc(niceDateTime(h.at))}${h.actor ? ` · ${esc(h.actor)}` : ''}</div></li>`).join('')}</ul>
     </div>`;
 
   const reload = () => detailPage(id);
@@ -641,6 +693,17 @@ async function detailPage(id) {
         <div class="actions"><button class="btn" type="submit">Save date</button><button class="btn btn-quiet" type="button" data-close>Cancel</button></div>
       </form>`;
     },
+    remind: () => `
+      <form class="subpanel stack" data-form="remind">
+        <h2>Send a payment reminder</h2>
+        <p class="muted small">Emails the client a short reminder with the amount, the due date and a link to pay. If the payment is late, it says so. Replies come to ${esc(config.admin_email || 'you')}.</p>
+        ${config.email ? '' : '<div class="notice bad small">Email isn’t set up on the server (RESEND_API_KEY), so this will fail.</div>'}
+        <div class="grid2">
+          <label>Payment <select name="suffix">${openLines.map((l) => `<option value="${l.suffix}">${esc(l.ref)}${l.label ? ` ${esc(l.label)}` : ''} · ${money(l.outstanding_cents, cur)} due ${esc(dueText(l.due_date))}</option>`).join('')}</select></label>
+          <label>Send to <input type="email" name="to" required value="${esc(inv.client_email)}"></label>
+        </div>
+        <div class="actions"><button class="btn" type="submit">Send reminder</button><button class="btn btn-quiet" type="button" data-close>Cancel</button></div>
+      </form>`,
     void: () => `
       <form class="subpanel stack" data-form="void">
         <h2>Void invoice ${esc(inv.id)}</h2>
@@ -691,6 +754,10 @@ async function detailPage(id) {
     } else if (kind === 'due') {
       ok = await busy(btn, () => api(`invoices/${inv.id}/lines/${f.dataset.suffix}/due`, { method: 'POST', body: { due_date: f.due_date.value || null } }));
       if (ok) toast('Due date saved');
+    } else if (kind === 'remind') {
+      const out = await busy(btn, () => api(`invoices/${inv.id}/remind`, { method: 'POST', body: { suffix: Number(f.suffix.value), to: f.to.value } }));
+      ok = out;
+      if (out) toast(`Reminder for ${out.ref} sent to ${out.sent_to}`);
     } else if (kind === 'void') {
       if (!f.reason.value.trim()) return toast('Give a reason for voiding.', true);
       ok = await busy(btn, () => api(`invoices/${inv.id}/void`, { method: 'POST', body: { reason: f.reason.value } }));
@@ -699,6 +766,10 @@ async function detailPage(id) {
     if (ok) reload();
   });
 
+  $('#toggle-reminders')?.addEventListener('click', async (e) => {
+    const on = !!inv.reminders_off;
+    if (await busy(e.target, () => api(`invoices/${inv.id}/reminders`, { method: 'POST', body: { on } }))) { toast(on ? 'Reminders on for this invoice' : 'Reminders off for this invoice'); reload(); }
+  });
   $('#make-link')?.addEventListener('click', async (e) => {
     if (await busy(e.target, () => api(`invoices/${inv.id}/stripe-link`, { method: 'POST', body: {} }))) { toast('Stripe link created'); reload(); }
   });
@@ -818,7 +889,7 @@ async function dashboardPage() {
   app.innerHTML = `
     <div class="head">
       <h1>Dashboard</h1>
-      <div class="actions"><a class="btn btn-quiet" href="/admin/reports" data-nav>Reports</a><a class="btn" href="/admin/invoices/new" data-nav>New invoice</a></div>
+      <div class="actions"><a class="btn btn-quiet" href="/admin/reports" data-nav data-ro>Reports</a><a class="btn" href="/admin/invoices/new" data-nav>New invoice</a></div>
     </div>
     ${setupPanel(d.setup)}
     <section class="hero-row${d.setup.some((s) => !s.done) ? ' section' : ''}">
@@ -923,7 +994,7 @@ async function reportsPage() {
   const r = REPORTS[params.get('r')] ? params.get('r') : 'receivables';
   document.title = `${REPORTS[r]} | Painkiller Labs admin`;
   const tabs = `<nav class="tabs noprint" aria-label="Reports">${Object.entries(REPORTS).map(([k, v]) => `<a href="/admin/reports?r=${k}" data-nav${k === r ? ' aria-current="page"' : ''}>${v}</a>`).join('')}</nav>`;
-  const head = (extra = '') => `<div class="head"><h1>Reports</h1><div class="actions noprint">${extra}<button class="btn btn-quiet" type="button" id="print">Print or save as PDF</button></div></div>${tabs}`;
+  const head = (extra = '') => `<div class="head"><h1>Reports</h1><div class="actions noprint">${extra}<button class="btn btn-quiet" type="button" id="print" data-ro>Print or save as PDF</button></div></div>${tabs}`;
   const bindPrint = () => $('#print')?.addEventListener('click', () => window.print());
 
   if (r === 'receivables') {
@@ -962,7 +1033,7 @@ async function reportsPage() {
       <form class="filters report-filters noprint section" id="range">
         <label>From <input type="date" name="from" value="${esc(from)}" required></label>
         <label>To <input type="date" name="to" value="${esc(to)}" required></label>
-        <button class="btn btn-quiet" type="submit">Show</button>
+        <button class="btn btn-quiet" type="submit" data-ro>Show</button>
         <div class="chips">${Object.entries(PERIODS).map(([k, v]) => `<a class="chip" href="/admin/reports?r=payments&period=${k}" data-nav${k === period ? ' aria-current="true"' : ''}>${v}</a>`).join('')}</div>
       </form>
       <div class="dash-grid section">
@@ -1099,7 +1170,7 @@ async function bankPage() {
       <div class="actions noprint">
         ${d.stripe ? '<button class="btn btn-quiet" type="button" id="sync">Sync with Stripe</button>' : ''}
         <a class="btn btn-quiet" href="/admin/api/bank.csv?${qs}" download>Export CSV</a>
-        <button class="btn btn-quiet" type="button" id="print">Print or save as PDF</button>
+        <button class="btn btn-quiet" type="button" id="print" data-ro>Print or save as PDF</button>
       </div>
     </div>
     ${printHead('Deposits and Stripe fees', `${niceDate(from)} to ${niceDate(to)}`)}
@@ -1108,7 +1179,7 @@ async function bankPage() {
     <form class="filters report-filters noprint section" id="range">
       <label>From <input type="date" name="from" value="${esc(from)}" required></label>
       <label>To <input type="date" name="to" value="${esc(to)}" required></label>
-      <button class="btn btn-quiet" type="submit">Show</button>
+      <button class="btn btn-quiet" type="submit" data-ro>Show</button>
       <div class="chips">${Object.entries(PERIODS).map(([k, v]) => `<a class="chip" href="/admin/bank?period=${k}" data-nav${k === period ? ' aria-current="true"' : ''}>${v}</a>`).join('')}</div>
     </form>
 
@@ -1305,6 +1376,233 @@ function bankLineRow(l) {
     </tr>`;
 }
 
+// ---------- reminders panel (invoice page) ----------
+
+function remindersPanel(inv, openLines) {
+  const global = !!config.reminders;
+  let status;
+  if (!global) status = 'Automatic reminders are switched off for all invoices. An admin can turn them on in Settings.';
+  else if (inv.reminders_off) status = 'Automatic reminders are off for this invoice.';
+  else status = 'Automatic reminders are on: 3 days before each payment is due, then 1, 7 and 21 days after if it’s still unpaid.';
+  if (global && !inv.reminders_off && !inv.sent_date) status += ' They start once the invoice is marked as sent.';
+  return `
+    <div class="panel">
+      <h2>Payment reminders</h2>
+      <p class="muted small">${esc(status)}</p>
+      <div class="actions">
+        <button class="btn btn-quiet btn-sm" data-panel="remind"${openLines.length ? '' : ' disabled'}>Send a reminder now</button>
+        ${global ? `<button class="btn btn-quiet btn-sm" id="toggle-reminders">${inv.reminders_off ? 'Turn on for this invoice' : 'Turn off for this invoice'}</button>` : ''}
+      </div>
+      ${inv.reminders.length ? `<table class="tbl compact section">
+        <thead><tr><th>Sent</th><th>Payment</th><th>Why</th><th>To</th></tr></thead>
+        <tbody>${inv.reminders.map((r) => `
+          <tr><td data-label="Sent">${esc(niceDateTime(r.sent_at))}</td><td data-label="Payment" class="mono">${esc(r.ref)}</td>
+            <td data-label="Why">${esc(REMINDER_KIND[r.kind] || r.kind)}${r.error ? ` <span class="badge Overdue" title="${esc(r.error)}">Failed</span>` : ''}</td>
+            <td data-label="To">${esc(r.sent_to)}</td></tr>`).join('')}</tbody></table>` : ''}
+    </div>`;
+}
+
+// ---------- clients ----------
+
+async function clientsPage() {
+  const { clients } = await api('clients/all');
+  document.title = 'Clients | Painkiller Labs admin';
+  app.innerHTML = `
+    <div class="head"><h1>Clients</h1><div class="actions"><a class="btn" href="/admin/invoices/new" data-nav>New invoice</a></div></div>
+    <p class="muted">Clients are saved when you create an invoice for them. Pick them from the list on the invoice form so one client doesn’t end up under two names.</p>
+    ${clients.length ? `
+      <div class="filters section"><label class="q">Search <input type="search" id="find" placeholder="Name or email" autocomplete="off"></label></div>
+      <table class="tbl section" id="clients">
+        <thead><tr><th>Client</th><th>Email</th><th class="num">Invoices</th><th class="num">Owed</th><th>Last invoice</th></tr></thead>
+        <tbody>${clients.map((c) => `
+          <tr class="click" data-href="/admin/clients/${c.id}" data-find="${esc(`${c.name} ${c.email}`.toLowerCase())}">
+            <td data-label="Client"><a href="/admin/clients/${c.id}" data-nav>${esc(c.name)}</a></td>
+            <td data-label="Email">${c.email ? esc(c.email) : '<span class="muted">—</span>'}</td>
+            <td data-label="Invoices" class="num">${c.invoices}${c.open ? ` <span class="muted small">(${c.open} open)</span>` : ''}</td>
+            <td data-label="Owed" class="num">${totalCents(c.owed) ? `${esc(totalsText(c.owed))}${c.overdue ? ' <span class="badge Overdue">Overdue</span>' : ''}` : '<span class="muted">—</span>'}</td>
+            <td data-label="Last invoice">${c.last_invoice ? esc(niceDate(c.last_invoice)) : '<span class="muted">—</span>'}</td>
+          </tr>`).join('')}</tbody>
+      </table>` : '<div class="empty section">No clients yet. They’re added when you create an invoice.</div>'}`;
+  clickableRows(app);
+  $('#find')?.addEventListener('input', (e) => {
+    const n = e.target.value.trim().toLowerCase();
+    $$('#clients tbody tr').forEach((tr) => { tr.hidden = !!n && !tr.dataset.find.includes(n); });
+  });
+}
+
+async function clientPage(id) {
+  const [c, { clients }] = await Promise.all([api(`clients/${id}`), api('clients/all')]);
+  document.title = `${c.name} | Painkiller Labs admin`;
+  if (c.archived_at) {
+    app.innerHTML = `<a class="back" href="/admin/clients" data-nav>← Clients</a><div class="notice">${esc(c.name)}. This client was merged into another one, and their invoices moved with them.</div>`;
+    return;
+  }
+  const others = clients.filter((x) => x.id !== c.id);
+  const ro = readOnly();
+  app.innerHTML = `
+    <a class="back" href="/admin/clients" data-nav>← Clients</a>
+    <div class="head">
+      <div><h1>${esc(c.name)}</h1>${c.email ? `<p class="muted">${esc(c.email)}</p>` : ''}</div>
+      <div class="actions">
+        <a class="btn btn-quiet" href="/admin/reports?r=statement&client=${encodeURIComponent(c.name)}" data-nav data-ro>Statement</a>
+        <a class="btn" href="/admin/invoices/new?client=${c.id}" data-nav>New invoice for ${esc(c.name)}</a>
+      </div>
+    </div>
+    <section class="section">
+      <h2>Invoices</h2>
+      ${c.invoices.length ? `<table class="tbl section">
+        <thead><tr><th>Invoice</th><th>Issued</th><th>Status</th><th class="num">Total</th><th class="num">Owed</th></tr></thead>
+        <tbody>${c.invoices.map((i) => `
+          <tr class="click" data-href="/admin/invoices/${esc(i.id)}">
+            <td data-label="Invoice"><a class="mono" href="/admin/invoices/${esc(i.id)}" data-nav>${esc(i.id)}</a>${i.description ? `<div class="muted small">${esc(i.description.split('\n')[0].slice(0, 80))}</div>` : ''}</td>
+            <td data-label="Issued">${esc(niceDate(i.issue_date))}</td>
+            <td data-label="Status">${badge(i.status)}</td>
+            <td data-label="Total" class="num">${money(i.total_cents, i.currency)}</td>
+            <td data-label="Owed" class="num">${i.outstanding_cents && !i.voided_at ? money(i.outstanding_cents, i.currency) : '<span class="muted">—</span>'}</td>
+          </tr>`).join('')}</tbody></table>` : '<div class="empty section">No invoices.</div>'}
+    </section>
+    <form class="panel stack" id="client-form">
+      <h2>Details</h2>
+      <fieldset class="plain stack"${ro ? ' disabled' : ''}>
+        <div class="grid2">
+          <label>Name <input name="name" required value="${esc(c.name)}"></label>
+          <label>Email <input name="email" type="email" value="${esc(c.email)}"></label>
+        </div>
+        <label>Billing address <textarea name="address" rows="3">${esc(c.address)}</textarea></label>
+        <label>Notes <span class="muted small">(private)</span><textarea name="notes" rows="2">${esc(c.notes)}</textarea></label>
+      </fieldset>
+      <p class="muted small">Renaming a client renames them on all their invoices. A new email or address is used on new invoices and reminders; invoices already sent keep what they were sent with.</p>
+      <div class="actions"><button class="btn" type="submit">Save client</button></div>
+    </form>
+    ${others.length && !ro ? `
+    <form class="panel stack" id="merge-form">
+      <h2>Same client under another name?</h2>
+      <p class="muted small">Merging moves all of ${esc(c.name)}’s invoices to the client you choose, and removes ${esc(c.name)} from the list. Their history is kept.</p>
+      <div class="merge-row">
+        <select name="into" aria-label="Merge into"><option value="">Merge ${esc(c.name)} into…</option>${others.map((o) => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select>
+        <button class="btn btn-quiet" type="submit">Merge</button>
+      </div>
+    </form>` : ''}
+    ${c.history.length ? `<div class="panel"><h2>History</h2><ul class="history">${c.history.map((h) => `
+      <li><div>${esc(CLIENT_ACTION[h.action] || h.action)}${h.action === 'client_edit' ? ` <span class="muted">· Changed: ${esc(Object.keys(h.detail).join(', '))}</span>` : ''}${h.detail.from && h.action === 'client_merge' ? ` <span class="muted">· ${esc(h.detail.from)}</span>` : ''}</div>
+        <div class="when">${esc(niceDateTime(h.at))}${h.actor ? ` · ${esc(h.actor)}` : ''}</div></li>`).join('')}</ul></div>` : ''}`;
+  clickableRows(app);
+  $('#client-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const out = await busy(f.querySelector('button[type=submit]'), () => api(`clients/${c.id}`, { method: 'POST', body: {
+      name: f.name.value, email: f.email.value, address: f.address.value, notes: f.notes.value,
+    } }));
+    if (out) { toast(out.changed.length ? 'Client saved' : 'No changes'); clientPage(id); }
+  });
+  $('#merge-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    if (!f.into.value) return toast('Choose the client to merge into.', true);
+    const into = others.find((o) => String(o.id) === f.into.value);
+    if (!confirm(`Move all of ${c.name}'s invoices to ${into.name}? This can't be undone from here.`)) return;
+    const out = await busy(f.querySelector('button'), () => api(`clients/${c.id}/merge`, { method: 'POST', body: { into: into.id } }));
+    if (out) { toast(`Merged: ${plural(out.moved, 'invoice')} moved to ${into.name}`); go(`/admin/clients/${into.id}`, true); }
+  });
+}
+const CLIENT_ACTION = { client_create: 'Client saved', client_edit: 'Details changed', client_merge: 'Another client merged in', client_merged_into: 'Merged into another client' };
+
+// ---------- settings: people and reminders ----------
+
+const ROLE_TEXT = {
+  admin: ['Admin', 'Can do everything, including adding and removing people.'],
+  viewer: ['Read only', 'Can see invoices, clients, reports and the bank page, but can’t change anything.'],
+};
+
+async function settingsPage() {
+  const [{ users, me }, st] = await Promise.all([api('users'), api('settings')]);
+  document.title = 'Settings | Painkiller Labs admin';
+  const roleSelect = (u) => `<select data-role="${esc(u.email)}" aria-label="Access for ${esc(u.email)}">${Object.entries(ROLE_TEXT).map(([k, [label]]) => `<option value="${k}"${u.role === k ? ' selected' : ''}>${label}</option>`).join('')}</select>`;
+  app.innerHTML = `
+    <div class="head"><h1>Settings</h1></div>
+
+    <section class="section">
+      <div class="head tight"><h2>Who can sign in</h2></div>
+      <p class="muted">Only these people can get a sign-in link. ${Object.values(ROLE_TEXT).map(([l, d]) => `<strong>${l}:</strong> ${esc(d)}`).join(' ')}</p>
+      <table class="tbl section">
+        <thead><tr><th>Person</th><th>Access</th><th>Last signed in</th><th></th></tr></thead>
+        <tbody>${users.map((u) => `
+          <tr>
+            <td data-label="Person"><span>${esc(u.email)}${u.name ? `<div class="muted small">${esc(u.name)}</div>` : ''}</span></td>
+            <td data-label="Access">${u.email === me ? `${ROLE_TEXT[u.role][0]} <span class="muted small">(you)</span>` : roleSelect(u)}</td>
+            <td data-label="Last signed in">${u.last_sign_in ? esc(niceDateTime(u.last_sign_in)) : '<span class="muted">Not yet</span>'}</td>
+            <td data-label="">${u.email === me ? '' : `<button class="link-btn small" data-remove="${esc(u.email)}">Remove</button>`}</td>
+          </tr>`).join('')}</tbody>
+      </table>
+      <form class="panel stack section" id="add-user">
+        <h2>Add someone</h2>
+        <div class="grid3">
+          <label>Email <input type="email" name="email" required autocomplete="off"></label>
+          <label>Name <span class="muted small">(optional)</span><input name="name" autocomplete="off"></label>
+          <label>Access <select name="role"><option value="viewer">Read only</option><option value="admin">Admin</option></select></label>
+        </div>
+        <p class="muted small">They sign in at ${esc((config.public_url || location.origin) + '/admin')} with this email address. No email is sent when you add them, so let them know.</p>
+        <div class="actions"><button class="btn" type="submit">Add</button></div>
+      </form>
+    </section>
+
+    <section class="section">
+      <div class="head tight"><h2>Payment reminders</h2></div>
+      <div class="panel stack">
+        <div class="toggle-row">
+          <div><strong>Automatic reminder emails are ${st.reminders ? 'on' : 'off'}</strong>
+            <p class="muted small">When on, clients get an email at each of these points while a payment is unpaid: ${st.stages.map((s) => esc(s.label.toLowerCase())).join(', ')}. After that, no more emails. Only invoices that have been sent, to clients with an email address, get them. They go out between 9 am and 6 pm Toronto time. You can turn them off for any single invoice from its page.</p></div>
+          <button class="btn${st.reminders ? ' btn-quiet' : ''}" id="toggle-auto">${st.reminders ? 'Turn off' : 'Turn on'}</button>
+        </div>
+        ${st.email ? '' : '<div class="notice bad small">Email isn’t set up on the server (RESEND_API_KEY), so reminders can’t be sent.</div>'}
+        <div>
+          <h3 class="small-h">${st.reminders ? 'Going out today' : 'Would go out today if you turn them on'}</h3>
+          ${st.due_today.length ? `<table class="tbl compact">
+            <thead><tr><th>Payment</th><th>Client</th><th>Why</th><th>To</th><th class="num">Amount</th></tr></thead>
+            <tbody>${st.due_today.map((r) => `
+              <tr class="click" data-href="/admin/invoices/${esc(r.invoice_id)}">
+                <td data-label="Payment" class="mono">${esc(r.ref)}</td><td data-label="Client">${esc(r.client_name)}</td>
+                <td data-label="Why">${esc(REMINDER_KIND[r.kind])}</td><td data-label="To">${esc(r.to)}</td>
+                <td data-label="Amount" class="num">${money(r.amount_cents, r.currency)}</td></tr>`).join('')}</tbody></table>`
+            : '<p class="muted small">None today.</p>'}
+        </div>
+      </div>
+    </section>`;
+
+  clickableRows(app);
+  $$('[data-role]').forEach((sel) => sel.addEventListener('change', async () => {
+    const out = await busy(sel, () => api(`users/${encodeURIComponent(sel.dataset.role)}`, { method: 'POST', body: { role: sel.value } }));
+    if (out) toast(`${sel.dataset.role} is now ${ROLE_TEXT[sel.value][0].toLowerCase()}`);
+    settingsPage();
+  }));
+  $$('[data-remove]').forEach((b) => b.addEventListener('click', async () => {
+    if (!confirm(`Remove ${b.dataset.remove}? They're signed out straight away and can't sign in again unless someone adds them back.`)) return;
+    if (await busy(b, () => api(`users/${encodeURIComponent(b.dataset.remove)}/remove`, { method: 'POST' }))) { toast('Removed'); settingsPage(); }
+  }));
+  $('#add-user').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const out = await busy(f.querySelector('button'), () => api('users', { method: 'POST', body: { email: f.email.value, name: f.name.value, role: f.role.value } }));
+    if (out) { toast(`${out.user.email} added`); settingsPage(); }
+  });
+  $('#toggle-auto').addEventListener('click', async (e) => {
+    const on = !st.reminders;
+    if (on && st.due_today.length && !confirm(`Turn on reminders? ${plural(st.due_today.length, 'email')} will go out today.`)) return;
+    if (await busy(e.target, () => api('settings/reminders', { method: 'POST', body: { enabled: on } }))) {
+      config.reminders = on;
+      toast(on ? 'Reminders on' : 'Reminders off');
+      settingsPage();
+    }
+  });
+}
+
 // ---------- start ----------
 
-api('config').then((c) => { config = c; }).catch(() => {}).finally(route);
+function applyRole() {
+  document.body.classList.toggle('read-only', readOnly());
+  $$('[data-admin-only]', document).forEach((el) => { el.hidden = readOnly(); });
+  const me = document.getElementById('me');
+  if (me && config.me) me.textContent = `${config.me.email}${readOnly() ? ' · read only' : ''}`;
+}
+
+api('config').then((c) => { config = c; applyRole(); }).catch(() => {}).finally(route);

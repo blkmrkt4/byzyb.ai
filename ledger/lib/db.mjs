@@ -82,6 +82,41 @@ CREATE TABLE IF NOT EXISTS audit_log (
   detail    TEXT NOT NULL DEFAULT '{}'
 );
 
+-- Who may sign in. role is 'admin' (everything, including this list) or
+-- 'viewer' (read only). Removing someone sets removed_at; the row is kept.
+CREATE TABLE IF NOT EXISTS users (
+  email      TEXT PRIMARY KEY,
+  name       TEXT NOT NULL DEFAULT '',
+  role       TEXT NOT NULL DEFAULT 'viewer',
+  added_by   TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  removed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS clients (
+  id          INTEGER PRIMARY KEY,
+  name        TEXT NOT NULL,
+  email       TEXT NOT NULL DEFAULT '',
+  address     TEXT NOT NULL DEFAULT '',
+  notes       TEXT NOT NULL DEFAULT '',
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL,
+  archived_at TEXT
+);
+
+-- Payment reminder emails, one row per attempt. kind is before, late1, late7,
+-- late21 (automatic) or manual.
+CREATE TABLE IF NOT EXISTS reminders (
+  id         INTEGER PRIMARY KEY,
+  invoice_id TEXT NOT NULL REFERENCES invoices(id),
+  line_id    INTEGER NOT NULL REFERENCES payment_lines(id),
+  kind       TEXT NOT NULL,
+  sent_to    TEXT NOT NULL,
+  sent_at    TEXT NOT NULL,
+  error      TEXT
+);
+
 CREATE TABLE IF NOT EXISTS login_tokens (
   hash       TEXT PRIMARY KEY,
   expires_at INTEGER NOT NULL,
@@ -156,6 +191,7 @@ CREATE TABLE IF NOT EXISTS bank_lines (
 );
 
 CREATE INDEX IF NOT EXISTS idx_lines_invoice   ON payment_lines(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_reminders_line  ON reminders(line_id);
 CREATE INDEX IF NOT EXISTS idx_txns_payout     ON stripe_txns(payout_id);
 CREATE INDEX IF NOT EXISTS idx_bank_match      ON bank_lines(match_type, match_id);
 CREATE INDEX IF NOT EXISTS idx_payments_line   ON payments(payment_line_id);
@@ -210,6 +246,35 @@ function migrate(db) {
         CREATE INDEX IF NOT EXISTS idx_lines_invoice ON payment_lines(invoice_id);`);
     });
     db.exec('PRAGMA foreign_keys = ON');
+  }
+
+  // Sign-in is per person now; older tokens and sessions without an email stop working.
+  if (!hasColumn(db, 'login_tokens', 'email')) db.exec("ALTER TABLE login_tokens ADD COLUMN email TEXT NOT NULL DEFAULT ''");
+  if (!hasColumn(db, 'sessions', 'email')) db.exec("ALTER TABLE sessions ADD COLUMN email TEXT NOT NULL DEFAULT ''");
+  if (!hasColumn(db, 'audit_log', 'actor')) db.exec('ALTER TABLE audit_log ADD COLUMN actor TEXT');
+
+  // Saved clients. Invoices keep their own copy of the name and email (what was
+  // sent), plus a link to the client record.
+  for (const [col, def] of [['client_id', 'INTEGER REFERENCES clients(id)'], ['client_address', "TEXT NOT NULL DEFAULT ''"], ['reminders_off', 'INTEGER NOT NULL DEFAULT 0']]) {
+    if (!hasColumn(db, 'invoices', col)) db.exec(`ALTER TABLE invoices ADD COLUMN ${col} ${def}`);
+  }
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_name ON clients(name COLLATE NOCASE)');
+  const orphans = db.prepare('SELECT id, client_name, client_email FROM invoices WHERE client_id IS NULL ORDER BY created_at').all();
+  if (orphans.length) {
+    tx(db, () => {
+      const now = new Date().toISOString();
+      const find = db.prepare('SELECT * FROM clients WHERE name = ? COLLATE NOCASE');
+      const make = db.prepare('INSERT INTO clients (name, email, created_at, updated_at) VALUES (?, ?, ?, ?)');
+      const setEmail = db.prepare("UPDATE clients SET email = ? WHERE id = ? AND email = ''");
+      const link = db.prepare('UPDATE invoices SET client_id = ?, client_name = ? WHERE id = ?');
+      for (const inv of orphans) {
+        const name = inv.client_name.trim();
+        let c = find.get(name);
+        if (!c) c = { id: Number(make.run(name, inv.client_email || '', now, now).lastInsertRowid), name };
+        else if (inv.client_email) setEmail.run(inv.client_email, c.id);
+        link.run(c.id, c.name, inv.id);
+      }
+    });
   }
 
   // Cached fallback payment link per payment (see createLinePaymentLink). After the rebuild above.

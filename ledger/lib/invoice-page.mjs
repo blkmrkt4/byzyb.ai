@@ -112,7 +112,7 @@ export function renderInvoicePage(inv, { business, today, token, canPay, notice 
 
   <section class="billto">
     <h2>Bill to</h2>
-    <p>${esc(inv.client_name)}${inv.client_email ? `<br>${esc(inv.client_email)}` : ''}</p>
+    <p>${esc(inv.client_name)}${inv.client_address ? `<br>${esc(inv.client_address).replace(/\n/g, '<br>')}` : ''}${inv.client_email ? `<br>${esc(inv.client_email)}` : ''}</p>
   </section>
 
   ${inv.description ? `<section class="desc"><h2>For</h2><p>${esc(inv.description).replace(/\n/g, '<br>')}</p></section>` : ''}
@@ -179,6 +179,39 @@ export function invoiceEmail(inv, { business, link }) {
 ${when ? `<p>${esc(when)}</p>` : ''}
 <p><a href="${esc(link)}" style="display:inline-block;background:#25292E;color:#fff;padding:12px 20px;border-radius:9px;text-decoration:none;font-weight:600">View and pay invoice ${esc(inv.id)}</a></p>
 <p style="color:#616972;font-size:13px">You can pay by card on that page, or print it or save it as a PDF for your records. Questions? Reply to this email.</p>
+<p>${esc(business.shortName)}</p>
+</div>`;
+  return { subject, text, html };
+}
+
+// A reminder about one payment. kind: before (due soon), late1/late7/late21
+// (overdue), or manual (sent by hand: worded by whether it's late yet).
+export function reminderEmail(inv, line, { business, link, today }) {
+  const cur = inv.currency;
+  const count = inv.lines.length;
+  const amount = money(line.outstanding_cents, cur);
+  const what = count > 1 ? `${paymentName(line, count)} on invoice ${inv.id} (${line.ref})` : `invoice ${inv.id}`;
+  const late = line.due_date && line.due_date < today;
+  const days = line.due_date ? Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${line.due_date}T00:00:00Z`)) / 86_400_000) : null;
+  let subject, lead;
+  if (late) {
+    subject = `Overdue: invoice ${line.ref}, ${amount}`;
+    lead = `Our records show ${amount} for ${what} was due ${longDate(line.due_date)}${days > 1 ? `, ${days} days ago` : ''}, and it hasn't been paid yet.`;
+  } else if (line.due_date) {
+    subject = `Reminder: invoice ${line.ref} is due ${longDate(line.due_date)}`;
+    lead = `A friendly reminder that ${amount} for ${what} is due ${line.due_date === today ? 'today' : longDate(line.due_date)}.`;
+  } else {
+    subject = `Reminder: invoice ${line.ref}, ${amount}`;
+    lead = `A friendly reminder that ${amount} for ${what} is ready to pay.`;
+  }
+  const greeting = `Hi ${inv.client_name},`;
+  const already = 'If you’ve already paid, thank you, and please ignore this email.';
+  const text = [greeting, '', lead, '', `View and pay: ${link}`, '', already, 'Questions? Reply to this email.', '', business.shortName].join('\n');
+  const html = `<div style="font:15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#25292E;max-width:560px">
+<p>${esc(greeting)}</p>
+<p>${esc(lead)}</p>
+<p><a href="${esc(link)}" style="display:inline-block;background:#25292E;color:#fff;padding:12px 20px;border-radius:9px;text-decoration:none;font-weight:600">View and pay ${esc(line.ref)}</a></p>
+<p style="color:#616972;font-size:13px">${esc(already)} Questions? Reply to this email.</p>
 <p>${esc(business.shortName)}</p>
 </div>`;
   return { subject, text, html };

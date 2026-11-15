@@ -44,11 +44,16 @@ auto-matches deposits to payouts and manual payments; the rest are matched by ha
 
 ## Phase 4: smaller fixes
 
-- [ ] **Saved clients.** A clients table with email and billing address, chosen from a list, so
+- [x] **Saved clients.** A clients table with email and billing address, chosen from a list, so
       one client can't split into two names with separate balances.
-- [ ] **Payment reminders.** Automatic emails a few days before a payment is due and when it
+- [x] **Payment reminders.** Automatic emails a few days before a payment is due and when it
       goes overdue.
-- [ ] **Duplicate invoice.** Start a new invoice from an old one for repeat work.
+- [x] **Duplicate invoice.** Start a new invoice from an old one for repeat work.
+
+## Access control
+
+- [x] **Access list with roles.** Only listed people get sign-in links. Admins manage the list
+      at /admin/settings; read-only people can see everything except the list and change nothing.
 
 ## Shipped notes
 
@@ -60,3 +65,9 @@ auto-matches deposits to payouts and manual payments; the rest are matched by ha
   "Finish setting up" checklist for the Stripe webhook events, the Checkout key permission
   and the HST number. Reports at /admin/reports: receivables, payments and HST (with HST
   charged on invoices issued in the period), client statements, CSV exports, print layouts.
+- Phase 3 shipped 2026-11-14 (see the Bank notes above).
+- Phase 4 and access control shipped 2026-11-15. Saved clients at /admin/clients (rename,
+  merge, billing address on invoices). Payment reminders: off until an admin turns them on in
+  Settings; 3 days before due, then 1, 7 and 21 days late, 9 am to 6 pm Toronto; per-invoice
+  opt-out and "Send a reminder now". Duplicate invoice from any invoice page. The first admins
+  come from the ADMIN_EMAILS variable, used only when the access list is empty.
