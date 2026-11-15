@@ -241,6 +241,7 @@ const per = (interval) => (interval === 'year' ? 'year' : 'month');
 function planPrice(o, hst) {
   const unit = per(o.interval);
   const withTax = o.amount_cents + Math.round(o.amount_cents * HST_RATE);
+  if (!o.interval) return { main: money(o.amount_cents, o.currency), unit: 'one-time', tax: hst ? `+ HST: ${money(withTax, o.currency)} in total` : '' };
   return {
     main: `${money(o.amount_cents, o.currency)}`,
     unit: `a ${unit}`,
@@ -253,10 +254,8 @@ function planPrice(o, hst) {
 export function renderPlanPage(offer, { business, token }) {
   const withdrawn = !!offer.cancelled_at;
   const fromLines = [business.name, ...String(business.address || '').split('\n'), business.email].filter(Boolean);
-  const units = new Set(offer.options.map((o) => per(o.interval)));
-  const term = units.size === 1
-    ? `Billed ${[...units][0] === 'month' ? 'monthly' : 'yearly'} for ${offer.payments} ${[...units][0]}${offer.payments === 1 ? '' : 's'}, starting the day you choose.`
-    : `Billed for ${offer.payments} payments, starting the day you choose.`;
+  const billing = (o) => (!o.interval ? 'One payment, due the day you choose.'
+    : `Billed ${o.interval === 'year' ? 'yearly' : 'monthly'} for ${offer.payments} ${per(o.interval)}${offer.payments === 1 ? '' : 's'}, starting the day you choose.`);
   const cards = offer.options.map((o) => {
     const price = planPrice(o, offer.hst_enabled);
     const details = String(o.details || '').split('\n').map((l) => l.replace(/^[-•*]\s*/, '').trim()).filter(Boolean);
@@ -265,6 +264,7 @@ export function renderPlanPage(offer, { business, token }) {
         <h3>${esc(o.name)}</h3>
         <p class="price"><span class="amt">${esc(price.main)}</span> <span class="per">${esc(price.unit)}</span></p>
         ${price.tax ? `<p class="sub">${esc(price.tax)}</p>` : ''}
+        <p class="sub">${esc(billing(o))}</p>
         ${details.length ? `<ul>${details.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>` : ''}
         ${withdrawn ? '' : `<form method="post" action="/invoice/${esc(token)}/choose/${esc(o.key)}"><button class="pay" type="submit">Choose ${esc(o.name)}</button></form>`}
       </article>`;
@@ -296,7 +296,7 @@ export function renderPlanPage(offer, { business, token }) {
   </header>
   ${offer.message ? `<section class="desc"><p>${esc(offer.message).replace(/\n/g, '<br>')}</p></section>` : ''}
   <section class="plans" aria-label="Plans">${cards}</section>
-  <p class="sub terms">${esc(term)} Choosing a plan creates invoice ${esc(offer.id)} for it, here at this same link, where you can pay by card.</p>
+  <p class="sub terms">Choosing a plan creates invoice ${esc(offer.id)} for it, here at this same link, where you can pay by card.</p>
   <footer>Questions before you choose? Email <a href="mailto:${esc(business.email)}?subject=Invoice%20${esc(offer.id)}">${esc(business.email)}</a>.</footer>
 </main>
 </body>
@@ -329,9 +329,10 @@ export function planChosenEmail(offer, option, { business, adminLink }) {
   const p = planPrice(option, offer.hst_enabled);
   const what = `${offer.client_name} chose ${option.name} (${p.main} ${p.unit}${offer.hst_enabled ? ' + HST' : ''}).`;
   const subject = `${offer.client_name} chose ${option.name}`;
-  const text = [what, '', `Invoice ${offer.id} has been created for ${offer.payments} payments.`, `See it: ${adminLink}`].join('\n');
+  const count = option.interval ? `${offer.payments} payments` : 'one payment';
+  const text = [what, '', `Invoice ${offer.id} has been created for ${count}.`, `See it: ${adminLink}`].join('\n');
   const html = `<div style="font:15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#25292E;max-width:560px">
-<p>${esc(what)}</p><p>Invoice ${esc(offer.id)} has been created for ${offer.payments} payments.</p>
+<p>${esc(what)}</p><p>Invoice ${esc(offer.id)} has been created for ${esc(count)}.</p>
 <p><a href="${esc(adminLink)}">See invoice ${esc(offer.id)}</a></p><p style="color:#616972;font-size:13px">${esc(business.shortName)} ledger</p></div>`;
   return { subject, text, html };
 }

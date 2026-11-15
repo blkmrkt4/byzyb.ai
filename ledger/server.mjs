@@ -390,7 +390,7 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
         return redirect(res, self);
       }
       if (out.created) {
-        if (stripe) {
+        if (stripe && out.option.interval) {
           const err = await makeLink(out.invoice_id);
           if (err) log.error('[ledger] subscription link after plan choice failed', out.invoice_id, err);
         }

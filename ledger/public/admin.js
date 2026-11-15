@@ -409,7 +409,7 @@ async function formPage(id) {
         <div class="subpanel stack">
           <div class="head"><h2>Amount</h2><button class="btn btn-quiet btn-sm" type="button" id="add-item">Add line item</button></div>
           ${products.length ? `<label>Start from a Stripe product <span class="muted small">(optional)</span>
-            <select name="product"><option value="">None. I’ll enter the amount</option>${products.map((p) => `<option value="${esc(p.price)}"${p === preProduct ? ' selected' : ''}>${esc(p.name)} · ${esc(money(p.amount_cents, p.currency))}${p.interval ? ` a ${p.interval}` : ''}</option>`).join('')}</select>
+            <select name="product"><option value="">None. I’ll enter the amount</option>${products.map((p) => `<option value="${esc(p.price)}"${p === preProduct ? ' selected' : ''}>${esc(p.brand)} · ${esc(p.name)} · ${esc(money(p.amount_cents, p.currency))}${p.interval ? ` a ${p.interval}` : ''}</option>`).join('')}</select>
             <span class="muted small" id="product-hint"></span></label>` : ''}
           <div id="items"></div>
           <div class="grid3">
@@ -1569,7 +1569,7 @@ function remindersPanel(inv, openLines) {
 // invoice, with the number shown here from the start.
 
 const intervalWord = (i) => (i === 'year' ? 'year' : 'month');
-const planPrice = (o) => `${money(o.amount_cents, o.currency)} a ${intervalWord(o.interval)}`;
+const planPrice = (o) => (o.interval ? `${money(o.amount_cents, o.currency)} a ${intervalWord(o.interval)}` : `${money(o.amount_cents, o.currency)} one-time`);
 const DEFAULT_OFFER_MESSAGE = 'Here are the ways we can look after your website from here. Have a look at what each one includes and choose the one that suits you.';
 
 async function offerFormPage() {
@@ -1578,7 +1578,8 @@ async function offerFormPage() {
   const draft = loadDraft(draftName);
   const [{ products = [], error }, { id: freshId }, { clients: clientNames }] = await Promise.all([api('stripe-products'), api('next-id'), api('clients')]);
   const newId = draft?.id || freshId;
-  const plans = products.filter((p) => p.interval).sort((a, b) => a.amount_cents - b.amount_cents);
+  // Grouped by business (PK Labs first, as the server sorts them), then by price.
+  const plans = products.map((p, i) => ({ ...p, i })).sort((a, b) => (a.brand === b.brand ? a.amount_cents - b.amount_cents : a.i - b.i));
   document.title = 'New plan choice | Painkiller Labs admin';
   app.innerHTML = `
     <a class="back" href="/admin/invoices" data-nav>← Invoices</a>
@@ -1595,15 +1596,15 @@ async function offerFormPage() {
       <label>Message at the top of the page <textarea name="message" rows="3">${esc(DEFAULT_OFFER_MESSAGE)}</textarea></label>
       <div class="subpanel stack">
         <h2>Plans to offer</h2>
-        ${plans.length ? `<p class="muted small">Tick the plans the client can choose between. Prices come from Stripe. Write what each includes, one point per line.</p>
+        ${plans.length ? `<p class="muted small">Tick the plans the client can choose between. Prices come from Stripe. Write what each includes, one point per line. A one-time item becomes a single payment when chosen.</p>
         <div class="plan-picks">${plans.map((p, i) => `
           <div class="plan-pick" data-i="${i}">
-            <label class="check"><input type="checkbox" data-k="on"> <span><b>${esc(p.name)}</b> · ${esc(planPrice(p))} <span class="muted">${esc(p.currency)}</span></span></label>
+            <label class="check"><input type="checkbox" data-k="on"> <span><span class="brand-tag">${esc(p.brand)}</span> <b>${esc(p.name)}</b> · ${esc(planPrice(p))} <span class="muted">${esc(p.currency)}</span></span></label>
             <div class="plan-edit" hidden>
               <label>Name on the page <input data-k="name" value="${esc(p.name)}" maxlength="80"></label>
               <label>What it includes <textarea data-k="details" rows="3" placeholder="One point per line">${esc(p.description)}</textarea></label>
             </div>
-          </div>`).join('')}</div>` : '<div class="notice warn">No monthly or yearly prices found in Stripe. Add a recurring price to a product in Stripe first.</div>'}
+          </div>`).join('')}</div>` : '<div class="notice warn">No active prices found in Stripe. Add a product with a price in Stripe first.</div>'}
         <div class="grid3">
           <label><span id="count-label">Number of payments</span> <input name="payments" type="number" min="1" max="120" value="12"></label>
         </div>
@@ -1625,7 +1626,7 @@ async function offerFormPage() {
   });
   const picked = () => $$('.plan-pick').filter((el) => el.querySelector('[data-k="on"]').checked);
   const updateCount = () => {
-    const units = new Set(picked().map((el) => intervalWord(plans[el.dataset.i].interval)));
+    const units = new Set(picked().filter((el) => plans[el.dataset.i].interval).map((el) => intervalWord(plans[el.dataset.i].interval)));
     $('#count-label').textContent = units.size === 1 ? `Number of ${[...units][0]}s` : 'Number of payments';
   };
   $$('.plan-pick [data-k="on"]').forEach((cb) => cb.addEventListener('change', () => {

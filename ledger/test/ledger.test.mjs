@@ -1046,7 +1046,7 @@ const PLANS = [
   { price: 'price_build', product: 'prod_build', name: 'Website build', description: '', amount_cents: 800000, currency: 'CAD', interval: null },
 ];
 
-test('a plan choice reserves its invoice number and only offers monthly or yearly Stripe prices', async () => {
+test('a plan choice reserves its invoice number and only offers active Stripe prices', async () => {
   const O = await import('../lib/offers.mjs');
   const db = fresh();
   const id = O.createOffer(db, { client_name: 'Cavera Insurance', options: [{ price: 'price_host' }, { price: 'price_care', details: 'Hosting\nChanges' }] }, PLANS);
@@ -1055,7 +1055,6 @@ test('a plan choice reserves its invoice number and only offers monthly or yearl
   assert.deepEqual(o.options.map((x) => [x.name, x.amount_cents, x.details]), [['Website Hosting', 6000, 'Hosting\nBackups'], ['Website care plus', 25000, 'Hosting\nChanges']]);
   // Nobody else can be given that number.
   assert.equal(invoice(db, { id }) === id, false);
-  assert.throws(() => O.createOffer(db, { client_name: 'X', options: [{ price: 'price_build' }] }, PLANS), /monthly or yearly/);
   assert.throws(() => O.createOffer(db, { client_name: 'X', options: [{ price: 'price_gone' }] }, PLANS), /isn’t an active price/);
   assert.throws(() => O.createOffer(db, { client_name: 'X', options: [] }, PLANS), /at least one/);
 });
@@ -1122,4 +1121,30 @@ test('a withdrawn plan choice can’t be picked', async (t) => {
   assert.match(await (await req(`/invoice/${public_token}`)).text(), /no longer available/);
   await req(`/invoice/${public_token}/choose/1`, { method: 'POST' });
   assert.equal(L.listInvoices(db, {}).length, 0);
+});
+
+test('a one-time item in a plan choice becomes a single-payment invoice', async () => {
+  const O = await import('../lib/offers.mjs');
+  const db = fresh();
+  const id = O.createOffer(db, { client_name: 'Cavera Insurance', hst_enabled: false, options: [{ price: 'price_host' }, { price: 'price_build' }] }, PLANS);
+  const out = O.chooseOffer(db, O.getOffer(db, id).public_token, '2', '2026-11-20');
+  const inv = L.getInvoice(db, out.invoice_id);
+  assert.equal(inv.schedule, 'one_time');
+  assert.equal(inv.lines.length, 1);
+  assert.equal(inv.total_cents, 800000);
+  assert.equal(inv.lines[0].due_date, '2026-11-20');
+  assert.equal(inv.stripe_product, 'prod_build');
+});
+
+test('Stripe products are labelled by business, PK Labs first', async () => {
+  const { listProductPrices } = await import('../lib/stripe.mjs');
+  const price = (id, prod, name, amount, recurring, metadata = {}) => ({ id, unit_amount: amount, currency: 'cad', recurring, product: { id: prod, name, active: true, metadata } });
+  const stripe = { get: async () => ({ has_more: false, data: [
+    price('p1', 'prod_UPymbPCbhJb1TB', 'Individual', 1200, { interval: 'month', interval_count: 1 }),
+    price('p2', 'prod_hosting', 'Website Hosting', 6000, { interval: 'month', interval_count: 1 }),
+    price('p3', 'prod_other', 'Thing', 500, null, { brand: 'Side project' }),
+    price('p4', 'prod_inv', 'Invoice ABCD-01', 100, null),
+  ] }) };
+  const list = await listProductPrices(stripe);
+  assert.deepEqual(list.map((p) => [p.brand, p.name]), [['PK Labs', 'Website Hosting'], ['EZSay', 'Individual'], ['Side project', 'Thing']]);
 });

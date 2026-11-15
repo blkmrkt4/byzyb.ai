@@ -223,6 +223,15 @@ async function recurringPrice(stripe, inv, { currency, amount, interval }) {
   return stripe.post('/prices', { currency, unit_amount: amount, recurring: { interval }, ...productOf(inv, `Invoice ${inv.id}`) });
 }
 
+// Which business a Stripe product belongs to, shown in front of its name in
+// the ledger's pickers. The account also sells EZSay subscriptions; everything
+// else is PK Labs. A product's "brand" metadata in Stripe overrides this.
+const PRODUCT_BRANDS = {
+  prod_UPymbPCbhJb1TB: 'EZSay', // Individual
+  prod_UPymQUkBVib8sW: 'EZSay', // Professional Editor
+};
+const DEFAULT_BRAND = 'PK Labs';
+
 // Active prices on the account, for the "Start from a Stripe product" picker.
 // Leaves out the one-off products the ledger makes for invoices.
 export async function listProductPrices(stripe) {
@@ -236,12 +245,15 @@ export async function listProductPrices(stripe) {
       if (p.recurring && (p.recurring.interval_count ?? 1) !== 1) continue;
       const interval = p.recurring ? p.recurring.interval : null;
       if (interval && !['month', 'year'].includes(interval)) continue;
-      out.push({ price: p.id, product: prod.id, name: prod.name, description: prod.description || '', amount_cents: p.unit_amount, currency: p.currency.toUpperCase(), interval });
+      const brand = String(prod.metadata?.brand || PRODUCT_BRANDS[prod.id] || DEFAULT_BRAND);
+      out.push({ price: p.id, product: prod.id, brand, name: prod.name, description: prod.description || '', amount_cents: p.unit_amount, currency: p.currency.toUpperCase(), interval });
     }
     if (!res.has_more) break;
     starting_after = res.data.at(-1).id;
   }
-  return out.sort((a, b) => a.name.localeCompare(b.name) || a.amount_cents - b.amount_cents);
+  // PK Labs first, then by name and price.
+  const rank = (b) => (b === DEFAULT_BRAND ? 0 : 1);
+  return out.sort((a, b) => rank(a.brand) - rank(b.brand) || a.brand.localeCompare(b.brand) || a.name.localeCompare(b.name) || a.amount_cents - b.amount_cents);
 }
 
 // ---------- payment links ----------

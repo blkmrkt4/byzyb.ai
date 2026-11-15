@@ -57,7 +57,6 @@ export function createOffer(db, input, catalogue) {
   const options = picked.map((o, i) => {
     const p = catalogue.find((c) => c.price === o.price);
     if (!p) throw new LedgerError('One of those plans isn’t an active price in Stripe any more. Reload and pick again.');
-    if (!INTERVALS[p.interval]) throw new LedgerError(`“${p.name}” isn’t a monthly or yearly price`);
     return {
       key: String(i + 1), price: p.price, product: p.product,
       name: String(o.name || p.name).trim().slice(0, 80) || p.name,
@@ -113,11 +112,12 @@ export function chooseOffer(db, token, key, today = todayToronto()) {
       client_name: o.client_name, client_email: o.client_email, client_address: o.client_address,
       description: opt.details ? `${opt.name}\n${opt.details}` : opt.name,
       currency: o.options[0].currency, hst_enabled: o.hst_enabled,
-      schedule: INTERVALS[opt.interval], count: o.payments, first_due: today, issue_date: today,
-      line_items: [{
+      // A one-time item (like a website build) is a single payment due today.
+      schedule: INTERVALS[opt.interval] || 'one_time', count: opt.interval ? o.payments : 1, first_due: today, issue_date: today,
+      line_items: [opt.interval ? {
         description: `${opt.name}: ${o.payments} ${opt.interval}${o.payments === 1 ? '' : 's'} × ${money(opt.amount_cents, opt.currency)}`,
         amount_cents: opt.amount_cents * o.payments,
-      }],
+      } : { description: opt.name, amount_cents: opt.amount_cents }],
       stripe_product: opt.product,
       notes: `The client chose “${opt.name}” from plan choice ${o.id} on ${today}.`,
     }, { reserved: { public_token: o.public_token } });
