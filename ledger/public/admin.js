@@ -1,5 +1,5 @@
 // Painkiller Labs admin. Plain JavaScript, no build step.
-// Routes: /admin/dashboard, /admin/reports, /admin/invoices, /admin/invoices/new, /admin/invoices/:id, /admin/invoices/:id/edit
+// Routes: /admin/dashboard, /admin/reports, /admin/bank, /admin/invoices, /admin/invoices/new, /admin/invoices/:id, /admin/invoices/:id/edit
 
 const app = document.getElementById('app');
 const toastEl = document.getElementById('toast');
@@ -120,6 +120,7 @@ async function route() {
     let m;
     if (p === '/admin/dashboard' || p === '/admin') return await dashboardPage();
     if (p === '/admin/reports') return await reportsPage();
+    if (p === '/admin/bank') return await bankPage();
     if (p === '/admin/invoices') return await listPage();
     if (p === '/admin/invoices/new') return await formPage(null);
     if ((m = p.match(/^\/admin\/invoices\/([A-Za-z0-9]{4})\/edit$/))) return await formPage(m[1].toUpperCase());
@@ -745,6 +746,10 @@ const SETUP_TEXT = {
     title: 'Let the Pay buttons create Stripe checkouts',
     body: 'In Stripe, open Developers → API keys, edit the restricted key the ledger uses, and set Checkout Sessions, Prices and Payment Links to Write. This ticks itself off once the key can reach Checkout.',
   },
+  bank_read: {
+    title: 'Let the ledger read your Stripe deposits',
+    body: 'On the same restricted key, set Balance, Payouts and Charges to Read. The Bank page then breaks each Stripe deposit into the payments and fees inside it. This ticks itself off once the key can read them.',
+  },
   hst_number: {
     title: 'Add your HST number',
     body: 'Once you have it, send it to Claude or set HST_NUMBER on the ledger service in Railway. Invoices that charge HST must show it.',
@@ -1053,6 +1058,251 @@ async function reportsPage() {
   $('#pick select').addEventListener('change', (e) => go(`/admin/reports?r=statement${e.target.value ? `&client=${encodeURIComponent(e.target.value)}` : ''}`, true));
   clickableRows(app);
   bindPrint();
+}
+
+// ---------- bank ----------
+
+const PAYOUT_STATUS = { paid: ['Paid', 'Deposited'], in_transit: ['Sent', 'On the way'], pending: ['Draft', 'Pending'], failed: ['Overdue', 'Failed'], canceled: ['Void', 'Cancelled'] };
+const payoutBadge = (s) => { const [cls, text] = PAYOUT_STATUS[s] || ['Draft', s]; return `<span class="badge ${cls}">${esc(text)}</span>`; };
+const inBank = (b, waiting) => (b
+  ? `<span class="badge Paid" title="${esc(b.description)}">In bank ${esc(niceDate(b.date))}</span>`
+  : `<span class="badge ${waiting ? 'Draft' : 'Partly'}">${waiting ? 'Not landed yet' : 'Not matched'}</span>`);
+const payRef = (t) => (t.ref
+  ? `<a class="mono" href="/admin/invoices/${esc(t.invoice_id)}" data-nav>${esc(t.ref)}</a>`
+  : t.payment_id ? '<span class="badge Partly">Unmatched</span>' : '<span class="muted small">Not in the ledger</span>');
+function ago(iso) {
+  const min = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min ago`;
+  if (min < 48 * 60) return `${Math.round(min / 60)} h ago`;
+  return niceDate(iso.slice(0, 10));
+}
+
+async function bankPage() {
+  const params = new URLSearchParams(location.search);
+  const period = params.get('period') || (params.get('from') ? '' : 'this-month');
+  const [from, to] = periodRange(period, config.today) || [params.get('from'), params.get('to')];
+  const d = await api(`bank?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+  document.title = 'Bank | Painkiller Labs admin';
+  const t = d.totals;
+  const stripeHeld = d.balance ? addTotals(d.balance.available, d.balance.pending) : t.pending;
+  const qs = `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+
+  const notices = [];
+  if (!d.stripe) notices.push('<div class="notice warn">Stripe isn’t connected, so only e-transfers, cheques and cash show here.</div>');
+  else if (d.sync_error) notices.push(`<div class="notice warn"><strong>Couldn’t read Stripe.</strong> ${esc(d.sync_error)}</div>`);
+  else if (!d.charges_readable) notices.push('<div class="notice small">The Stripe key can’t read charges, so card payments are matched to invoices by amount and date. Set Charges to Read on the key for exact matching.</div>');
+
+  app.innerHTML = `
+    <div class="head">
+      <h1>Bank</h1>
+      <div class="actions noprint">
+        ${d.stripe ? '<button class="btn btn-quiet" type="button" id="sync">Sync with Stripe</button>' : ''}
+        <a class="btn btn-quiet" href="/admin/api/bank.csv?${qs}" download>Export CSV</a>
+        <button class="btn btn-quiet" type="button" id="print">Print or save as PDF</button>
+      </div>
+    </div>
+    ${printHead('Deposits and Stripe fees', `${niceDate(from)} to ${niceDate(to)}`)}
+    <p class="muted noprint">Every deposit that should reach your bank: Stripe payouts broken down into the payments and fees inside them, plus e-transfers, cheques and cash.${d.synced_at ? ` Synced with Stripe ${esc(ago(d.synced_at))}.` : ''}</p>
+    ${notices.join('')}
+    <form class="filters report-filters noprint section" id="range">
+      <label>From <input type="date" name="from" value="${esc(from)}" required></label>
+      <label>To <input type="date" name="to" value="${esc(to)}" required></label>
+      <button class="btn btn-quiet" type="submit">Show</button>
+      <div class="chips">${Object.entries(PERIODS).map(([k, v]) => `<a class="chip" href="/admin/bank?period=${k}" data-nav${k === period ? ' aria-current="true"' : ''}>${v}</a>`).join('')}</div>
+    </form>
+
+    <dl class="summary five">
+      <div><dt>Stripe deposits</dt><dd>${esc(totalsText(t.deposited))}</dd></div>
+      <div><dt>Stripe fees</dt><dd>${esc(totalsText(t.fees))}</dd></div>
+      <div><dt>E-transfers and cheques</dt><dd>${esc(totalsText(t.manual))}</dd></div>
+      <div><dt>Held by Stripe now</dt><dd>${esc(totalsText(stripeHeld))}</dd></div>
+      <div><dt>Not matched to bank</dt><dd>${d.counts.bank_lines_total ? d.counts.not_in_bank : '<span class="muted small">Import a statement</span>'}</dd></div>
+    </dl>
+
+    <section class="section">
+      <div class="head tight"><h2>Stripe deposits</h2><span class="muted small noprint">Click a deposit to see what’s in it</span></div>
+      ${d.payouts.length ? `<div class="payouts">${d.payouts.map(payoutBlock).join('')}</div>`
+        : `<div class="empty">${d.stripe && !d.sync_error ? 'No Stripe deposits in this period.' : 'No Stripe deposits to show.'}</div>`}
+    </section>
+
+    ${d.pending.length || d.on_the_way.length ? `
+    <section class="section">
+      <div class="head tight"><h2>Collected, not in your bank yet</h2>${d.balance ? `<span class="muted small">Stripe is holding ${esc(totalsText(stripeHeld))}</span>` : ''}</div>
+      <p class="muted small">Card payments reach your bank in a Stripe payout, usually 2 business days after they’re made.</p>
+      <table class="tbl report section">
+        <thead><tr><th>Date</th><th>What</th><th>Payment</th><th>Client / payer</th><th class="num">Amount</th><th class="num">Fee</th><th class="num">You get</th></tr></thead>
+        <tbody>
+          ${d.on_the_way.map((p) => `<tr><td data-label="Date">${esc(niceDate(p.date))}</td><td data-label="What"><span>Payout ${payoutBadge(p.status)}</span></td><td data-label="Payment"><span class="muted small">Arriving ${esc(niceDate(p.date))}</span></td><td data-label="Client"></td><td class="num" data-label="Amount"></td><td class="num" data-label="Fee"></td><td class="num" data-label="You get">${money(p.amount_cents, p.currency)}</td></tr>`).join('')}
+          ${d.pending.map((x) => txnRow(x)).join('')}
+        </tbody>
+      </table>
+    </section>` : ''}
+
+    <section class="section">
+      <div class="head tight"><h2>E-transfers, cheques and cash</h2><span class="muted small">Payments you recorded by hand</span></div>
+      ${d.manual.length ? `<table class="tbl report section">
+        <thead><tr><th>Date</th><th>Payment</th><th>Client</th><th>Method</th><th class="num">Amount</th><th>Bank</th></tr></thead>
+        <tbody>${d.manual.map((m) => `
+          <tr><td data-label="Date">${esc(niceDate(m.date))}</td><td data-label="Payment">${payRef(m)}</td><td data-label="Client">${esc(m.client_name || '—')}</td>
+            <td data-label="Method">${esc(m.method)}</td><td class="num" data-label="Amount">${money(m.amount_cents, m.currency)}</td>
+            <td data-label="Bank">${d.counts.bank_lines_total ? inBank(m.bank) : '<span class="muted small">—</span>'}</td></tr>`).join('')}</tbody>
+        <tfoot><tr><td colspan="4">Total</td><td class="num">${esc(totalsText(t.manual))}</td><td></td></tr></tfoot>
+      </table>` : '<div class="empty">No e-transfers, cheques or cash recorded in this period.</div>'}
+    </section>
+
+    <section class="section">
+      <div class="head tight"><h2>Bank statement</h2></div>
+      <form class="panel import noprint" id="import">
+        <div>
+          <strong>Import deposits from your bank</strong>
+          <p class="muted small">In online banking, download your account activity as a CSV file and choose it here. Only deposits are read. Each one is matched to a Stripe payout or a recorded payment when the amount and date line up. Importing the same file twice is fine.</p>
+        </div>
+        <div class="import-row">
+          <input type="file" name="file" accept=".csv,text/csv" required>
+          <select name="currency" aria-label="Account currency"><option>CAD</option><option>USD</option></select>
+          <button class="btn" type="submit">Import</button>
+        </div>
+      </form>
+      ${d.bank_lines.length ? `<table class="tbl report section">
+        <thead><tr><th>Date</th><th>Bank description</th><th class="num">Amount</th><th>Matched to</th></tr></thead>
+        <tbody>${d.bank_lines.map(bankLineRow).join('')}</tbody>
+      </table>` : `<div class="empty section">${d.counts.bank_lines_total ? 'No bank deposits in this period.' : 'No bank statement imported yet.'}</div>`}
+    </section>`;
+
+  // Open every deposit's breakdown on paper.
+  const details = $$('details.payout');
+  window.onbeforeprint = () => details.forEach((x) => { x.dataset.wasOpen = x.open ? '1' : ''; x.open = true; });
+  window.onafterprint = () => details.forEach((x) => { x.open = x.dataset.wasOpen === '1'; });
+  $('#print').addEventListener('click', () => window.print());
+  $('#sync')?.addEventListener('click', (e) => busy(e.target, async () => {
+    const r = await api('bank/sync', { method: 'POST' });
+    toast(`Synced: ${plural(r.payouts, 'payout')}`);
+    bankPage();
+  }));
+  $('#range').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const f = e.target;
+    go(`/admin/bank?from=${f.from.value}&to=${f.to.value}`, true);
+  });
+  $('#import').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const file = f.file.files[0];
+    if (!file) return toast('Choose a CSV file first.', true);
+    if (file.size > 7_000_000) return toast('That file is too large. Download a shorter date range.', true);
+    busy(f.querySelector('button'), async () => {
+      const r = await api('bank/import', { method: 'POST', body: { csv: await file.text(), currency: f.currency.value } });
+      const bits = [`${plural(r.imported, 'deposit')} imported`];
+      if (r.matched) bits.push(`${r.matched} matched`);
+      if (r.duplicates) bits.push(`${r.duplicates} already there`);
+      toast(bits.join(', '));
+      bankPage();
+    });
+  });
+  $$('[data-match]').forEach((b) => b.addEventListener('click', () => {
+    const sel = $(`select[data-for="${b.dataset.match}"]`);
+    if (!sel.value) return toast('Choose what this deposit is.', true);
+    const [type, id] = sel.value.split(':');
+    busy(b, async () => {
+      const r = await api(`bank/lines/${b.dataset.match}/match`, { method: 'POST', body: { type, id } });
+      toast(r.amount_differs ? 'Matched. The amounts are different, so check it.' : 'Matched');
+      bankPage();
+    });
+  }));
+  for (const [attr, action, msg] of [['data-unmatch', 'unmatch', 'Match removed'], ['data-restore', 'restore', 'Restored']]) {
+    $$(`[${attr}]`).forEach((b) => b.addEventListener('click', () => busy(b, async () => {
+      await api(`bank/lines/${b.getAttribute(attr)}/${action}`, { method: 'POST' });
+      toast(msg);
+      bankPage();
+    })));
+  }
+  $$('[data-ignore]').forEach((b) => b.addEventListener('click', () => {
+    const row = b.closest('td');
+    if (row.querySelector('.ignore-form')) return;
+    row.insertAdjacentHTML('beforeend', `<form class="ignore-form"><input name="note" placeholder="Why? e.g. owner loan, GST refund" maxlength="300"><button class="btn btn-quiet btn-sm">Not a client payment</button></form>`);
+    const f = row.querySelector('.ignore-form');
+    f.note.focus();
+    f.addEventListener('submit', (e) => {
+      e.preventDefault();
+      busy(f.querySelector('button'), async () => {
+        await api(`bank/lines/${b.dataset.ignore}/ignore`, { method: 'POST', body: { note: f.note.value } });
+        toast('Marked as not a client payment');
+        bankPage();
+      });
+    });
+  }));
+}
+
+function addTotals(...ts) {
+  const out = {};
+  for (const t of ts) for (const [c, v] of Object.entries(t || {})) out[c] = (out[c] || 0) + v;
+  return out;
+}
+
+function txnRow(x) {
+  const fee = x.fee_cents ? `−${money(x.fee_cents, x.currency)}` : '';
+  const isFee = ['stripe_fee', 'tax'].includes(x.type);
+  return `
+    <tr>
+      <td data-label="Date">${esc(niceDate(x.date))}</td>
+      <td data-label="What">${esc(x.label)}</td>
+      <td data-label="Payment">${isFee ? '' : payRef(x)}</td>
+      <td data-label="Client">${esc(x.client_name || x.payer || x.description || '—')}</td>
+      <td class="num" data-label="Amount">${isFee ? '' : money(x.amount_cents, x.currency)}</td>
+      <td class="num" data-label="Fee">${fee}</td>
+      <td class="num" data-label="You get">${money(x.net_cents, x.currency)}</td>
+    </tr>`;
+}
+
+function payoutBlock(p) {
+  const payments = p.txns.filter((x) => ['charge', 'payment'].includes(x.type)).length;
+  const sub = !p.automatic ? 'Manual payout. Stripe doesn’t list what’s in it.'
+    : !p.itemised ? 'Breakdown not read yet'
+      : `${plural(payments, 'payment')}${p.fee_cents ? ` · ${money(p.fee_cents, p.currency)} in fees` : ''}`;
+  return `
+    <details class="payout panel">
+      <summary>
+        <span class="payout-date">${esc(niceDate(p.date))}</span>
+        <span class="payout-sub">${payoutBadge(p.status)} <span class="muted small">${esc(sub)}</span></span>
+        <span class="payout-bank">${p.status === 'paid' || p.status === 'in_transit' ? inBank(p.bank, p.status !== 'paid') : ''}</span>
+        <span class="payout-amt num">${money(p.amount_cents, p.currency)}</span>
+      </summary>
+      ${p.failure_message ? `<div class="notice bad small">${esc(p.failure_message)}</div>` : ''}
+      ${p.balanced === false ? `<div class="notice warn small">The items below add up to ${money(p.net_cents, p.currency)}, not ${money(p.amount_cents, p.currency)}. Press Sync with Stripe to read this deposit again.</div>` : ''}
+      ${p.txns.length ? `<table class="tbl report compact">
+        <thead><tr><th>Date</th><th>What</th><th>Payment</th><th>Client / payer</th><th class="num">Amount</th><th class="num">Fee</th><th class="num">You get</th></tr></thead>
+        <tbody>${p.txns.map(txnRow).join('')}</tbody>
+        <tfoot><tr><td colspan="4">Deposited</td><td class="num">${money(p.gross_cents, p.currency)}</td><td class="num">${p.fee_cents ? `−${money(p.fee_cents, p.currency)}` : ''}</td><td class="num">${money(p.net_cents, p.currency)}</td></tr></tfoot>
+      </table>` : ''}
+      <p class="muted small mono">${esc(p.id)}</p>
+    </details>`;
+}
+
+function bankLineRow(l) {
+  let cell;
+  if (l.match_type) {
+    cell = `<span class="badge Paid">${l.match_method === 'auto' ? 'Matched' : 'Matched by you'}</span> <span class="small">${esc(l.matched_to)}</span>
+      <button class="link-btn small noprint" data-unmatch="${l.id}">Undo</button>`;
+  } else if (l.ignored_at) {
+    cell = `<span class="badge Draft">Not a client payment</span>${l.note ? ` <span class="muted small">${esc(l.note)}</span>` : ''}
+      <button class="link-btn small noprint" data-restore="${l.id}">Restore</button>`;
+  } else {
+    const opts = l.options.map((o) => `<option value="${o.type}:${esc(o.id)}">${o.exact ? '' : '≠ '}${esc(niceDate(o.date))} · ${money(o.amount_cents, o.currency)} · ${esc(o.label)}</option>`).join('');
+    cell = `<span class="badge Partly">Not matched</span>
+      <div class="match-row noprint">
+        ${l.options.length ? `<select data-for="${l.id}" aria-label="Match this deposit"><option value="">What is this deposit?</option>${opts}</select>
+        <button class="btn btn-quiet btn-sm" data-match="${l.id}">Match</button>` : '<span class="muted small">Nothing in the ledger is close to this amount and date.</span>'}
+        <button class="link-btn small" data-ignore="${l.id}">Not a client payment</button>
+      </div>`;
+  }
+  return `
+    <tr>
+      <td data-label="Date">${esc(niceDate(l.date))}</td>
+      <td data-label="Description">${esc(l.description || '—')}</td>
+      <td class="num" data-label="Amount">${money(l.amount_cents, l.currency)}</td>
+      <td data-label="Matched to"><div class="cell-stack">${cell}</div></td>
+    </tr>`;
 }
 
 // ---------- start ----------

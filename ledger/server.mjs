@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { openDb } from './lib/db.mjs';
 import * as L from './lib/ledger.mjs';
 import * as R from './lib/reports.mjs';
+import * as B from './lib/bank.mjs';
 import * as A from './lib/auth.mjs';
 import { sendLoginEmail, sendInvoiceEmail } from './lib/email.mjs';
 import { renderInvoicePage, renderNotFound, invoiceEmail } from './lib/invoice-page.mjs';
@@ -147,9 +148,10 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
     // A custom header can't be sent cross-site without a CORS preflight, which
     // this server never allows, so it blocks cross-site form posts.
     if (method !== 'GET' && req.headers['x-ledger'] !== '1') return json(res, 403, { error: 'Missing X-Ledger header' });
-    const body = method === 'GET' ? {} : JSON.parse((await readBody(req)) || '{}');
-    const q = Object.fromEntries(url.searchParams);
     const [a, b, c] = parts;
+    const limit = a === 'bank' && b === 'import' ? 8_000_000 : 1_000_000;
+    const body = method === 'GET' ? {} : JSON.parse((await readBody(req, limit)) || '{}');
+    const q = Object.fromEntries(url.searchParams);
 
     if (method === 'GET' && a === 'config') {
       return json(res, 200, {
@@ -163,6 +165,7 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
       return json(res, 200, { ok: true });
     }
     if (method === 'GET' && a === 'reports') return reportsApi(res, b, q);
+    if (a === 'bank' || a === 'bank.csv') return bankApi(req, res, method, parts, body, q);
     if (method === 'GET' && a === 'clients') return json(res, 200, { clients: L.listClients(db) });
     if (method === 'GET' && a === 'next-id') return json(res, 200, { id: L.nextInvoiceId(db) });
     if (method === 'GET' && a === 'invoices' && !b) return json(res, 200, { invoices: L.listInvoices(db, q), clients: L.listClients(db) });
@@ -216,14 +219,61 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
     checkoutCheck = { at: Date.now(), ok };
     return ok;
   }
+  let bankCheck = { at: 0, ok: false };
+  async function payoutsReadable() {
+    if (!stripe) return false;
+    if (L.getSetting(db, 'bank.synced_at') && L.getSetting(db, 'bank.charges_readable') === '1') return true;
+    if (Date.now() - bankCheck.at < 10 * 60_000) return bankCheck.ok;
+    let ok = false;
+    try {
+      await stripe.get('/balance');
+      await stripe.get('/payouts', { limit: 1 });
+      await stripe.get('/charges', { limit: 1 });
+      ok = true;
+    } catch { ok = false; }
+    bankCheck = { at: Date.now(), ok };
+    return ok;
+  }
   async function setupStatus() {
     const manual = (k) => L.getSetting(db, `setup.${k}`) === 'done';
     const sawAdjustment = !!db.prepare("SELECT 1 FROM audit_log WHERE action IN ('refund', 'dispute') LIMIT 1").get();
     return [
       { key: 'webhook_events', done: manual('webhook_events') || sawAdjustment, manual: true },
       { key: 'checkout', done: manual('checkout') || await checkoutAllowed(), manual: true },
+      { key: 'bank_read', done: await payoutsReadable(), manual: false },
       { key: 'hst_number', done: !!cfg.business.hstNumber, manual: false },
     ];
+  }
+
+  // ---------- bank ----------
+  // Opening the Bank page syncs with Stripe if the last sync is over 30 minutes old.
+  let syncing = null;
+  async function sync() {
+    syncing ||= B.syncStripe(db, stripe).finally(() => { syncing = null; });
+    return syncing;
+  }
+  async function bankApi(req, res, method, [a, b, c, d], body, q) {
+    if (method === 'GET' && a === 'bank' && !b) {
+      let syncError = null;
+      const last = L.getSetting(db, 'bank.synced_at');
+      if (stripe && q.sync !== '0' && (!last || Date.now() - Date.parse(last) > 30 * 60_000)) {
+        try { await sync(); } catch (err) { syncError = err.message; if (!(err instanceof B.StripePermissionError)) log.error('[ledger] stripe sync failed:', err.message); }
+      }
+      return json(res, 200, { ...B.bankReport(db, { from: q.from, to: q.to }), stripe: !!stripe, sync_error: syncError });
+    }
+    if (method === 'GET' && a === 'bank.csv') {
+      const r = B.bankReport(db, { from: q.from, to: q.to });
+      return send(res, 200, B.bankCsv(r), 'text/csv; charset=utf-8', { 'Content-Disposition': `attachment; filename="deposits-${q.from}-to-${q.to}.csv"` });
+    }
+    if (method === 'POST' && b === 'sync') return json(res, 200, await sync());
+    if (method === 'POST' && b === 'import') return json(res, 200, B.importStatement(db, body.csv, { currency: body.currency }));
+    if (method === 'POST' && b === 'lines' && c) {
+      if (d === 'match') return json(res, 200, B.matchBankLine(db, c, { type: body.type, target: body.id }));
+      if (d === 'unmatch') { B.unmatchBankLine(db, c); return json(res, 200, { ok: true }); }
+      if (d === 'ignore') { B.ignoreBankLine(db, c, body.note); return json(res, 200, { ok: true }); }
+      if (d === 'restore') { B.restoreBankLine(db, c); return json(res, 200, { ok: true }); }
+    }
+    return json(res, 404, { error: 'Not found' });
   }
 
   // ---------- reports ----------

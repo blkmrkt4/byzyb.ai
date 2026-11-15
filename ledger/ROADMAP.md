@@ -30,10 +30,17 @@ Agreed 2026-11-14. Tick items off here as they ship.
 
 ## Phase 3: match to the bank
 
-- [ ] **5. Bank reconciliation.** Pull Stripe payouts and balance transactions so each bank
+- [x] **5. Bank reconciliation.** Pull Stripe payouts and balance transactions so each bank
       deposit breaks down into the payments in it minus Stripe fees. Show money collected but
       not yet deposited, and total fees for the books. Manual e-transfers and cheques appear in
       the same view. Later: import a bank statement CSV and tick deposits off automatically.
+
+Shipped 2026-11-14: Bank page at /admin/bank. Syncs Stripe payouts and balance
+transactions (needs Balance, Payouts and Charges: Read on the restricted key), shows each
+deposit's payments and fees, money Stripe is still holding, Stripe fees for the period, and
+manual e-transfers/cheques/cash. Bank statement CSV import (RBC, TD and generic formats)
+auto-matches deposits to payouts and manual payments; the rest are matched by hand or marked
+"not a client payment". CSV export per payout item for the accountant.
 
 ## Phase 4: smaller fixes
 

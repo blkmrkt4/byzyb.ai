@@ -618,10 +618,192 @@ test('the dashboard API includes the setup checklist, and items can be ticked of
   const { req, db } = await server(t);
   const cookie = `pk_admin=${A.createSession(db)}`;
   const get = async () => (await (await req('/admin/api/dashboard', { headers: { cookie } })).json()).setup;
-  assert.deepEqual((await get()).map((s) => [s.key, s.done]), [['webhook_events', false], ['checkout', false], ['hst_number', false]]);
+  assert.deepEqual((await get()).map((s) => [s.key, s.done]), [['webhook_events', false], ['checkout', false], ['bank_read', false], ['hst_number', false]]);
   await req('/admin/api/setup/webhook_events', { method: 'POST', body: '{"done":true}', headers: { cookie, 'x-ledger': '1' } });
   assert.equal((await get())[0].done, true);
   assert.equal((await req('/admin/api/setup/hst_number', { method: 'POST', body: '{"done":true}', headers: { cookie, 'x-ledger': '1' } })).status, 404);
   const csv = await req('/admin/api/reports/payments.csv?from=2026-11-01&to=2026-11-30', { headers: { cookie } });
   assert.match(csv.headers.get('content-disposition'), /payments-2026-11-01-to-2026-11-30\.csv/);
+});
+
+// ---------- bank reconciliation ----------
+
+import * as B from '../lib/bank.mjs';
+
+const noon = (d) => Date.UTC(...d.split('-').map((n, i) => (i === 1 ? n - 1 : +n)), 12) / 1000;
+
+// A fake Stripe with one landed payout (the Acme card payment) and one payment
+// not paid out yet. `chargesReadable: false` makes expanding the charge fail.
+function fakeStripe({ chargesReadable = true } = {}) {
+  const calls = [];
+  const charge = (id, pi, name) => ({ id, object: 'charge', payment_intent: pi, billing_details: { name } });
+  const txn = (id, over) => ({ id, type: 'charge', currency: 'cad', created: 1794000000, status: 'available', available_on: 1794200000, ...over });
+  return {
+    calls,
+    async get(path, params = {}) {
+      calls.push([path, params]);
+      if (params.expand && !chargesReadable) throw new Error('Stripe: Permission denied. Enabling Charges Read would allow this request');
+      const src = (id, pi, name) => (params.expand ? charge(id, pi, name) : id);
+      if (path === '/payouts') {
+        return { has_more: false, data: [{ id: 'po_1', amount: 109693, currency: 'cad', status: 'paid', arrival_date: noon('2026-11-10'), created: noon('2026-11-08'), automatic: true, method: 'standard' }] };
+      }
+      if (path === '/balance_transactions' && params.payout === 'po_1') {
+        return { has_more: false, data: [
+          txn('txn_1', { amount: 113000, fee: 3307, net: 109693, source: src('ch_1', 'pi_1', 'Pat') }),
+          txn('txn_po', { type: 'payout', amount: -109693, fee: 0, net: -109693, source: 'po_1' }),
+        ] };
+      }
+      if (path === '/balance_transactions') {
+        return { has_more: false, data: [txn('txn_2', { amount: 5650, fee: 194, net: 5456, status: 'pending', created: noon('2026-11-13'), source: src('ch_2', 'pi_2', 'Walk-in') })] };
+      }
+      if (path === '/balance') return { available: [{ currency: 'cad', amount: 0 }], pending: [{ currency: 'cad', amount: 5456 }] };
+      throw new Error(`unexpected ${path}`);
+    },
+  };
+}
+
+async function bankBook() {
+  const db = fresh();
+  const card = invoice(db, { client_name: 'Acme Dental' });
+  L.upsertStripePayment(db, await paymentFromEvent(checkout({ metadata: { invoice_id: card, payment_suffix: '01' } })));
+  const et = invoice(db, { client_name: 'Bloor Physio', subtotal_cents: 50000 });
+  L.recordManualPayment(db, { line_id: L.getInvoice(db, et).lines[0].id, amount_cents: 56500, received_at: '2026-11-05', method: 'e-transfer' });
+  return { db, card, et };
+}
+
+const RBC = `Account Type,Account Number,Transaction Date,Cheque Number,Description 1,Description 2,CAD$,USD$
+Chequing,05555-1234567,11/11/2026,,STRIPE,MSP/DIV,1096.93,
+Chequing,05555-1234567,11/06/2026,,E-TRANSFER,BLOOR PHYSIO,565.00,
+Chequing,05555-1234567,11/07/2026,,RENT,,-2000.00,
+Chequing,05555-1234567,11/08/2026,,MISC DEPOSIT,,50.00,
+`;
+
+test('a Stripe sync breaks each payout into payments and fees, and shows what is not paid out yet', async () => {
+  const { db, card } = await bankBook();
+  const stripe = fakeStripe();
+  const out = await B.syncStripe(db, stripe, { nowSec: noon('2026-11-14') });
+  assert.equal(out.charges_readable, true);
+  const r = B.bankReport(db, { from: '2026-11-01', to: '2026-11-30' });
+  assert.equal(r.payouts.length, 1);
+  const po = r.payouts[0];
+  assert.equal(po.balanced, true);
+  assert.equal(po.txns.length, 1); // the payout's own line is left out
+  assert.equal(po.txns[0].ref, `${card}-01`);
+  assert.equal(po.txns[0].fee_cents, 3307);
+  assert.equal(po.gross_cents, 113000);
+  assert.deepEqual(r.totals.deposited, { CAD: 109693 });
+  assert.deepEqual(r.totals.fees, { CAD: 3501 });
+  assert.equal(r.pending.length, 1);
+  assert.equal(r.pending[0].ref, null); // a Stripe payment the ledger never saw
+  assert.equal(r.pending[0].payer, 'Walk-in');
+  assert.deepEqual(r.balance.pending, { CAD: 5456 });
+  assert.equal(r.manual.length, 1);
+  assert.equal(r.counts.not_in_bank, 2);
+
+  // A landed payout isn't read again on the next sync.
+  stripe.calls.length = 0;
+  await B.syncStripe(db, stripe, { nowSec: noon('2026-11-14') });
+  assert.ok(!stripe.calls.some(([, p]) => p.payout));
+  assert.match(B.bankCsv(r), /po_1,1096.93,2026-11-06,Payment,.*-01,Acme Dental,1130,33.07,1096.93,CAD,no/);
+});
+
+test('without Charges: Read, Stripe payments are matched by amount and date instead', async () => {
+  const { db, card } = await bankBook();
+  const out = await B.syncStripe(db, fakeStripe({ chargesReadable: false }), { nowSec: noon('2026-11-14') });
+  assert.equal(out.charges_readable, false);
+  const r = B.bankReport(db, { from: '2026-11-01', to: '2026-11-30' });
+  assert.equal(r.payouts[0].txns[0].ref, `${card}-01`);
+  assert.equal(r.charges_readable, false);
+});
+
+test('a Stripe key without payout access gets a plain explanation', async () => {
+  const db = fresh();
+  const stripe = { async get() { throw new Error('Stripe: Permission denied. Enabling Payouts Read (payout_read)...'); } };
+  await assert.rejects(B.syncStripe(db, stripe), (e) => e instanceof B.StripePermissionError && /Balance, Payouts and Charges/.test(e.message));
+});
+
+test('reading bank statements: RBC with a header, TD without one, and odd amounts', () => {
+  const rbc = B.readStatement(RBC);
+  assert.equal(rbc.rows.length, 4);
+  assert.deepEqual(rbc.rows[0], { date: '2026-11-11', amount_cents: 109693, description: 'STRIPE · MSP/DIV', currency: null });
+  assert.equal(rbc.rows[2].amount_cents, -200000);
+
+  const td = B.readStatement('11/11/2026,STRIPE PAYOUT,,1096.93,5000.00\n11/07/2026,RENT,2000.00,,3903.07\n');
+  assert.deepEqual(td.rows.map((r) => [r.date, r.amount_cents, r.description]), [['2026-11-11', 109693, 'STRIPE PAYOUT'], ['2026-11-07', -200000, 'RENT']]);
+
+  const dmy = B.readStatement('Date,Description,Amount\n25/11/2026,Deposit,"1,234.50"\n03/11/2026,Fee,(4.00)\n');
+  assert.deepEqual(dmy.rows.map((r) => [r.date, r.amount_cents]), [['2026-11-25', 123450], ['2026-11-03', -400]]);
+
+  assert.equal(B.parseAmount('12.00-'), -1200);
+  assert.equal(B.parseAmount('$1,000.5 CR'), 100050);
+  assert.equal(B.parseAmount('abc'), null);
+  assert.equal(B.parseDate('Nov 14, 2026'), '2026-11-14');
+  assert.equal(B.parseDate('14-Nov-2026'), '2026-11-14');
+  assert.equal(B.parseDate('2026-02-30'), null);
+  assert.throws(() => B.readStatement('a,b\n1,2\n'), /date column/);
+});
+
+test('importing a bank statement ticks off payouts and e-transfers, once', async () => {
+  const { db, et } = await bankBook();
+  await B.syncStripe(db, fakeStripe(), { nowSec: noon('2026-11-14') });
+  const out = B.importStatement(db, RBC);
+  assert.deepEqual({ imported: out.imported, withdrawals: out.withdrawals, matched: out.matched }, { imported: 3, withdrawals: 1, matched: 2 });
+
+  let r = B.bankReport(db, { from: '2026-11-01', to: '2026-11-30' });
+  assert.equal(r.payouts[0].bank.date, '2026-11-11');
+  assert.equal(r.manual[0].bank.date, '2026-11-06');
+  assert.equal(r.manual[0].ref, `${et}-01`);
+  assert.equal(r.counts.not_in_bank, 0);
+  assert.equal(r.counts.bank_unmatched, 1);
+  const misc = r.bank_lines.find((l) => l.description === 'MISC DEPOSIT');
+  assert.deepEqual(misc.options, []); // nothing left to match it to
+
+  // Importing the same statement again adds nothing.
+  assert.deepEqual([B.importStatement(db, RBC).imported, B.importStatement(db, RBC).duplicates], [0, 3]);
+
+  B.ignoreBankLine(db, misc.id, 'Owner top-up');
+  r = B.bankReport(db, { from: '2026-11-01', to: '2026-11-30' });
+  assert.equal(r.counts.bank_unmatched, 0);
+
+  // Undo a match, then match it by hand.
+  const stripeLine = r.bank_lines.find((l) => l.match_type === 'payout');
+  B.unmatchBankLine(db, stripeLine.id);
+  assert.throws(() => B.matchBankLine(db, misc.id, { type: 'payout', target: 'po_1' }), /Restore/);
+  assert.equal(B.matchBankLine(db, stripeLine.id, { type: 'payout', target: 'po_1' }).amount_differs, false);
+  assert.throws(() => B.matchBankLine(db, misc.id, { type: 'payout', target: 'po_1' }), /Restore|already/);
+  B.restoreBankLine(db, misc.id);
+  assert.throws(() => B.matchBankLine(db, misc.id, { type: 'payout', target: 'po_1' }), /already matched/);
+});
+
+test('two identical deposits that could each be either payment are left for you to match', async () => {
+  const db = fresh();
+  for (const name of ['A Co', 'B Co']) {
+    const id = invoice(db, { client_name: name, subtotal_cents: 10000 });
+    L.recordManualPayment(db, { line_id: L.getInvoice(db, id).lines[0].id, amount_cents: 11300, received_at: '2026-11-05', method: 'cheque' });
+  }
+  const out = B.importStatement(db, 'Date,Description,Amount\n2026-11-06,Cheque deposit,113.00\n');
+  assert.equal(out.matched, 0);
+  const [line] = B.bankReport(db, { from: '2026-11-01', to: '2026-11-30' }).bank_lines;
+  assert.equal(line.options.length, 2);
+  assert.ok(line.options.every((o) => o.exact));
+});
+
+test('the bank API syncs, imports and matches', async (t) => {
+  const { req, db } = await server(t, {}, { stripe: fakeStripe() });
+  const cookie = `pk_admin=${A.createSession(db)}`;
+  const post = (p, body) => req(`/admin/api/${p}`, { method: 'POST', body: JSON.stringify(body), headers: { cookie, 'x-ledger': '1' } });
+  const r = await (await req('/admin/api/bank?from=2026-11-01&to=2026-11-30', { headers: { cookie } })).json();
+  assert.equal(r.sync_error, null);
+  assert.ok(r.synced_at);
+  assert.equal(r.payouts.length, 1);
+  const imp = await (await post('bank/import', { csv: RBC })).json();
+  assert.equal(imp.imported, 3);
+  assert.equal(imp.matched, 1); // the payout; there's no e-transfer in this ledger
+  const csv = await req('/admin/api/bank.csv?from=2026-11-01&to=2026-11-30', { headers: { cookie } });
+  assert.match(csv.headers.get('content-disposition'), /deposits-2026-11-01-to-2026-11-30/);
+  assert.match(await csv.text(), /yes \(2026-11-11\)/);
+  const lines = (await (await req('/admin/api/bank?from=2026-11-01&to=2026-11-30', { headers: { cookie } })).json()).bank_lines;
+  const et = lines.find((l) => l.description.startsWith('E-TRANSFER'));
+  assert.equal((await post(`bank/lines/${et.id}/ignore`, { note: 'personal' })).status, 200);
+  assert.equal((await post('bank/import', { csv: 'nothing here' })).status, 400);
 });

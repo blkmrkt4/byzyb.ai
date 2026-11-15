@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomToken } from './ids.mjs';
 
-// Records are never hard-deleted: invoices are voided, payments are ignored or
-// unassigned. The only DELETEs in this codebase are for expired login tokens
+// Records are never hard-deleted: invoices are voided, payments and bank lines
+// are ignored or unassigned. The only DELETEs in this codebase are for expired login tokens
 // and sessions.
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS invoices (
@@ -101,7 +101,63 @@ CREATE TABLE IF NOT EXISTS settings (
   updated_at TEXT NOT NULL
 );
 
+-- Stripe payouts and what's in them, read from the Stripe API (see lib/bank.mjs).
+CREATE TABLE IF NOT EXISTS stripe_payouts (
+  id              TEXT PRIMARY KEY,
+  amount_cents    INTEGER NOT NULL,
+  currency        TEXT NOT NULL,
+  status          TEXT NOT NULL,
+  arrival_date    TEXT NOT NULL,
+  created_at      TEXT NOT NULL,
+  method          TEXT,
+  automatic       INTEGER NOT NULL DEFAULT 1,
+  description     TEXT,
+  failure_message TEXT,
+  txns_loaded_at  TEXT,
+  txns_status     TEXT,
+  synced_at       TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS stripe_txns (
+  id             TEXT PRIMARY KEY,
+  payout_id      TEXT,
+  type           TEXT NOT NULL,
+  source_id      TEXT,
+  payment_intent TEXT,
+  payer          TEXT,
+  amount_cents   INTEGER NOT NULL,
+  fee_cents      INTEGER NOT NULL DEFAULT 0,
+  net_cents      INTEGER NOT NULL,
+  currency       TEXT NOT NULL,
+  created_at     TEXT NOT NULL,
+  available_on   TEXT,
+  status         TEXT,
+  description    TEXT,
+  synced_at      TEXT NOT NULL
+);
+
+-- Deposits imported from a bank statement CSV. match_type is 'payout' (a
+-- Stripe payout id) or 'payment' (a manual payment id).
+CREATE TABLE IF NOT EXISTS bank_lines (
+  id           INTEGER PRIMARY KEY,
+  import_id    TEXT NOT NULL,
+  fingerprint  TEXT NOT NULL UNIQUE,
+  date         TEXT NOT NULL,
+  description  TEXT NOT NULL DEFAULT '',
+  amount_cents INTEGER NOT NULL,
+  currency     TEXT NOT NULL DEFAULT 'CAD',
+  match_type   TEXT,
+  match_id     TEXT,
+  matched_at   TEXT,
+  match_method TEXT,
+  ignored_at   TEXT,
+  note         TEXT,
+  created_at   TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_lines_invoice   ON payment_lines(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_txns_payout     ON stripe_txns(payout_id);
+CREATE INDEX IF NOT EXISTS idx_bank_match      ON bank_lines(match_type, match_id);
 CREATE INDEX IF NOT EXISTS idx_payments_line   ON payments(payment_line_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity    ON audit_log(entity, entity_id);
 `;
