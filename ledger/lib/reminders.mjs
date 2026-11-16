@@ -57,6 +57,9 @@ export function dueReminders(db, today = todayToronto(), now = Date.now()) {
     const inv = invCache.get(r.invoice_id);
     const line = inv.lines.find((l) => l.id === r.line_id);
     if (!line || line.outstanding_cents <= 0) continue;
+    // On automatic payments the card is charged on the due date (and Stripe
+    // retries a failed one), so no "please pay" email until it's a week late.
+    if (inv.subscriptions.length && ['before', 'late1'].includes(stage.kind)) continue;
     const to = recipient(db, inv);
     if (!to) continue;
     out.push({

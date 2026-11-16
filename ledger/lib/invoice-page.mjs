@@ -24,18 +24,26 @@ export function paymentName(line, count) {
   return line.label ? `${of} · ${line.label}` : of;
 }
 
-function lineStatus(l, today, isVoid) {
+// With automatic payments on, a payment isn't the client's to press Pay for
+// until it's clearly been missed (Stripe retries a failed card for a few days).
+const AUTOPAY_GRACE_DAYS = 5;
+const autoCharged = (l, today, auto) => auto && l.paid_cents === 0 && l.due_date
+  && Date.parse(`${l.due_date}T00:00:00Z`) + AUTOPAY_GRACE_DAYS * 86_400_000 > Date.parse(`${today}T00:00:00Z`);
+
+function lineStatus(l, today, isVoid, auto) {
   if (l.outstanding_cents === 0) return { cls: 'paid', text: `Paid${l.paid_at ? ` ${longDate(l.paid_at)}` : ''}` };
   if (isVoid) return { cls: 'void', text: 'Cancelled' };
+  if (autoCharged(l, today, auto)) return { cls: 'due', text: l.due_date > today ? 'Charged automatically' : 'Being charged' };
   if (l.paid_cents > 0) return { cls: 'part', text: `${money(l.outstanding_cents, l.currency)} left to pay` };
   if (!l.due_date) return { cls: 'later', text: 'Due on completion' };
   if (l.due_date < today) return { cls: 'late', text: 'Overdue' };
   return { cls: 'due', text: 'Due' };
 }
 
-export function renderInvoicePage(inv, { business, today, token, canPay, notice }) {
+export function renderInvoicePage(inv, { business, today, token, canPay, notice, autopay: offerAutopay = false }) {
   const cur = inv.currency;
   const isVoid = !!inv.voided_at;
+  const auto = !isVoid && (inv.subscriptions || []).length > 0;
   const count = inv.lines.length;
   const open = inv.lines.filter((l) => l.outstanding_cents > 0);
   const nextDue = open.find((l) => l.due_date) || open[0];
@@ -48,8 +56,8 @@ export function renderInvoicePage(inv, { business, today, token, canPay, notice 
     : `<tr><td>${inv.description ? esc(inv.description.split('\n')[0]) : 'Services'}</td><td class="num">${money(inv.subtotal_cents, cur)}</td></tr>`;
 
   const schedule = inv.lines.map((l) => {
-    const st = lineStatus({ ...l, currency: cur }, today, isVoid);
-    const pay = canPay && !isVoid && l.outstanding_cents > 0
+    const st = lineStatus({ ...l, currency: cur }, today, isVoid, auto);
+    const pay = canPay && !isVoid && l.outstanding_cents > 0 && !autoCharged(l, today, auto)
       ? `<form method="post" action="/invoice/${esc(token)}/pay/${String(l.suffix).padStart(2, '0')}" class="noprint">
            <button class="pay" type="submit">Pay ${money(l.outstanding_cents, cur)}</button></form>`
       : '';
@@ -65,12 +73,13 @@ export function renderInvoicePage(inv, { business, today, token, canPay, notice 
 
   const fromLines = [business.name, ...String(business.address || '').split('\n'), business.email].filter(Boolean);
   const notices = [];
-  if (notice === 'chosen') notices.push(`<div class="notice ok">Thank you for choosing ${esc((inv.description || 'your plan').split('\n')[0])}. Your invoice is below.${inv.stripe_link_url ? ' Set up card payments once and each payment is charged automatically.' : ''}</div>`);
+  if (notice === 'chosen') notices.push(`<div class="notice ok">Thank you for choosing ${esc((inv.description || 'your plan').split('\n')[0])}. Your invoice is below.${offerAutopay ? ' Set up card payments once and each payment is charged automatically.' : ''}</div>`);
+  if (notice === 'autopay' && !auto) notices.push('<div class="notice ok">Thank you. Your automatic payments are being set up; it can take a minute to show here.</div>');
   if (notice === 'paid') notices.push('<div class="notice ok">Thank you. Your payment went through, and a receipt is on its way by email. It can take a minute to show here.</div>');
   if (notice === 'nopay') notices.push('<div class="notice warn">Online payment isn’t available right now. Please try again later, or reply to the invoice email.</div>');
   if (isVoid) notices.push('<div class="notice bad">This invoice was cancelled and doesn’t need to be paid.</div>');
 
-  const howToPay = isVoid || inv.outstanding_cents === 0 || !(canPay || business.etransferEmail) ? '' : `
+  const howToPay = isVoid || auto || inv.outstanding_cents === 0 || !(canPay || business.etransferEmail) ? '' : `
     <section class="how">
       <h2>How to pay</h2>
       <ul>
@@ -131,7 +140,7 @@ export function renderInvoicePage(inv, { business, today, token, canPay, notice 
     ${!isVoid ? `<dt class="grand">Balance due</dt><dd class="grand">${money(inv.outstanding_cents, cur)}</dd>` : ''}
   </dl>
 
-  ${autopay(inv, { isVoid, count })}
+  ${auto ? autopayOn(inv) : offerAutopay ? autopay(inv, { isVoid, count, token }) : ''}
   <section class="schedule">
     <h2>${count > 1 ? `Payment schedule · ${count} payments` : 'Payment'}</h2>
     <table>
@@ -149,8 +158,19 @@ export function renderInvoicePage(inv, { business, today, token, canPay, notice 
 
 // A monthly or yearly invoice with a Stripe subscription: one button sets up
 // every payment, instead of paying them one at a time.
-function autopay(inv, { isVoid, count }) {
-  if (isVoid || !inv.stripe_link_url || inv.paid_cents || !['monthly', 'annual'].includes(inv.schedule)) return '';
+function autopayOn(inv) {
+  const unit = inv.schedule === 'annual' ? 'year' : 'month';
+  const left = inv.lines.filter((l) => l.paid_cents === 0).length;
+  if (!left) return '';
+  return `
+  <section class="autopay on noprint">
+    <div><b>Automatic payments are on</b>
+      <p class="sub">Your card is charged each ${unit} on the due date${left > 1 ? ` for the ${left} payments still to come` : ' for the last payment'}, then it stops. Stripe emails a receipt each time. You don’t need to press Pay.</p></div>
+  </section>`;
+}
+
+function autopay(inv, { isVoid, count, token }) {
+  if (isVoid || inv.paid_cents || !['monthly', 'annual'].includes(inv.schedule)) return '';
   const per = inv.lines.at(-1);
   const first = inv.lines[0];
   const unit = inv.schedule === 'monthly' ? 'month' : 'year';
@@ -159,14 +179,14 @@ function autopay(inv, { isVoid, count }) {
   <section class="autopay noprint">
     <div><b>Pay automatically each ${unit}</b>
       <p class="sub">Set up your card once: the first payment of ${money(first.amount_cents, inv.currency)} is charged now, then ${money(per.amount_cents, inv.currency)} each ${unit} for the ${count - 1} payments after it, then it stops. Checkout is handled securely by Stripe.</p></div>
-    <a class="pay" href="${esc(inv.stripe_link_url)}">Set up ${unit === 'month' ? 'monthly' : 'yearly'} payments</a>
+    <form method="post" action="/invoice/${esc(token)}/autopay"><button class="pay" type="submit">Set up ${unit === 'month' ? 'monthly' : 'yearly'} payments</button></form>
   </section>`;
   }
   return `
   <section class="autopay noprint">
     <div><b>Pay automatically each ${unit}</b>
       <p class="sub">Set up your card once and each of the ${count} payments of ${money(per.amount_cents, inv.currency)} is charged on its due date, then it stops. Checkout is handled securely by Stripe.</p></div>
-    <a class="pay" href="${esc(inv.stripe_link_url)}">Set up ${unit === 'month' ? 'monthly' : 'yearly'} payments</a>
+    <form method="post" action="/invoice/${esc(token)}/autopay"><button class="pay" type="submit">Set up ${unit === 'month' ? 'monthly' : 'yearly'} payments</button></form>
   </section>`;
 }
 
@@ -321,7 +341,7 @@ function planPrice(o, hst) {
 
 // The page the client sees before choosing. Choosing posts back here and
 // turns into their invoice at the same address.
-export function renderPlanPage(offer, { business, token, today }) {
+export function renderPlanPage(offer, { business, token, today, problem = false }) {
   const withdrawn = !!offer.cancelled_at;
   const fromLines = [business.name, ...String(business.address || '').split('\n'), business.email].filter(Boolean);
   const billing = (o) => {
@@ -373,6 +393,7 @@ export function renderPlanPage(offer, { business, token, today }) {
 </head>
 <body>
 <main class="sheet">
+  ${problem && !withdrawn ? `<div class="notice warn">Sorry, that plan couldn’t be set up. Please try again, or email <a href="mailto:${esc(business.email)}">${esc(business.email)}</a> and we’ll sort it out.</div>` : ''}
   ${withdrawn ? `<div class="notice bad">These options are no longer available. Email <a href="mailto:${esc(business.email)}">${esc(business.email)}</a> if you have questions.</div>` : ''}
   <header class="top">
     <div>

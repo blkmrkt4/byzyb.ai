@@ -51,6 +51,7 @@ export function makeStripe(secretKey, fetchImpl = fetch) {
   return {
     get: (path, params) => call('GET', path, params),
     post: (path, params) => call('POST', path, params),
+    del: (path, params) => call('DELETE', path, params),
   };
 }
 
@@ -101,8 +102,15 @@ export async function paymentFromEvent(event, stripe) {
   switch (event.type) {
     case 'checkout.session.completed':
     case 'checkout.session.async_payment_succeeded': {
-      // Subscription checkouts are recorded from invoice.paid, which also covers renewals.
-      if (o.mode === 'subscription') return { skip: 'subscription checkout (recorded from invoice.paid)' };
+      // Subscription checkouts: payments are recorded from invoice.paid (which also
+      // covers renewals); this event says which invoice the subscription is for.
+      if (o.mode === 'subscription') {
+        const subId = idOf(o.subscription);
+        if (!subId) return { skip: 'subscription checkout without a subscription' };
+        let invoiceId = o.metadata?.invoice_id || null;
+        if (!invoiceId && stripe) invoiceId = (await stripe.get(`/subscriptions/${subId}`)).metadata?.invoice_id || null;
+        return invoiceId ? { subscription_started: { id: subId, invoice_id: String(invoiceId).toUpperCase() } } : { skip: 'subscription checkout not from the ledger' };
+      }
       if (o.payment_status !== 'paid') return { skip: `checkout not paid yet (${o.payment_status})` };
       const pi = typeof o.payment_intent === 'string' ? o.payment_intent : o.payment_intent?.id;
       return {
@@ -128,8 +136,10 @@ export async function paymentFromEvent(event, stripe) {
       // Older API versions put the PaymentIntent on the invoice; newer ones list it under invoice payments.
       let pi = typeof o.payment_intent === 'string' ? o.payment_intent : o.payment_intent?.id;
       if (!pi && stripe) {
-        const list = await stripe.get('/invoice_payments', { invoice: o.id }).catch(() => null);
-        pi = list?.data?.find((x) => x.status === 'paid')?.payment?.payment_intent || null;
+        // If this lookup fails, let it throw: Stripe retries the event, rather than
+        // the payment being stored under the wrong ID and recorded twice.
+        const list = await stripe.get('/invoice_payments', { invoice: o.id });
+        pi = idOf(list?.data?.find((x) => x.status === 'paid')?.payment?.payment_intent) || null;
       }
       return {
         ...base,
@@ -181,7 +191,7 @@ export async function createLineCheckout(stripe, inv, line, { successUrl, cancel
     success_url: successUrl,
     cancel_url: cancelUrl,
   });
-  return session.url;
+  return { id: session.id || null, url: session.url };
 }
 
 // Fallback when the key can't create Checkout Sessions: a reusable Payment
@@ -243,7 +253,7 @@ export async function listProductPrices(stripe) {
     const res = await stripe.get('/prices', { active: 'true', limit: 100, 'expand[]': 'data.product', starting_after });
     for (const p of res.data) {
       const prod = p.product;
-      if (!prod || typeof prod !== 'object' || !prod.active || /^Invoice /.test(prod.name) || p.unit_amount == null) continue;
+      if (!prod || typeof prod !== 'object' || !prod.active || /^Invoice /.test(prod.name) || !p.unit_amount) continue;
       if (p.recurring && (p.recurring.interval_count ?? 1) !== 1) continue;
       const interval = p.recurring ? p.recurring.interval : null;
       if (interval && !['month', 'year'].includes(interval)) continue;
@@ -284,18 +294,44 @@ export async function createPaymentLink(stripe, inv, siteUrl, { today = new Date
     return { link_id: link.id, url: link.url };
   }
 
-  // Recurring: one subscription, one charge per payment line. The ledger
-  // matches each renewal to the next unpaid line and cancels the subscription
-  // after the last one.
-  // Every payment the same, or a larger first one that catches up on whole
-  // months already passed: the extra is a one-time charge on the first invoice.
+  const { items, extra, desc } = await subscriptionItems(stripe, inv);
+  const first = lines[0].due_date;
+  const waitDays = !extra && first && first > today ? daysFrom(today, first) : 0;
+  const link = await stripe.post('/payment_links', {
+    line_items: items,
+    metadata: meta,
+    subscription_data: { description: desc, metadata: meta, ...(waitDays >= 1 ? { trial_period_days: Math.min(waitDays, 730) } : {}) },
+    after_completion: redirect,
+  });
+  return { link_id: link.id, url: link.url };
+}
+
+const daysFrom = (a, b) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+
+// Can a Stripe subscription collect this invoice? Every payment the same, or a
+// larger first one that catches up on whole periods already passed (the extra
+// is a one-time charge on the first Stripe invoice).
+export function subscriptionShape(inv) {
+  const lines = inv.lines || [];
+  if (!['monthly', 'annual'].includes(inv.schedule) || !lines.length) return null;
   const regular = lines.at(-1).amount_cents;
   const rest = new Set(lines.slice(1).map((l) => l.amount_cents));
   const extra = lines[0].amount_cents - regular;
-  const ok = lines.length > 1 && rest.size === 1 && extra >= 0 && extra % regular === 0;
-  if (!ok && new Set(lines.map((l) => l.amount_cents)).size !== 1) {
+  if (!regular || rest.size !== 1 || extra < 0 || extra % regular !== 0) return null;
+  return { regular, extra };
+}
+
+// Recurring: one subscription, one charge per payment line. The ledger
+// matches each renewal to the next unpaid line and cancels the subscription
+// after the last one.
+async function subscriptionItems(stripe, inv) {
+  const lines = inv.lines;
+  const shape = subscriptionShape(inv);
+  if (!shape) {
     throw new Error('A Stripe subscription charges the same amount each time. Make every payment the same amount, or collect them another way.');
   }
+  const { regular, extra } = shape;
+  const currency = inv.currency.toLowerCase();
   const interval = inv.schedule === 'monthly' ? 'month' : 'year';
   const desc = `Invoice ${inv.id} — ${lines.length} ${inv.schedule} payments (${lineRef(inv.id, 1)} to ${lineRef(inv.id, lines.length)})`;
   const price = await recurringPrice(stripe, inv, { currency, amount: regular, interval });
@@ -308,15 +344,51 @@ export async function createPaymentLink(stripe, inv, siteUrl, { today = new Date
     });
     items.push({ price: catchUp.id, quantity: 1 });
   }
-  const first = lines[0].due_date;
-  const waitDays = !extra && first && first > today ? Math.round((Date.parse(`${first}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000) : 0;
-  const link = await stripe.post('/payment_links', {
+  return { items, extra, desc };
+}
+
+// "Set up monthly payments": a fresh Checkout Session each time it's pressed,
+// so a first payment due later waits until exactly that date, however long
+// the client took to press it.
+export async function createAutopayCheckout(stripe, inv, { today, successUrl, cancelUrl, nowSec = Math.floor(Date.now() / 1000) }) {
+  const { items, extra, desc } = await subscriptionItems(stripe, inv);
+  const meta = { invoice_id: inv.id, source: 'pk-ledger' };
+  const first = inv.lines[0].due_date;
+  const wait = {};
+  if (!extra && first && first > today) {
+    // Charge on the morning of the due date in Toronto (about 9 or 10 am).
+    const at = Math.floor(Date.parse(`${first}T14:00:00Z`) / 1000);
+    if (at - nowSec >= 2 * 86_400 + 600) wait.trial_end = at;
+    else wait.trial_period_days = Math.max(1, daysFrom(today, first));
+  }
+  const session = await stripe.post('/checkout/sessions', {
+    mode: 'subscription',
     line_items: items,
     metadata: meta,
-    subscription_data: { description: desc, metadata: meta, ...(waitDays >= 1 ? { trial_period_days: Math.min(waitDays, 730) } : {}) },
-    after_completion: redirect,
+    subscription_data: { description: desc, metadata: meta, ...wait },
+    customer_email: inv.client_email || undefined,
+    success_url: successUrl,
+    cancel_url: cancelUrl,
   });
-  return { link_id: link.id, url: link.url };
+  return { id: session.id || null, url: session.url };
+}
+
+// Whether a Checkout Session made earlier was completed, is still open, or is done with.
+export async function sessionStatus(stripe, id) {
+  if (!id || !stripe.get) return null;
+  try { return (await stripe.get(`/checkout/sessions/${id}`)).status || null; } catch { return null; }
+}
+
+export async function expireSession(stripe, id) {
+  try { await stripe.post(`/checkout/sessions/${id}/expire`, {}); } catch { /* already finished */ }
+}
+
+export async function cancelSubscriptionNow(stripe, subId) {
+  return stripe.del(`/subscriptions/${subId}`);
+}
+
+export async function deactivatePaymentLink(stripe, linkId) {
+  return stripe.post(`/payment_links/${linkId}`, { active: 'false' });
 }
 
 export async function cancelSubscriptionAtPeriodEnd(stripe, subId) {

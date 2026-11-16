@@ -79,3 +79,13 @@ auto-matches deposits to payouts and manual payments; the rest are matched by ha
   monthly/yearly Stripe plans on one page (with what each includes). It holds the invoice
   number from the start; when the client picks, the invoice is created at the same link with
   the Stripe subscription for that plan, and the owner gets an email.
+- Robustness pass 2026-11-16. Choosing a plan twice (double-click, back button, second tab)
+  lands on the invoice. "Set up monthly payments" opens a fresh Stripe Checkout each time (the
+  trial runs to the real first due date), closes any earlier open one, and is replaced by
+  "Automatic payments are on" once a subscription exists; a second subscription for the same
+  invoice is cancelled at once and the owner emailed. Subscriptions stop however the invoice
+  is paid off (card, e-transfer, matched by hand) and at once when it's voided. Pressing Pay
+  twice closes the first checkout; a payment made twice anyway goes to the next payment.
+  Refunds and disputes arriving out of order or before their payment are handled. Admin forms
+  can't be submitted twice, drafts don't come back after saving, amounts over $10M and billing
+  starts more than a year away are refused.

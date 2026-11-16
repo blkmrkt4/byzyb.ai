@@ -5,6 +5,7 @@
 import { tx } from './db.mjs';
 import { randomToken, isInvoiceId } from './ids.mjs';
 import {
+  isDate,
   LedgerError, audit, todayToronto, nextInvoiceId, createInvoice, getInvoice, markSent, saveClientFromInvoice, addInterval,
 } from './ledger.mjs';
 import { money, prepayFor, servicePeriod, periodText, catchUp } from './invoice-page.mjs';
@@ -57,7 +58,8 @@ function customOption(o, currency) {
   return { price: null, product: null, custom: true, name, details: String(o.details || '').trim().slice(0, 1500), amount_cents: amount, currency, interval };
 }
 
-export function createOffer(db, input, catalogue) {
+// today: for the start-date range check (tests pass a fixed day).
+export function createOffer(db, input, catalogue, { today = todayToronto() } = {}) {
   const client_name = String(input.client_name || '').trim();
   if (!client_name) throw new LedgerError('Client name is required');
   const client_email = String(input.client_email || '').trim();
@@ -65,7 +67,12 @@ export function createOffer(db, input, catalogue) {
   const payments = Number(input.payments ?? 12);
   if (!Number.isInteger(payments) || payments < 1 || payments > 120) throw new LedgerError('Number of payments must be between 1 and 120');
   const service_start = input.service_start ? String(input.service_start) : null;
-  if (service_start && (!/^\d{4}-\d{2}-\d{2}$/.test(service_start) || Number.isNaN(Date.parse(service_start)))) throw new LedgerError('The service start date isn’t a valid date');
+  if (service_start && !isDate(service_start)) throw new LedgerError('The service start date isn’t a valid date');
+  if (service_start) {
+    if (service_start < addInterval(today, 'annual', -1) || service_start > addInterval(today, 'annual', 1)) {
+      throw new LedgerError('Billing can start at most a year before or after today. Check the year.');
+    }
+  }
   const free = Number(input.prepay_free_months || 0);
   if (!Number.isInteger(free) || free < 0 || free > 11) throw new LedgerError('Months free must be a whole number from 0 to 11');
   if (free && free >= payments) throw new LedgerError('Months free must be fewer than the number of months');
@@ -79,6 +86,7 @@ export function createOffer(db, input, catalogue) {
     if (o.custom) return { key: String(i + 1), ...customOption(o, currency) };
     const p = catalogue.find((c) => c.price === o.price);
     if (!p) throw new LedgerError('One of those plans isn’t an active price in Stripe any more. Reload and pick again.');
+    if (!(p.amount_cents > 0)) throw new LedgerError(`“${p.name}” is free in Stripe, so there’s nothing to invoice. Pick a paid plan.`);
     return {
       key: String(i + 1), price: p.price, product: p.product,
       name: String(o.name || p.name).trim().slice(0, 80) || p.name,

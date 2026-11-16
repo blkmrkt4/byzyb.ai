@@ -15,9 +15,12 @@ import { renderInvoicePage, renderNotFound, invoiceEmail, invoiceEmailDraft, ren
 import {
   verifyStripeSignature, makeStripe, paymentFromEvent, createPaymentLink, cancelSubscriptionAtPeriodEnd, HANDLED_EVENTS,
   ADJUSTMENT_EVENTS, adjustmentFromEvent, createLineCheckout, createLinePaymentLink, listProductPrices,
+  createAutopayCheckout, sessionStatus, expireSession, cancelSubscriptionNow, deactivatePaymentLink, subscriptionShape,
 } from './lib/stripe.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+// HEAD is a GET without the body (link checkers and email scanners send it).
+const isGet = (req) => req.method === 'GET' || req.method === 'HEAD';
 
 export function makeConfig(env = process.env) {
   const port = Number(env.PORT || 4400);
@@ -136,20 +139,108 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
       return json(res, 200, { received: true, kind: adj.kind, ...out });
     }
     if (!HANDLED_EVENTS.includes(event.type)) return json(res, 200, { received: true, skipped: event.type });
-    const rec = await paymentFromEvent(event, stripe);
+    let rec;
+    try { rec = await paymentFromEvent(event, stripe); } catch (err) {
+      // A Stripe lookup failed: answer with an error so Stripe sends the event again later.
+      log.error('[ledger] webhook lookup failed', event.id, err.message);
+      return json(res, 503, { error: 'Try again later' });
+    }
     if (rec.skip) return json(res, 200, { received: true, skipped: rec.skip });
+    if (rec.subscription_started) {
+      const { id, invoice_id } = rec.subscription_started;
+      if (!db.prepare('SELECT 1 FROM invoices WHERE id = ?').get(invoice_id)) return json(res, 200, { received: true, skipped: 'unknown invoice' });
+      const { duplicate } = L.recordSubscription(db, id, invoice_id);
+      if (duplicate) await stopDuplicate(id, invoice_id);
+      else if (L.subscriptionFinished(db, invoice_id)) await endSubscriptions(invoice_id, 'nothing left to pay');
+      await retireAutopayLink(invoice_id);
+      return json(res, 200, { received: true, subscription: id, duplicate });
+    }
     const out = L.upsertStripePayment(db, rec);
-    if (out.invoice_paid && out.subscription && stripe) {
-      // Last payment on a recurring invoice: stop the subscription renewing.
-      try {
-        await cancelSubscriptionAtPeriodEnd(stripe, out.subscription);
-        L.audit(db, 'invoice', out.invoice_id, 'subscription_end', { subscription: out.subscription });
-      } catch (err) {
-        log.error('[ledger] could not cancel subscription', out.subscription, err.message);
-        L.audit(db, 'invoice', out.invoice_id, 'subscription_end_failed', { subscription: out.subscription, error: err.message });
-      }
+    if (out.duplicate_subscription) await stopDuplicate(out.subscription, out.invoice_id);
+    else if (out.invoice_id && (out.invoice_paid || out.subscription_done)) await endSubscriptions(out.invoice_id, 'paid in full');
+    else if (out.subscription && !out.matched && out.invoice_id && L.subscriptionFinished(db, out.invoice_id)) {
+      // A renewal after the invoice was finished: make sure it's the last.
+      await endSubscriptions(out.invoice_id, 'paid in full', [out.subscription]);
     }
     return json(res, 200, { received: true, ...out });
+  }
+
+  // Stop every subscription collecting an invoice: after its last payment
+  // (whether by card, e-transfer or a Pay button) or when it's voided.
+  // Paid off: let the current period run out. Void: stop at once.
+  async function endSubscriptions(invoiceId, reason, extra = []) {
+    const ids = [...new Set([...L.activeSubscriptions(db, invoiceId), ...extra])];
+    if (!ids.length || !stripe) return;
+    for (const id of ids) {
+      try {
+        if (reason === 'void') await cancelSubscriptionNow(stripe, id);
+        else await cancelSubscriptionAtPeriodEnd(stripe, id);
+        L.endSubscriptionRecord(db, id, reason);
+        L.audit(db, 'invoice', invoiceId, 'subscription_end', { subscription: id, reason });
+      } catch (err) {
+        log.error('[ledger] could not cancel subscription', id, err.message);
+        L.audit(db, 'invoice', invoiceId, 'subscription_end_failed', { subscription: id, error: err.message });
+      }
+    }
+    await retireAutopayLink(invoiceId);
+  }
+
+  // Automatic payments were set up twice (two tabs, or the back button after
+  // finishing). Keep the first; stop the second before it charges again. Any
+  // payment it already took counts towards the next month.
+  async function stopDuplicate(subId, invoiceId) {
+    if (!stripe) return;
+    try {
+      await cancelSubscriptionNow(stripe, subId);
+      L.endSubscriptionRecord(db, subId, 'duplicate');
+      L.audit(db, 'invoice', invoiceId, 'subscription_duplicate', { subscription: subId });
+    } catch (err) {
+      log.error('[ledger] could not cancel duplicate subscription', subId, err.message);
+      L.audit(db, 'invoice', invoiceId, 'subscription_end_failed', { subscription: subId, error: err.message });
+    }
+    sendInvoice({
+      to: cfg.adminEmail, apiKey: cfg.resendKey, from: cfg.emailFrom,
+      subject: `Invoice ${invoiceId}: automatic payments were set up twice`,
+      text: `The client set up automatic payments for invoice ${invoiceId} a second time. The ledger cancelled the second subscription (${subId}) so they aren't charged twice each month. If it already took a payment, that payment counts towards their next month; you can refund it in Stripe instead if you prefer.\n\n${cfg.publicUrl}/admin/invoices/${invoiceId}`,
+      html: `<p>The client set up automatic payments for invoice ${invoiceId} a second time. The ledger cancelled the second subscription (${subId}) so they aren't charged twice each month.</p><p>If it already took a payment, that payment counts towards their next month; you can refund it in Stripe instead if you prefer.</p><p><a href="${cfg.publicUrl}/admin/invoices/${invoiceId}">Open invoice ${invoiceId}</a></p>`,
+    }).catch((err) => log.error('[ledger] duplicate-subscription email failed:', err.message));
+  }
+
+  // Once a subscription is running (or finished), the reusable autopay link
+  // shouldn't start another one.
+  async function retireAutopayLink(invoiceId) {
+    const inv = db.prepare('SELECT stripe_link_id, schedule FROM invoices WHERE id = ?').get(invoiceId);
+    if (!stripe || !inv?.stripe_link_id || !['monthly', 'annual'].includes(inv.schedule)) return;
+    try {
+      await deactivatePaymentLink(stripe, inv.stripe_link_id);
+      db.prepare('UPDATE invoices SET stripe_link_url = NULL WHERE id = ?').run(invoiceId);
+      L.audit(db, 'invoice', invoiceId, 'stripe_link_off', { link_id: inv.stripe_link_id });
+    } catch (err) {
+      log.error('[ledger] could not turn off payment link', inv.stripe_link_id, err.message);
+    }
+  }
+
+  // Create requests carry a one-off key from the form; the same key again (Enter
+  // pressed twice, a retry after a dropped connection) gets the same record back.
+  const created = new Map();
+  const repeated = (key) => (typeof key === 'string' && key ? created.get(key)?.id : null);
+  function remember(key, id) {
+    if (typeof key !== 'string' || !key) return;
+    const now = Date.now();
+    for (const [k, v] of created) if (now - v.at > 30 * 60_000) created.delete(k);
+    created.set(key.slice(0, 100), { id, at: now });
+  }
+
+  // One at a time per key (an invoice or a payment), so a double-click can't
+  // open two checkouts or set up two subscriptions.
+  const locks = new Map();
+  function serial(key, fn) {
+    const prev = locks.get(key) || Promise.resolve();
+    const run = prev.catch(() => {}).then(fn);
+    const tail = run.catch(() => {});
+    locks.set(key, tail);
+    tail.then(() => { if (locks.get(key) === tail) locks.delete(key); });
+    return run;
   }
 
   async function handleApi(req, res, url, parts, user) {
@@ -205,7 +296,11 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
       if (method === 'POST' && !b) {
         const { products } = await stripeProducts();
         if (!stripe) throw new L.LedgerError('Stripe isn’t connected, so there are no plans to offer');
-        return json(res, 201, { id: O.createOffer(db, body, products) });
+        const again = repeated(body.request_key);
+        if (again) return json(res, 201, { id: again, repeated: true });
+        const id = O.createOffer(db, body, products);
+        remember(body.request_key, id);
+        return json(res, 201, { id });
       }
       if (method === 'GET' && b && !c) return json(res, 200, { ...O.getOffer(db, b), link: offerLink(O.getOffer(db, b)) });
       if (method === 'POST' && b && c === 'email') return json(res, 200, await emailOffer(b, body.to, edits(body)));
@@ -222,7 +317,10 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
       return send(res, 200, L.toCsv(L.listInvoices(db, q)), 'text/csv; charset=utf-8', { 'Content-Disposition': `attachment; filename="${name}"` });
     }
     if (method === 'POST' && a === 'invoices' && !b) {
+      const again = repeated(body.request_key);
+      if (again) return json(res, 201, { id: again, link_error: null, repeated: true });
       const id = L.createInvoice(db, body);
+      remember(body.request_key, id);
       let linkError = null;
       if (body.create_stripe_link) linkError = await makeLink(id);
       return json(res, 201, { id, link_error: linkError });
@@ -235,8 +333,17 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
     if (method === 'POST' && a === 'invoices' && b) {
       if (c === 'edit') return json(res, 200, L.updateInvoice(db, b, body));
       if (c === 'send') { L.markSent(db, b, body); return json(res, 200, { ok: true }); }
-      if (c === 'void') { L.voidInvoice(db, b, body.reason); return json(res, 200, { ok: true }); }
-      if (c === 'payments') return json(res, 201, { id: L.recordManualPayment(db, body) });
+      if (c === 'void') {
+        L.voidInvoice(db, b, body.reason);
+        await endSubscriptions(b.toUpperCase(), 'void');
+        return json(res, 200, { ok: true });
+      }
+      if (c === 'payments') {
+        const id = L.recordManualPayment(db, body);
+        const inv = b.toUpperCase();
+        if (L.subscriptionFinished(db, inv)) await endSubscriptions(inv, 'paid in full');
+        return json(res, 201, { id });
+      }
       if (c === 'email') return json(res, 200, await emailInvoice(b, body.to, edits(body)));
       if (c === 'remind') return json(res, 200, await RM.sendManualReminder(db, b, body, reminderOpts));
       if (c === 'reminders') { RM.setInvoiceReminders(db, b, !!body.on); return json(res, 200, { ok: true }); }
@@ -253,7 +360,12 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
       return json(res, 200, { payments: L.unmatchedPayments(db, { includeIgnored: q.ignored === '1' }), open_lines: L.openLines(db) });
     }
     if (method === 'POST' && a === 'payments' && b) {
-      if (c === 'assign') return json(res, 200, { line: L.assignPayment(db, b, body.line_id) });
+      if (c === 'assign') {
+        const line = L.assignPayment(db, b, body.line_id);
+        const inv = line.replace(/-\d+$/, '');
+        if (L.subscriptionFinished(db, inv)) await endSubscriptions(inv, 'paid in full');
+        return json(res, 200, { line });
+      }
       if (c === 'unassign') { L.unassignPayment(db, b); return json(res, 200, { ok: true }); }
       if (c === 'ignore') { L.ignorePayment(db, b, body.note); return json(res, 200, { ok: true }); }
       if (c === 'restore') { L.restorePayment(db, b); return json(res, 200, { ok: true }); }
@@ -394,34 +506,34 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
   // the Stripe subscription for it and tell the owner, then show the invoice.
   async function handleOffer(req, res, offer, action, key, extra, headers) {
     const self = offerLink(offer);
-    if (!action && req.method === 'GET') {
-      return send(res, 200, renderPlanPage(offer, { business: cfg.business, token: offer.public_token, today: L.todayToronto() }), 'text/html; charset=utf-8', headers);
+    if (!action && isGet(req)) {
+      return send(res, 200, renderPlanPage(offer, {
+        business: cfg.business, token: offer.public_token, today: L.todayToronto(), problem: req.url.includes('problem=1'),
+      }), 'text/html; charset=utf-8', headers);
     }
     if (action === 'choose' && req.method === 'POST' && /^\d$/.test(key || '')) {
       let out;
       if (extra && extra !== 'year') return send(res, 404, renderNotFound(cfg.business), 'text/html; charset=utf-8', headers);
       try { out = O.chooseOffer(db, offer.public_token, key, L.todayToronto(), { prepay: extra === 'year' }); } catch (err) {
         if (!(err instanceof L.LedgerError)) throw err;
-        return redirect(res, self);
+        log.error('[ledger] plan choice failed', offer.id, err.message);
+        return redirect(res, offer.cancelled_at ? self : `${self}?problem=1`);
       }
       if (out.created) {
-        if (stripe && out.option.interval && !out.prepay && L.getInvoice(db, out.invoice_id).lines.length > 1) {
-          const err = await makeLink(out.invoice_id);
-          if (err) log.error('[ledger] subscription link after plan choice failed', out.invoice_id, err);
-        }
         const mail = planChosenEmail(offer, out.option, { prepay: out.prepay, business: cfg.business, adminLink: `${cfg.publicUrl}/admin/invoices/${out.invoice_id}` });
         sendInvoice({ to: cfg.adminEmail, ...mail, apiKey: cfg.resendKey, from: cfg.emailFrom })
           .catch((err) => log.error('[ledger] plan-chosen email failed:', err.message));
       }
       return redirect(res, `${self}?chosen=1`);
     }
-    return send(res, 404, renderNotFound(cfg.business), 'text/html; charset=utf-8', headers);
+    // Anything else at this address (an old bookmark, a GET of a form address): show the plans.
+    return redirect(res, self);
   }
 
   // The client's invoice page and its Pay buttons. The token in the URL is the
   // only key, so these pages never show anything not on the invoice itself.
   async function handleInvoice(req, res, url, rest) {
-    const headers = { 'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; form-action 'self' https://checkout.stripe.com; frame-ancestors 'none'; base-uri 'none'" };
+    const headers = { 'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; form-action 'self' https://checkout.stripe.com https://buy.stripe.com; frame-ancestors 'none'; base-uri 'none'" };
     const [token, action, suffix] = rest;
     if (token === 'assets' && INVOICE_STATIC[action] && !suffix) {
       return send(res, 200, fs.readFileSync(path.join(here, 'public', action)), INVOICE_STATIC[action], { 'Cache-Control': 'no-cache' });
@@ -436,35 +548,91 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
       return handleOffer(req, res, offer, action, suffix, rest[3], headers);
     }
     const self = `${cfg.publicUrl}/invoice/${inv.public_token}`;
-    if (!action && req.method === 'GET') {
-      const n = url.searchParams.get('paid') === '1' ? 'paid' : url.searchParams.get('pay') === 'unavailable' ? 'nopay'
-        : url.searchParams.get('chosen') === '1' ? 'chosen' : null;
+    if (!action && isGet(req)) {
+      const sp = url.searchParams;
+      const n = sp.get('paid') === '1' ? 'paid' : sp.get('pay') === 'unavailable' ? 'nopay'
+        : sp.get('chosen') === '1' ? 'chosen' : sp.get('autopay') === 'on' ? 'autopay' : null;
       return send(res, 200, renderInvoicePage(inv, {
         business: cfg.business, today: L.todayToronto(), token: inv.public_token, canPay: !!stripe, notice: n,
+        autopay: autopayOffered(inv),
       }), 'text/html; charset=utf-8', headers);
     }
+    // The plan was already chosen (a double-click, the back button, a second
+    // tab): the invoice for the plan they chose is right here.
+    if (action === 'choose') return redirect(res, `${self}?chosen=1`);
+    if (action === 'autopay' && req.method === 'POST') return serial(`autopay:${inv.id}`, () => startAutopay(res, inv.id, self));
     if (action === 'pay' && req.method === 'POST' && /^\d{2}$/.test(suffix || '')) {
-      const line = inv.lines.find((l) => l.suffix === Number(suffix));
-      if (!line || inv.voided_at || !line.outstanding_cents) return redirect(res, self);
-      if (!stripe) return redirect(res, `${self}?pay=unavailable`);
-      try {
-        return redirect(res, await createLineCheckout(stripe, inv, line, { successUrl: `${self}?paid=1`, cancelUrl: self }));
-      } catch (err) {
-        log.error('[ledger] checkout failed, trying a payment link', inv.id, err.message);
-      }
-      // Fallback: a payment link for this payment, reused while the amount owed is the same.
-      try {
-        if (line.pay_link_url && line.pay_link_amount === line.outstanding_cents) return redirect(res, line.pay_link_url);
-        const link = await createLinePaymentLink(stripe, inv, line, { successUrl: `${self}?paid=1` });
-        L.savePayLink(db, line.id, link.url, line.outstanding_cents);
-        return redirect(res, link.url);
-      } catch (err) {
-        log.error('[ledger] payment link failed', inv.id, err.message);
-        L.audit(db, 'invoice', inv.id, 'checkout_failed', { line: line.ref, error: err.message });
+      return serial(`pay:${inv.id}:${suffix}`, () => payLine(res, inv.id, Number(suffix), self));
+    }
+    // GET of a form address (refresh after the back button) or an old link: show the invoice.
+    if (isGet(req)) return redirect(res, self);
+    return send(res, 404, renderNotFound(cfg.business), 'text/html; charset=utf-8', headers);
+  }
+
+  // Monthly or yearly invoices that can be collected by one Stripe subscription,
+  // offered on invoices from a plan choice or that have an autopay link.
+  function autopayOffered(inv) {
+    return !!stripe && !inv.voided_at && inv.lines.length > 1 && !!subscriptionShape(inv) && !inv.subscriptions.length
+      && !inv.paid_cents && (inv.from_plan_choice || !!inv.stripe_link_url);
+  }
+
+  async function startAutopay(res, invoiceId, self) {
+    const inv = L.getInvoice(db, invoiceId);
+    if (inv.subscriptions.length) return redirect(res, `${self}?autopay=on`);
+    if (!autopayOffered(inv)) return redirect(res, self);
+    // Pressed before: finished already (the webhook may not be here yet), or
+    // still open in another tab, which is closed so only one can be completed.
+    if (inv.autopay_session) {
+      const st = await sessionStatus(stripe, inv.autopay_session);
+      if (st === 'complete') return redirect(res, `${self}?autopay=on`);
+      if (st === 'open') await expireSession(stripe, inv.autopay_session);
+    }
+    try {
+      const s = await createAutopayCheckout(stripe, inv, { today: L.todayToronto(), successUrl: `${self}?autopay=on`, cancelUrl: self });
+      L.setAutopaySession(db, inv.id, s.id);
+      return redirect(res, s.url);
+    } catch (err) {
+      log.error('[ledger] autopay checkout failed, trying the payment link', inv.id, err.message);
+    }
+    if (!inv.stripe_link_url) {
+      const err = await makeLink(inv.id);
+      if (err) {
+        L.audit(db, 'invoice', inv.id, 'checkout_failed', { line: 'autopay', error: err });
         return redirect(res, `${self}?pay=unavailable`);
       }
     }
-    return send(res, 404, renderNotFound(cfg.business), 'text/html; charset=utf-8', headers);
+    return redirect(res, L.getInvoice(db, inv.id).stripe_link_url);
+  }
+
+  async function payLine(res, invoiceId, suffix, self) {
+    const inv = L.getInvoice(db, invoiceId);
+    const line = inv.lines.find((l) => l.suffix === suffix);
+    if (!line || inv.voided_at || !line.outstanding_cents) return redirect(res, self);
+    if (!stripe) return redirect(res, `${self}?pay=unavailable`);
+    if (line.checkout_session) {
+      const st = await sessionStatus(stripe, line.checkout_session);
+      // Paid in another tab a moment ago; Stripe hasn't told us yet.
+      if (st === 'complete') return redirect(res, `${self}?paid=1`);
+      if (st === 'open') await expireSession(stripe, line.checkout_session);
+    }
+    try {
+      const s = await createLineCheckout(stripe, inv, line, { successUrl: `${self}?paid=1`, cancelUrl: self });
+      L.setCheckoutSession(db, line.id, s.id);
+      return redirect(res, s.url);
+    } catch (err) {
+      log.error('[ledger] checkout failed, trying a payment link', inv.id, err.message);
+    }
+    // Fallback: a payment link for this payment, reused while the amount owed is the same.
+    try {
+      if (line.pay_link_url && line.pay_link_amount === line.outstanding_cents) return redirect(res, line.pay_link_url);
+      const link = await createLinePaymentLink(stripe, inv, line, { successUrl: `${self}?paid=1` });
+      L.savePayLink(db, line.id, link.url, line.outstanding_cents);
+      return redirect(res, link.url);
+    } catch (err) {
+      log.error('[ledger] payment link failed', inv.id, err.message);
+      L.audit(db, 'invoice', inv.id, 'checkout_failed', { line: line.ref, error: err.message });
+      return redirect(res, `${self}?pay=unavailable`);
+    }
   }
 
   // Your Stripe products and prices, for starting an invoice from one. Cached briefly.
@@ -505,7 +673,9 @@ export function createApp(cfg, db, { stripe = makeStripe(cfg.stripeKey), sendEma
     if (p === '/robots.txt') return send(res, 200, 'User-agent: *\nDisallow: /\n', 'text/plain');
 
     if (p.startsWith('/invoice/')) {
-      return handleInvoice(req, res, url, p.slice('/invoice/'.length).split('/').map(decodeURIComponent));
+      let rest;
+      try { rest = p.slice('/invoice/'.length).split('/').map(decodeURIComponent); } catch { rest = ['bad'] }
+      return handleInvoice(req, res, url, rest);
     }
 
     if (p.startsWith('/admin/static/')) {

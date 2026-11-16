@@ -413,7 +413,7 @@ test('a client checkout is for what is still owed on that one payment', async ()
   const inv = L.getInvoice(db, id);
   const calls = [];
   const stripe = { post: async (path, params) => { calls.push([path, params]); return { url: 'https://checkout.stripe.com/c/pay/cs_x' }; } };
-  const url = await createLineCheckout(stripe, inv, inv.lines[0], { successUrl: 'https://s/ok', cancelUrl: 'https://s/no' });
+  const { url } = await createLineCheckout(stripe, inv, inv.lines[0], { successUrl: 'https://s/ok', cancelUrl: 'https://s/no' });
   assert.equal(url, 'https://checkout.stripe.com/c/pay/cs_x');
   const [path, params] = calls[0];
   assert.equal(path, '/checkout/sessions');
@@ -444,7 +444,7 @@ test('a refund stops counting as paid; partial refunds count the rest', async ()
   assert.equal(inv.lines[0].payments[0].refunded_cents, 113000);
   assert.ok(inv.history.some((h) => h.action === 'refund'));
   assert.equal(L.openLines(db).length, 1);
-  assert.deepEqual(L.applyRefund(db, { payment_intent: 'pi_unknown', amount_refunded: 5 }), { found: false });
+  assert.deepEqual(L.applyRefund(db, { payment_intent: 'pi_unknown', amount_refunded: 5 }), { found: false, held: true });
 });
 
 test('an open or lost dispute stops counting as paid; a won one counts again', async () => {
@@ -1098,16 +1098,26 @@ test('the client picks a plan and it becomes their invoice at the same link', as
   assert.equal(inv.stripe_product, 'prod_host');
   assert.equal(inv.line_items[0].description, 'Website Hosting: 12 months × $60.00');
   assert.ok(inv.sent_date);
-  assert.equal(inv.stripe_link_url, 'https://buy.stripe.com/sub');
-  assert.equal(posts.find((p) => p[0] === '/prices')[1].product, 'prod_host');
   assert.ok(emails.some((m) => m.subject === 'Cavera Insurance chose Website Hosting'));
 
   const after = await (await req(`${path}?chosen=1`)).text();
   assert.match(after, /Thank you for choosing Website Hosting/);
   assert.match(after, /Set up monthly payments/);
 
-  // Choosing again, or the other plan, changes nothing.
-  await req(`${path}/choose/2`, { method: 'POST' });
+  // Setting up automatic payments opens a Stripe subscription checkout under the plan's product.
+  const ap = await req(`${path}/autopay`, { method: 'POST' });
+  assert.equal(ap.status, 303);
+  assert.equal(ap.headers.get('location'), 'https://buy.stripe.com/sub');
+  assert.equal(posts.find((p) => p[0] === '/prices')[1].product, 'prod_host');
+  const session = posts.find((p) => p[0] === '/checkout/sessions')[1];
+  assert.equal(session.mode, 'subscription');
+  assert.equal(session.metadata.invoice_id, id);
+
+  // Choosing again (double-click, back button), or the other plan, changes
+  // nothing and lands on the invoice rather than an error.
+  const again = await req(`${path}/choose/2`, { method: 'POST' });
+  assert.equal(again.status, 303);
+  assert.equal(again.headers.get('location'), `${offer.link}?chosen=1`);
   assert.equal(L.getInvoice(db, id).total_cents, 6780 * 12);
   assert.equal(L.listInvoices(db, {}).length, 1);
 });
@@ -1217,7 +1227,7 @@ test('a plan choice for a service that already started shows the service period 
   const O = await import('../lib/offers.mjs');
   const { db, req } = await server(t);
   const id = O.createOffer(db, { client_name: 'Cavera Insurance', hst_enabled: false, prepay_free_months: 2, service_start: '2026-10-01',
-    options: [{ price: 'price_host' }, { price: 'price_build' }] }, PLANS);
+    options: [{ price: 'price_host' }, { price: 'price_build' }] }, PLANS, { today: '2026-11-16' });
   const o = O.getOffer(db, id);
   const page = await (await req(`/invoice/${o.public_token}`)).text();
   assert.match(page, /Covers 12 months of service, October 1, 2026 to September 30, 2027\./);
@@ -1238,7 +1248,7 @@ test('a plan choice for a service that already started shows the service period 
 test('missed months with HST stay whole months, and the subscription charges them once up front', async () => {
   const O = await import('../lib/offers.mjs');
   const db = fresh();
-  const id = O.createOffer(db, { client_name: 'Cavera Insurance', service_start: '2026-09-15', options: [{ price: 'price_host' }] }, PLANS);
+  const id = O.createOffer(db, { client_name: 'Cavera Insurance', service_start: '2026-09-15', options: [{ price: 'price_host' }] }, PLANS, { today: '2026-11-16' });
   O.chooseOffer(db, O.getOffer(db, id).public_token, '1', '2026-11-20');
   const inv = L.getInvoice(db, id);
   // Sep 15, Oct 15 and Nov 15 have passed: 3 × $67.80, then $67.80 a month.
@@ -1281,7 +1291,7 @@ test('you can edit an email before it goes, and the link to their page is always
 test('a billing start date still to come: first payment that day, and the card isn’t charged until then', async () => {
   const O = await import('../lib/offers.mjs');
   const db = fresh();
-  const id = O.createOffer(db, { client_name: 'Cavera Insurance', hst_enabled: false, service_start: '2026-12-01', options: [{ price: 'price_host' }] }, PLANS);
+  const id = O.createOffer(db, { client_name: 'Cavera Insurance', hst_enabled: false, service_start: '2026-12-01', options: [{ price: 'price_host' }] }, PLANS, { today: '2026-11-16' });
   O.chooseOffer(db, O.getOffer(db, id).public_token, '1', '2026-11-20');
   const inv = L.getInvoice(db, id);
   assert.deepEqual([inv.lines.length, inv.lines[0].due_date, inv.lines[1].due_date], [12, '2026-12-01', '2027-01-01']);
@@ -1292,4 +1302,217 @@ test('a billing start date still to come: first payment that day, and the card i
   // Due today: charged straight away, no trial.
   await createPaymentLink(stripe, inv, 'https://x', { today: '2026-12-01' });
   assert.equal(link.subscription_data.trial_period_days, undefined);
+});
+
+// ---------- real-life mishaps: double-clicks, back buttons, second tabs, events out of order ----------
+
+// A fake Stripe that remembers what was asked, with Checkout Sessions whose status can be set.
+function recordingStripe() {
+  const calls = [];
+  const sessions = new Map();
+  let n = 0;
+  return {
+    calls, sessions,
+    get: async (p) => {
+      calls.push(['GET', p]);
+      const cs = p.match(/^\/checkout\/sessions\/(.+)$/);
+      if (cs) return { id: cs[1], status: sessions.get(cs[1]) || 'open' };
+      if (p.startsWith('/subscriptions/')) return { metadata: {} };
+      return { has_more: false, data: [] };
+    },
+    post: async (p, params) => {
+      calls.push(['POST', p, params]);
+      n++;
+      if (p === '/checkout/sessions') { sessions.set(`cs_${n}`, 'open'); return { id: `cs_${n}`, url: `https://checkout.stripe.com/c/pay/cs_${n}` }; }
+      const exp = p.match(/^\/checkout\/sessions\/(.+)\/expire$/);
+      if (exp) { sessions.set(exp[1], 'expired'); return {}; }
+      if (p === '/prices') return { id: `price_${n}` };
+      if (p === '/payment_links') return { id: `plink_${n}`, url: `https://buy.stripe.com/l${n}` };
+      return { id: `obj_${n}` };
+    },
+    del: async (p) => { calls.push(['DELETE', p]); return {}; },
+  };
+}
+
+async function planInvoice(t, { payments = 3, start } = {}) {
+  const O = await import('../lib/offers.mjs');
+  const stripe = recordingStripe();
+  const s = await server(t, {}, { stripe });
+  const id = O.createOffer(s.db, { client_name: 'Cavera Insurance', client_email: 'ap@cavera.test', payments, service_start: start, hst_enabled: false, options: [{ price: 'price_host' }] }, PLANS);
+  const { public_token } = O.getOffer(s.db, id);
+  const path = `/invoice/${public_token}`;
+  const hook = async (type, object) => {
+    const raw = JSON.stringify({ id: `evt_${Math.random()}`, type, created: 1, data: { object } });
+    const r = await s.req('/api/stripe/webhook', { method: 'POST', body: raw, headers: { 'stripe-signature': signStripePayload(raw, 'whsec_test') } });
+    return { status: r.status, ...(await r.json()) };
+  };
+  const subPaid = (sub, n, amount = 6000) => hook('invoice.paid', {
+    id: `in_${sub}_${n}`, amount_paid: amount, currency: 'cad', subscription: sub, payment_intent: `pi_${sub}_${n}`,
+    subscription_details: { metadata: { invoice_id: id, source: 'pk-ledger' } },
+  });
+  const subStarted = (sub) => hook('checkout.session.completed', { id: `cs_${sub}`, mode: 'subscription', subscription: sub, metadata: { invoice_id: id } });
+  return { ...s, O, stripe, id, path, hook, subPaid, subStarted };
+}
+
+test('choosing twice, or a different plan in another tab, lands on the invoice instead of an error', async (t) => {
+  const { req, db, path, id } = await planInvoice(t);
+  const [a, b] = await Promise.all([req(`${path}/choose/1`, { method: 'POST' }), req(`${path}/choose/1`, { method: 'POST' })]);
+  assert.deepEqual([a.status, b.status], [303, 303]);
+  assert.match(b.headers.get('location'), /\?chosen=1$/);
+  const other = await req(`${path}/choose/2/year`, { method: 'POST' });
+  assert.match(other.headers.get('location'), /\?chosen=1$/);
+  assert.equal(L.listInvoices(db, {}).length, 1);
+  assert.equal(L.getInvoice(db, id).lines.length, 3);
+  // Refreshing a form address after the back button, or a link checker, just shows the invoice.
+  assert.equal((await req(`${path}/choose/1`)).status, 303);
+  assert.equal((await req(`${path}/pay/01`)).status, 303);
+  assert.equal((await req(path, { method: 'HEAD' })).status, 200);
+  assert.equal((await req('/invoice/%E0%A4%A')).status, 404);
+});
+
+test('setting up automatic payments twice can’t charge twice', async (t) => {
+  const { req, db, path, id, stripe, subStarted, subPaid, emails } = await planInvoice(t);
+  await req(`${path}/choose/1`, { method: 'POST' });
+  assert.match(await (await req(path)).text(), /Set up monthly payments/);
+
+  // Two tabs: the second press closes the first checkout, so only one can be finished.
+  const first = await req(`${path}/autopay`, { method: 'POST' });
+  const second = await req(`${path}/autopay`, { method: 'POST' });
+  assert.notEqual(first.headers.get('location'), second.headers.get('location'));
+  assert.ok(stripe.calls.some((c) => c[0] === 'POST' && c[1] === '/checkout/sessions/cs_2/expire' || /expire$/.test(c[1])));
+  // Finished, then the back button and press again before Stripe's message arrives.
+  const last = [...stripe.sessions.keys()].at(-1);
+  stripe.sessions.set(last, 'complete');
+  assert.match((await req(`${path}/autopay`, { method: 'POST' })).headers.get('location'), /\?autopay=on$/);
+
+  await subStarted('sub_A');
+  await subPaid('sub_A', 1);
+  const page = await (await req(path)).text();
+  assert.match(page, /Automatic payments are on/);
+  assert.doesNotMatch(page, /Set up monthly payments/);
+  assert.doesNotMatch(page, /Pay \$60\.00/, 'no Pay buttons for payments the card will cover');
+  assert.match((await req(`${path}/autopay`, { method: 'POST' })).headers.get('location'), /\?autopay=on$/);
+
+  // A second subscription anyway (e.g. an old reusable link): stopped at once, and the owner is told.
+  const r = await subStarted('sub_B');
+  assert.equal(r.duplicate, true);
+  assert.ok(stripe.calls.some((c) => c[0] === 'DELETE' && c[1] === '/subscriptions/sub_B'));
+  assert.ok(emails.some((m) => /set up twice/.test(m.subject)));
+  // Its first charge counts towards the next month rather than going missing.
+  await subPaid('sub_B', 1);
+  assert.deepEqual(L.getInvoice(db, id).lines.map((l) => l.paid_cents), [6000, 6000, 0]);
+  assert.deepEqual(L.activeSubscriptions(db, id), ['sub_A']);
+});
+
+test('a subscription stops however the invoice gets paid off, and when it’s voided', async (t) => {
+  // Last payment made by e-transfer instead of the card.
+  {
+    const { req, db, path, id, stripe, subStarted, subPaid } = await planInvoice(t);
+    await req(`${path}/choose/1`, { method: 'POST' });
+    await subStarted('sub_1');
+    await subPaid('sub_1', 1);
+    await subPaid('sub_1', 2);
+    const cookie = `pk_admin=${A.createSession(db, 'rh@pklabs.ca')}`;
+    const last = L.getInvoice(db, id).lines[2];
+    const r = await req(`/admin/api/invoices/${id}/payments`, { method: 'POST', headers: { cookie, 'X-Ledger': '1', 'content-type': 'application/json' }, body: JSON.stringify({ line_id: last.id, amount_cents: 6000, method: 'e-transfer' }) });
+    assert.equal(r.status, 201);
+    assert.ok(stripe.calls.some((c) => c[0] === 'POST' && c[1] === '/subscriptions/sub_1' && c[2].cancel_at_period_end === 'true'));
+    assert.deepEqual(L.activeSubscriptions(db, id), []);
+  }
+  // Voided while the subscription is running: cancelled straight away.
+  {
+    const { req, db, path, id, stripe, subStarted } = await planInvoice(t);
+    await req(`${path}/choose/1`, { method: 'POST' });
+    await subStarted('sub_v');
+    const cookie = `pk_admin=${A.createSession(db, 'rh@pklabs.ca')}`;
+    await req(`/admin/api/invoices/${id}/void`, { method: 'POST', headers: { cookie, 'X-Ledger': '1', 'content-type': 'application/json' }, body: '{"reason":"client left"}' });
+    assert.ok(stripe.calls.some((c) => c[0] === 'DELETE' && c[1] === '/subscriptions/sub_v'));
+  }
+});
+
+test('a partly refunded month isn’t charged again, and the subscription still ends on time', async (t) => {
+  const { req, db, path, id, stripe, subStarted, subPaid, hook } = await planInvoice(t);
+  await req(`${path}/choose/1`, { method: 'POST' });
+  await subStarted('sub_r');
+  await subPaid('sub_r', 1);
+  await hook('charge.refunded', { id: 'ch_1', payment_intent: 'pi_sub_r_1', amount_refunded: 1000 });
+  await subPaid('sub_r', 2);
+  const out = await subPaid('sub_r', 3);
+  assert.deepEqual(L.getInvoice(db, id).lines.map((l) => l.paid_cents), [5000, 6000, 6000]);
+  assert.equal(out.subscription_done, true);
+  assert.ok(stripe.calls.some((c) => c[1] === '/subscriptions/sub_r' && c[2]?.cancel_at_period_end === 'true'));
+});
+
+test('paying the same payment in two tabs puts the second towards the next payment', async (t) => {
+  const { req, db, path, id, hook } = await planInvoice(t);
+  await req(`${path}/choose/1`, { method: 'POST' });
+  const paid = (pi) => hook('checkout.session.completed', {
+    id: `cs_${pi}`, mode: 'payment', payment_status: 'paid', payment_intent: pi, amount_total: 6000, currency: 'cad',
+    metadata: { invoice_id: id, payment_suffix: '01' },
+  });
+  await paid('pi_tab1');
+  const second = await paid('pi_tab2');
+  assert.equal(second.matched, `${id}-02`);
+  const inv = L.getInvoice(db, id);
+  assert.deepEqual(inv.lines.map((l) => l.paid_cents), [6000, 6000, 0]);
+});
+
+test('refunds and disputes that arrive out of order still end up right', async () => {
+  const db = fresh();
+  const id = invoice(db, { subtotal_cents: 100000, hst_enabled: false });
+  const pay = { ref: 'pi_x', stripe_event_id: 'evt_x', stripe_type: 'payment_intent.succeeded', stripe_object_id: 'pi_x', amount_cents: 100000, currency: 'CAD', received_at: '2026-11-16T12:00:00Z', metadata: { invoice_id: id } };
+  // The refund arrives before the payment.
+  assert.equal(L.applyRefund(db, { payment_intent: 'pi_x', amount_refunded: 30000 }).held, true);
+  L.upsertStripePayment(db, pay);
+  assert.equal(L.getInvoice(db, id).paid_cents, 70000);
+  // A second refund's event, then the first one's again: the total only goes up.
+  L.applyRefund(db, { payment_intent: 'pi_x', amount_refunded: 50000 });
+  L.applyRefund(db, { payment_intent: 'pi_x', amount_refunded: 30000 });
+  assert.equal(L.getInvoice(db, id).paid_cents, 50000);
+  // A won dispute isn't reopened by its late "opened" event.
+  L.applyDispute(db, { payment_intent: 'pi_x', amount: 50000, status: 'won' });
+  L.applyDispute(db, { payment_intent: 'pi_x', amount: 50000, status: 'needs_response' });
+  assert.equal(L.getInvoice(db, id).paid_cents, 50000);
+});
+
+test('impossible dates and free plans are turned away', async () => {
+  const O = await import('../lib/offers.mjs');
+  const db = fresh();
+  assert.equal(L.isDate('2027-02-31'), false);
+  assert.equal(L.isDate('2028-02-29'), true);
+  assert.throws(() => O.createOffer(db, { client_name: 'X', service_start: '2027-02-31', options: [{ price: 'price_host' }] }, PLANS), /valid date/);
+  assert.throws(() => O.createOffer(db, { client_name: 'X', options: [{ price: 'price_free' }] }, [...PLANS, { price: 'price_free', product: 'p', name: 'Free', amount_cents: 0, currency: 'CAD', interval: 'month' }]), /free in Stripe/);
+});
+
+test('no “please pay” reminder for a payment the card is about to cover', async (t) => {
+  const RM = await import('../lib/reminders.mjs');
+  const { req, db, path, id, subStarted } = await planInvoice(t);
+  await req(`${path}/choose/1`, { method: 'POST' });
+  const second = L.getInvoice(db, id).lines[1];
+  const due = second.due_date;
+  const threeBefore = L.addInterval(due, 'monthly', 0).replace(/\d{2}$/, (d) => String(Number(d) - 3).padStart(2, '0'));
+  const before = RM.dueReminders(db, threeBefore).filter((r) => r.line_id === second.id).length;
+  await subStarted('sub_q');
+  const after = RM.dueReminders(db, threeBefore).filter((r) => r.line_id === second.id).length;
+  assert.ok(before >= 1);
+  assert.equal(after, 0);
+});
+
+test('typos and repeats from the admin forms are caught', async (t) => {
+  const O = await import('../lib/offers.mjs');
+  const db = fresh();
+  // $90 trillion would break every page that lists invoices; anything over $10 million is refused.
+  assert.throws(() => invoice(db, { subtotal_cents: 9_999_999_999_999_99 }), /more than \$10 million/);
+  // A start date a year or more off is almost always the wrong year.
+  assert.throws(() => O.createOffer(db, { client_name: 'X', service_start: '2019-01-01', options: [{ price: 'price_host' }] }, PLANS, { today: '2026-11-16' }), /at most a year/);
+  assert.throws(() => O.createOffer(db, { client_name: 'X', service_start: '2999-06-15', options: [{ price: 'price_host' }] }, PLANS, { today: '2026-11-16' }), /at most a year/);
+
+  // Enter pressed twice: the same request key gets the same invoice back.
+  const s = await server(t);
+  const cookie = `pk_admin=${A.createSession(s.db, 'rh@pklabs.ca')}`;
+  const post = () => s.req('/admin/api/invoices', { method: 'POST', headers: { cookie, 'X-Ledger': '1', 'content-type': 'application/json' },
+    body: JSON.stringify({ client_name: 'Acme', subtotal_cents: 10000, request_key: 'k-1' }) }).then((r) => r.json());
+  const [a, b] = await Promise.all([post(), post()]);
+  assert.equal(a.id, b.id);
+  assert.equal(L.listInvoices(s.db, {}).length, 1);
 });

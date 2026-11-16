@@ -308,6 +308,32 @@ function migrate(db) {
   for (const [col, def] of [['pay_link_url', 'TEXT'], ['pay_link_amount', 'INTEGER']]) {
     if (!hasColumn(db, 'payment_lines', col)) db.exec(`ALTER TABLE payment_lines ADD COLUMN ${col} ${def}`);
   }
+  // The Checkout Session last opened for a payment, so pressing Pay again (a
+  // second tab, the back button) closes the old one instead of allowing two charges.
+  if (!hasColumn(db, 'payment_lines', 'checkout_session')) db.exec('ALTER TABLE payment_lines ADD COLUMN checkout_session TEXT');
+  if (!hasColumn(db, 'invoices', 'autopay_session')) db.exec('ALTER TABLE invoices ADD COLUMN autopay_session TEXT');
+
+  // Stripe subscriptions collecting an invoice, so they can all be stopped when
+  // it's paid off or voided, and a second one set up by mistake can be caught.
+  db.exec(`CREATE TABLE IF NOT EXISTS subscriptions (
+    id          TEXT PRIMARY KEY,
+    invoice_id  TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    ended_at    TEXT,
+    end_reason  TEXT
+  )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_subscriptions_invoice ON subscriptions(invoice_id)');
+
+  // A refund or dispute that arrived before its payment (Stripe can deliver
+  // events out of order); applied when the payment arrives.
+  db.exec(`CREATE TABLE IF NOT EXISTS pending_adjustments (
+    id             INTEGER PRIMARY KEY,
+    kind           TEXT NOT NULL,
+    payment_intent TEXT,
+    charge         TEXT,
+    data           TEXT NOT NULL,
+    created_at     TEXT NOT NULL
+  )`);
 }
 
 // Run fn inside a transaction. node:sqlite is synchronous, so fn must be too.

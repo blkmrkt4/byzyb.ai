@@ -35,14 +35,21 @@ export function audit(db, entity, entityId, action, detail = {}) {
 
 // ---------- money and schedule ----------
 
+// Anything over $10 million is a typo here, and keeps sums far inside what
+// SQLite and JavaScript count exactly.
+const MAX_CENTS = 1_000_000_000;
 function cents(v, field) {
   const n = Number(v);
   if (!Number.isInteger(n) || n < 0) throw new LedgerError(`${field} must be a whole number of cents`);
+  if (n > MAX_CENTS) throw new LedgerError(`${field} is more than $10 million. Check for a typo.`);
   return n;
 }
 
-function isDate(s) {
-  return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s + 'T00:00:00Z'));
+// A real calendar date: "2027-02-31" is rejected rather than rolling over to March.
+export function isDate(s) {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const t = Date.parse(s + 'T00:00:00Z');
+  return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === s;
 }
 
 // payments: for a monthly or yearly invoice, HST is worked out per payment when
@@ -54,6 +61,7 @@ export function computeTotals({ line_items = [], subtotal_cents, hst_enabled = t
   const subtotal = items.length ? items.reduce((a, i) => a + i.amount_cents, 0) : cents(subtotal_cents, 'Subtotal');
   const n = Number.isInteger(payments) && payments > 1 && subtotal % payments === 0 ? payments : 1;
   const hst = hst_enabled ? Math.round((subtotal / n) * HST_RATE) * n : 0;
+  if (subtotal > MAX_CENTS) throw new LedgerError('The total is more than $10 million. Check for a typo.');
   return { line_items: items, subtotal_cents: subtotal, hst_cents: hst, total_cents: subtotal + hst };
 }
 
@@ -197,6 +205,9 @@ export function getInvoice(db, id, today = todayToronto()) {
       SELECT r.id, r.kind, r.sent_to, r.sent_at, r.error, pl.suffix FROM reminders r
         JOIN payment_lines pl ON pl.id = r.line_id WHERE r.invoice_id = ? ORDER BY r.id DESC`).all(inv.id)
       .map((r) => ({ ...r, ref: lineRef(inv.id, r.suffix) })),
+    // Stripe subscriptions charging this invoice automatically.
+    subscriptions: activeSubscriptions(db, inv.id),
+    from_plan_choice: !!db.prepare('SELECT 1 FROM plan_offers WHERE id = ? AND chosen_key IS NOT NULL').get(inv.id),
   };
 }
 
@@ -643,14 +654,38 @@ function nextOpenLine(db, invoiceId) {
      ORDER BY pl.suffix LIMIT 1`).get(invoiceId);
 }
 
-function findLineFor(db, { id, suffix }) {
+// The first payment line nothing has been paid towards yet. A subscription
+// charges one per period, so each renewal takes the next of these: a line
+// that was partly refunded keeps its payment and isn't charged again.
+function nextUntouchedLine(db, invoiceId) {
+  return db.prepare(`
+    SELECT pl.* FROM payment_lines pl
+     WHERE pl.invoice_id = ? AND NOT EXISTS (
+       SELECT 1 FROM payments p WHERE p.payment_line_id = pl.id AND p.ignored_at IS NULL)
+     ORDER BY pl.suffix LIMIT 1`).get(invoiceId);
+}
+
+function lineOwes(db, lineId) {
+  return db.prepare(`
+    SELECT pl.amount_cents - COALESCE(SUM(${NET}), 0) AS owes FROM payment_lines pl
+      LEFT JOIN payments p ON p.payment_line_id = pl.id AND p.ignored_at IS NULL
+     WHERE pl.id = ? GROUP BY pl.id`).get(lineId)?.owes ?? 0;
+}
+
+function findLineFor(db, { id, suffix }, { subscription = false } = {}) {
   const inv = db.prepare('SELECT * FROM invoices WHERE id = ?').get(id);
   if (!inv || inv.voided_at) return null;
   if (suffix) {
     const line = db.prepare('SELECT * FROM payment_lines WHERE invoice_id = ? AND suffix = ?').get(id, suffix);
-    if (line) return { line, inv };
+    // Paid for twice (two checkout tabs): the second payment goes towards the
+    // next payment still owing, or is left for you to refund if none is.
+    if (line && lineOwes(db, line.id) > 0) return { line, inv };
+    if (line) {
+      const next = nextOpenLine(db, id);
+      return next ? { line: next, inv, spill: true } : null;
+    }
   }
-  const line = nextOpenLine(db, id);
+  const line = subscription ? nextUntouchedLine(db, id) : nextOpenLine(db, id);
   return line ? { line, inv } : null;
 }
 
@@ -663,8 +698,10 @@ function autoMatchTarget(db, p) {
     const hit = findLineFor(db, {
       id: String(meta.invoice_id).toUpperCase(),
       suffix: meta.payment_suffix ? Number(meta.payment_suffix) : null,
-    });
-    if (hit) return { ...hit, method: 'auto: Stripe metadata' };
+    }, { subscription: !!p.stripe_subscription });
+    if (hit) return { ...hit, method: hit.spill ? 'auto: Stripe metadata (that payment was already paid)' : 'auto: Stripe metadata' };
+    // Ours, but nothing left on that invoice to put it towards: leave it unmatched.
+    return null;
   }
   for (const [text, label] of [[p.invoice_ref_entered, 'auto: invoice number entered at checkout'], [p.description, 'auto: payment description']]) {
     for (const ref of findRefs(text)) {
@@ -697,6 +734,8 @@ export function upsertStripePayment(db, rec) {
       audit(db, 'payment', p.id, 'receive', {
         stripe_type: rec.stripe_type, stripe_id: rec.stripe_object_id, amount_cents: rec.amount_cents, currency: rec.currency,
       });
+      applyPendingAdjustments(db, p);
+      p = db.prepare('SELECT * FROM payments WHERE id = ?').get(p.id);
     } else {
       // A later event for the same payment: fill in anything we didn't have.
       const meta = { ...JSON.parse(p.metadata || '{}'), ...(rec.metadata || {}) };
@@ -721,10 +760,22 @@ export function upsertStripePayment(db, rec) {
         matched = lineRef(t.inv.id, t.line.suffix);
         audit(db, 'payment', p.id, 'match', { line: matched, method: t.method, amount_cents: p.amount_cents, stripe_id: p.stripe_object_id });
         invoicePaid = !nextOpenLine(db, t.inv.id);
-        p.invoice_id = t.inv.id;
       }
     }
-    return { payment_id: p.id, created, matched, invoice_paid: invoicePaid, invoice_id: p.invoice_id || null, subscription: p.stripe_subscription };
+    const meta = JSON.parse(p.metadata || '{}');
+    const lineInv = p.payment_line_id ? db.prepare('SELECT invoice_id FROM payment_lines WHERE id = ?').get(p.payment_line_id)?.invoice_id : null;
+    const invoiceId = lineInv || (meta.invoice_id ? String(meta.invoice_id).toUpperCase() : null);
+    let duplicateSubscription = false;
+    if (p.stripe_subscription && invoiceId && db.prepare('SELECT 1 FROM invoices WHERE id = ?').get(invoiceId)) {
+      duplicateSubscription = recordSubscription(db, p.stripe_subscription, invoiceId).duplicate;
+    }
+    return {
+      payment_id: p.id, created, matched, invoice_paid: invoicePaid, invoice_id: invoiceId, subscription: p.stripe_subscription,
+      duplicate_subscription: duplicateSubscription,
+      // Every payment has had a charge (or the invoice is paid, void or gone):
+      // the subscription has nothing left to collect.
+      subscription_done: !!p.stripe_subscription && !!invoiceId && subscriptionFinished(db, invoiceId),
+    };
   });
 }
 
@@ -757,12 +808,14 @@ function lineOf(db, p) {
 }
 
 // Stripe reports the total refunded so far on the charge, so this sets rather than adds.
-export function applyRefund(db, { payment_intent, charge, amount_refunded }) {
+// Events can arrive out of order, so the refunded total only ever goes up.
+export function applyRefund(db, adj) {
+  const { payment_intent, charge, amount_refunded } = adj;
   return tx(db, () => {
     const p = stripePaymentFor(db, { payment_intent, charge });
-    if (!p) return { found: false };
+    if (!p) return holdAdjustment(db, 'refund', adj);
     const refunded = Math.min(Math.max(Number(amount_refunded) || 0, 0), p.amount_cents);
-    if (refunded === p.refunded_cents) return { found: true, payment_id: p.id, changed: false };
+    if (refunded <= p.refunded_cents) return { found: true, payment_id: p.id, changed: false };
     db.prepare('UPDATE payments SET refunded_cents = ? WHERE id = ?').run(refunded, p.id);
     const line = lineOf(db, p);
     audit(db, 'payment', p.id, 'refund', {
@@ -775,10 +828,14 @@ export function applyRefund(db, { payment_intent, charge, amount_refunded }) {
 
 // While a dispute is open, or once it's lost, the disputed amount doesn't count
 // as paid. If we win, it counts again.
-export function applyDispute(db, { payment_intent, charge, amount, status }) {
+// Once a dispute is decided, a late "opened" or "under review" event doesn't reopen it.
+const DISPUTE_FINAL = ['won', 'lost', 'warning_closed', 'prevented'];
+export function applyDispute(db, adj) {
+  const { payment_intent, charge, amount, status } = adj;
   return tx(db, () => {
     const p = stripePaymentFor(db, { payment_intent, charge });
-    if (!p) return { found: false };
+    if (!p) return holdAdjustment(db, 'dispute', adj);
+    if (DISPUTE_FINAL.includes(p.dispute_status) && !DISPUTE_FINAL.includes(status)) return { found: true, payment_id: p.id, changed: false, stale: true };
     const held = DISPUTE_KEPT.includes(status) ? 0 : Math.min(Math.max(Number(amount) || 0, 0), p.amount_cents - p.refunded_cents);
     if (held === p.dispute_cents && status === p.dispute_status) return { found: true, payment_id: p.id, changed: false };
     db.prepare('UPDATE payments SET dispute_cents = ?, dispute_status = ? WHERE id = ?').run(held, status, p.id);
@@ -789,6 +846,63 @@ export function applyDispute(db, { payment_intent, charge, amount, status }) {
     });
     return { found: true, payment_id: p.id, changed: true, invoice_id: line?.invoice_id || null };
   });
+}
+
+// A refund or dispute for a payment not recorded yet. Kept for 30 days in case
+// its payment event is still on the way (most are for sales outside the ledger).
+function holdAdjustment(db, kind, adj) {
+  if (!adj.payment_intent && !adj.charge) return { found: false };
+  db.prepare('DELETE FROM pending_adjustments WHERE created_at < ?').run(new Date(Date.now() - 30 * 86_400_000).toISOString());
+  db.prepare('INSERT INTO pending_adjustments (kind, payment_intent, charge, data, created_at) VALUES (?, ?, ?, ?, ?)')
+    .run(kind, adj.payment_intent || null, adj.charge || null, JSON.stringify(adj), nowIso());
+  return { found: false, held: true };
+}
+
+function applyPendingAdjustments(db, p) {
+  const rows = db.prepare('SELECT * FROM pending_adjustments WHERE payment_intent = ? OR charge = ? ORDER BY id').all(p.ref, p.ref);
+  for (const r of rows) {
+    const adj = JSON.parse(r.data);
+    if (r.kind === 'refund') applyRefund(db, adj);
+    else applyDispute(db, adj);
+    db.prepare('DELETE FROM pending_adjustments WHERE id = ?').run(r.id);
+  }
+}
+
+// ---------- subscriptions ----------
+
+// Remember that a Stripe subscription is collecting this invoice. duplicate:
+// another one was already collecting it (autopay set up twice).
+export function recordSubscription(db, subId, invoiceId) {
+  return tx(db, () => {
+    const known = db.prepare('SELECT * FROM subscriptions WHERE id = ?').get(subId);
+    if (known) return { duplicate: false, new: false };
+    const others = db.prepare('SELECT id FROM subscriptions WHERE invoice_id = ? AND ended_at IS NULL').all(invoiceId);
+    db.prepare('INSERT INTO subscriptions (id, invoice_id, created_at) VALUES (?, ?, ?)').run(subId, invoiceId, nowIso());
+    audit(db, 'invoice', invoiceId, 'subscription_start', { subscription: subId });
+    return { duplicate: others.length > 0, new: true };
+  });
+}
+
+export function activeSubscriptions(db, invoiceId) {
+  return db.prepare('SELECT id FROM subscriptions WHERE invoice_id = ? AND ended_at IS NULL ORDER BY created_at').all(invoiceId).map((r) => r.id);
+}
+
+export function endSubscriptionRecord(db, subId, reason) {
+  db.prepare('UPDATE subscriptions SET ended_at = ?, end_reason = ? WHERE id = ? AND ended_at IS NULL').run(nowIso(), reason, subId);
+}
+
+// Nothing left for a subscription to collect on this invoice.
+export function subscriptionFinished(db, invoiceId) {
+  const inv = db.prepare('SELECT voided_at FROM invoices WHERE id = ?').get(invoiceId);
+  return !inv || !!inv.voided_at || !nextOpenLine(db, invoiceId) || !nextUntouchedLine(db, invoiceId);
+}
+
+export function setCheckoutSession(db, lineId, sessionId) {
+  db.prepare('UPDATE payment_lines SET checkout_session = ? WHERE id = ?').run(sessionId || null, lineId);
+}
+
+export function setAutopaySession(db, invoiceId, sessionId) {
+  db.prepare('UPDATE invoices SET autopay_session = ? WHERE id = ?').run(sessionId || null, invoiceId);
 }
 
 // ---------- CSV ----------

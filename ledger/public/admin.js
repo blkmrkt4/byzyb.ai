@@ -19,13 +19,21 @@ function money(cents, currency = 'CAD') {
   }
 }
 
-// "1,234.5" -> 123450. Returns null if it isn't a valid amount.
+// "1,234.5" -> 123450. Returns null if it isn't a valid amount. Commas only
+// count as thousands separators ("1,00" is a mistake, not $100), and anything
+// over $10 million is taken to be a typo.
+const MAX_CENTS = 1_000_000_000;
 function parseMoney(v) {
-  const s = String(v ?? '').replace(/[\s,$]/g, '');
+  let s = String(v ?? '').replace(/[\s$]/g, '');
   if (s === '') return 0;
+  if (s.includes(',')) {
+    if (!/^\d{1,3}(,\d{3})+(\.\d{0,2})?$/.test(s)) return null;
+    s = s.replace(/,/g, '');
+  }
   if (!/^\d+(\.\d{0,2})?$/.test(s)) return null;
   const [whole, frac = ''] = s.split('.');
-  return Number(whole) * 100 + Number(frac.padEnd(2, '0'));
+  const c = Number(whole) * 100 + Number(frac.padEnd(2, '0'));
+  return c > MAX_CENTS ? null : c;
 }
 const centsToInput = (c) => (c / 100).toFixed(2);
 const DAY_MS = 86_400_000;
@@ -67,10 +75,21 @@ async function api(path, { method = 'GET', body } = {}) {
 }
 
 // Run an async action from a button, disabling it meanwhile and toasting errors.
+// If the action moves to another page, the button stays disabled until that
+// page has drawn, so a second click or Enter can't send it twice.
 async function busy(btn, fn) {
+  if (btn?.disabled) return undefined;
   if (btn) btn.disabled = true;
-  try { return await fn(); } catch (err) { toast(err.message, true); return undefined; } finally { if (btn) btn.disabled = false; }
+  try { return await fn(); } catch (err) { toast(err.message, true); return undefined; } finally {
+    await routing.catch(() => {});
+    if (btn) btn.disabled = false;
+  }
 }
+
+// A one-off key per form, sent with "create" requests, so a repeat (Enter
+// pressed twice, a retry after a dropped connection) returns the same record
+// instead of making a second one.
+const requestKey = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 
 // ---------- drafts ----------
 // A half-filled form is kept in this browser as you type, so leaving the page
@@ -111,11 +130,20 @@ function fillFields(f, vals = {}) {
 // Saves after the first real edit, then on every change after that.
 function autosave(f, save) {
   let dirty = false;
-  const now = () => { dirty = true; save(); };
+  const live = () => f.isConnected && !f.dataset.finished;
+  const now = () => { if (!live()) return; dirty = true; save(); };
   f.addEventListener('input', now);
   f.addEventListener('change', now);
   // Buttons like "Add line item" change the form without an input event.
-  f.addEventListener('click', () => { if (dirty) setTimeout(save, 0); });
+  f.addEventListener('click', (e) => {
+    if (!dirty || e.target.closest('[type="submit"], [data-no-draft]')) return;
+    setTimeout(() => { if (live()) save(); }, 0);
+  });
+}
+// The form was saved or cancelled: forget its draft for good.
+function finishDraft(f, name) {
+  f.dataset.finished = '1';
+  clearDraft(name);
 }
 function showDraftNotice(f, draft, what, name) {
   const when = new Date(draft.at).toLocaleString('en-CA', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Toronto' });
@@ -163,9 +191,15 @@ document.addEventListener('click', (e) => {
   e.preventDefault();
   go(a.getAttribute('href'));
 });
-window.addEventListener('popstate', route);
+window.addEventListener('popstate', () => route());
 
-async function route() {
+let routing = Promise.resolve();
+function route() {
+  routing = drawRoute();
+  return routing;
+}
+
+async function drawRoute() {
   const p = location.pathname.replace(/\/+$/, '');
   $$('.admin-nav a', document).forEach((a) => {
     if (p.startsWith(a.getAttribute('href'))) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
@@ -361,7 +395,10 @@ async function formPage(id) {
   const shift = dup ? daysFrom(dup.issue_date, config.today) : 0;
   const { clients: clientNames } = await api('clients');
   const draftName = inv ? `edit:${inv.id}` : `new${location.search}`;
-  const draft = loadDraft(draftName);
+  let draft = loadDraft(draftName);
+  // Changes kept from an earlier edit, but the invoice has changed since
+  // (someone else, or a payment): don't put the old values back over it.
+  if (draft && inv && draft.base !== inv.updated_at) { clearDraft(draftName); draft = null; }
   const newId = inv ? null : draft?.id || (await api('next-id')).id;
   const invNo = inv?.id || newId;
   if (inv?.voided_at) throw new Error('A void invoice can’t be edited.');
@@ -450,10 +487,11 @@ async function formPage(id) {
     showDraftNotice(f, draft, inv ? 'edit' : 'invoice', draftName);
   }
   autosave(f, () => saveDraft(draftName, {
-    id: newId, fields: formFields(f),
+    id: newId, base: inv?.updated_at, fields: formFields(f),
     state: { items: state.items, lines: state.lines, linesEdited: state.linesEdited, product: state.product },
   }));
-  $('#cancel-form').addEventListener('click', () => clearDraft(draftName));
+  $('#cancel-form').addEventListener('click', () => finishDraft(f, draftName));
+  const createKey = requestKey();
 
   // Picking a saved client fills in their email and address if those are empty.
   async function clientLookup() {
@@ -569,7 +607,7 @@ async function formPage(id) {
       const row = e.target.closest('[data-i]');
       const it = state.items[row.dataset.i];
       if (e.target.dataset.k === 'description') it.description = e.target.value;
-      else it.amount_cents = parseMoney(e.target.value) ?? 0;
+      else it.amount_cents = parseMoney(e.target.value);
       refresh();
     });
     $('#items').addEventListener('click', (e) => {
@@ -620,6 +658,7 @@ async function formPage(id) {
 
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (f.dataset.sending) return;
     const err = (m) => { $('#form-error').innerHTML = `<div class="notice bad">${esc(m)}</div>`; };
     $('#form-error').innerHTML = '';
     if (!f.client_name.value.trim()) return err('Client name is required.');
@@ -629,7 +668,8 @@ async function formPage(id) {
     };
     if (full) {
       const t = totals();
-      if (t.total == null || state.items.some((i) => i.amount_cents == null)) return err('Check the amounts: use numbers like 1500 or 1500.00.');
+      if (t.total == null || state.items.some((i) => i.amount_cents == null)) return err('Check the amounts: use numbers like 1500, 1,500 or 1500.00 (up to $10 million).');
+      if (f.schedule.value !== 'one_time' && (Number(f.count.value) < (f.schedule.value === 'split' ? 2 : 1) || Number(f.count.value) > 120 || !Number.isInteger(Number(f.count.value)))) return err('Number of payments must be a whole number up to 120.');
       if (!t.total) return err('Enter an amount.');
       if (state.lines.some((l) => !l.amount_cents)) return err('Every payment needs an amount.');
       if (f.schedule.value !== 'split' && state.lines.some((l) => !l.due_date)) return err('Every payment needs a due date.');
@@ -644,27 +684,28 @@ async function formPage(id) {
         currency: f.currency.value.toUpperCase(), issue_date: f.issue_date.value, schedule: f.schedule.value,
         lines: state.lines.map((l) => ({ ...l, due_date: l.due_date || null })),
       });
-      if (!inv) body.id = newId;
+      if (!inv) { body.id = newId; body.request_key = createKey; }
       if (!inv) body.create_stripe_link = ['monthly', 'annual'].includes(f.schedule.value) && !!f.create_stripe_link?.checked;
     }
     const btn = f.querySelector('button[type="submit"]');
     btn.disabled = true;
+    f.dataset.sending = '1';
     try {
       if (inv) {
         const out = await api(`invoices/${inv.id}/edit`, { method: 'POST', body });
-        clearDraft(draftName);
+        finishDraft(f, draftName);
         toast(out.changed.length ? 'Saved' : 'No changes');
         go(`/admin/invoices/${inv.id}`, true);
       } else {
         const out = await api('invoices', { method: 'POST', body });
-        clearDraft(draftName);
+        finishDraft(f, draftName);
         toast(out.id === newId ? `Invoice ${out.id} created` : `Invoice ${out.id} created (${newId} was taken, so it got a new number)`);
         if (out.link_error) setTimeout(() => toast(`Invoice created, but the Stripe link failed: ${out.link_error}`, true), 400);
         go(`/admin/invoices/${out.id}`, true);
       }
     } catch (ex) {
       err(ex.message);
-    } finally {
+      delete f.dataset.sending;
       btn.disabled = false;
     }
   });
@@ -675,6 +716,7 @@ async function formPage(id) {
 const ACTION_LABEL = {
   create: 'Created', edit: 'Edited', send: 'Marked as sent', void: 'Voided', stripe_link: 'Stripe payment link created',
   stripe_link_failed: 'Stripe payment link failed', subscription_end: 'Stripe subscription set to end',
+  subscription_start: 'Client set up automatic payments', subscription_duplicate: 'Second automatic-payment setup cancelled', stripe_link_off: 'Autopay link turned off (automatic payments set up)',
   subscription_end_failed: 'Could not end the Stripe subscription', receive: 'Payment received from Stripe',
   match: 'Payment matched', unmatch: 'Payment unassigned', ignore: 'Payment ignored', restore: 'Payment restored',
   record_manual: 'Manual payment recorded', due_date: 'Due date changed', refund: 'Refunded in Stripe',
@@ -1571,10 +1613,18 @@ function remindersPanel(inv, openLines) {
 // ---------- emails to clients ----------
 // Opens the email with the standard wording filled in, for you to edit, then sends it.
 async function openComposer(box, { draftPath, sendPath, button, onSent }) {
+  // Already open: keep what's been typed and just go to it.
+  const open = box.querySelector('form.composer');
+  if (!box.hidden && open) { box.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); open.message.focus(); return; }
   box.hidden = false;
   box.innerHTML = '<p class="muted small">Getting the email ready…</p>';
-  const d = await api(draftPath).catch((err) => { box.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`; return null; });
-  if (!d) return;
+  const fetched = await api(draftPath).catch((err) => { box.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`; return null; });
+  if (!fetched) return;
+  // An email being written is kept in this browser too, so signing in again
+  // (or leaving the page) doesn't lose it.
+  const keep = `email:${sendPath}`;
+  const kept = loadDraft(keep);
+  const d = kept ? { ...fetched, ...kept.fields } : fetched;
   box.innerHTML = `
     <form class="composer stack" novalidate>
       <h3 class="small-h">Email to send</h3>
@@ -1589,17 +1639,23 @@ async function openComposer(box, { draftPath, sendPath, button, onSent }) {
   box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   f.message.focus();
   f.message.setSelectionRange(0, 0);
-  f.querySelector('[data-cancel]').addEventListener('click', () => { box.hidden = true; box.innerHTML = ''; });
+  if (kept) f.insertAdjacentHTML('afterbegin', '<p class="muted small">Your unsent email from earlier, as you left it.</p>');
+  f.addEventListener('input', () => { if (!f.dataset.sending) saveDraft(keep, { fields: { to: f.to.value, subject: f.subject.value, message: f.message.value } }); });
+  f.querySelector('[data-cancel]').addEventListener('click', () => { clearDraft(keep); box.hidden = true; box.innerHTML = ''; });
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (f.dataset.sending) return;
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.to.value.trim())) {
       box.querySelector('#composer-error').innerHTML = '<div class="notice bad">Enter the email address to send to.</div>';
       return;
     }
     const btn = f.querySelector('button[type="submit"]');
     btn.textContent = 'Sending…';
+    f.dataset.sending = '1';
     const out = await busy(btn, () => api(sendPath, { method: 'POST', body: { to: f.to.value.trim(), subject: f.subject.value, message: f.message.value } }));
-    if (!out) { btn.textContent = 'Send'; return; }
+    if (!out) { btn.textContent = 'Send'; delete f.dataset.sending; return; }
+    btn.disabled = true;
+    clearDraft(keep);
     toast(`Emailed to ${out.sent_to}`);
     onSent();
   });
@@ -1609,6 +1665,10 @@ async function openComposer(box, { draftPath, sendPath, button, onSent }) {
 // The client is sent a page with a few plans and picks one; that becomes the
 // invoice, with the number shown here from the start.
 
+// How far back or ahead billing can start: a year either way. Further is almost
+// always a typo in the year, and would bill a client for a whole year at once.
+const START_MIN = () => addInterval(config.today, 'annual', -1);
+const START_MAX = () => addInterval(config.today, 'annual', 1);
 const intervalWord = (i) => (i === 'year' ? 'year' : 'month');
 const planPrice = (o) => (o.interval ? `${money(o.amount_cents, o.currency)} a ${intervalWord(o.interval)}` : `${money(o.amount_cents, o.currency)} one-time`);
 const DEFAULT_OFFER_MESSAGE = 'Here are the ways we can look after your website from here. Have a look at what each one includes and choose the one that suits you.';
@@ -1659,7 +1719,7 @@ async function offerFormPage() {
           <legend>Billing starts</legend>
           <label class="check"><input type="radio" name="start_mode" value="choose" checked> The day they choose</label>
           <label class="check"><input type="radio" name="start_mode" value="date"> On this date:</label>
-          <input class="date-pick" name="service_start" type="date" aria-label="Billing start date">
+          <input class="date-pick" name="service_start" type="date" min="${START_MIN()}" max="${START_MAX()}" aria-label="Billing start date">
         </fieldset>
         <p class="small start-note" id="start-note"></p>
         <label class="check"><input type="checkbox" name="hst_enabled" checked> Charge HST at 13% on top</label>
@@ -1708,6 +1768,7 @@ async function offerFormPage() {
     if (f.start_mode.value === 'date' && !f.service_start.value) { note.textContent = 'Pick the date billing starts.'; return; }
     if (!dated) { note.textContent = 'Their first payment is due the day they choose, then monthly from there.'; return; }
     const start = f.service_start.value;
+    if (start < START_MIN() || start > START_MAX()) { note.textContent = `That’s more than a year ${start < config.today ? 'ago' : 'away'}. Check the year: billing can start from ${niceDate(START_MIN())} to ${niceDate(START_MAX())}.`; return; }
     const n = Number(f.payments.value) || 12;
     const end = addDaysTo(addInterval(start, 'monthly', n), -1);
     const period = `${niceDate(start)} to ${niceDate(end)}`;
@@ -1805,22 +1866,28 @@ async function offerFormPage() {
     })),
     customs,
   }));
-  $('#cancel-form').addEventListener('click', () => clearDraft(draftName));
+  $('#cancel-form').addEventListener('click', () => finishDraft(f, draftName));
   updatePrepay();
+  const createKey = requestKey();
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (f.dataset.sending) return;
     const err = (m) => { $('#form-error').innerHTML = `<div class="notice bad">${esc(m)}</div>`; };
     $('#form-error').innerHTML = '';
     if (!f.client_name.value.trim()) return err('Client name is required.');
     const chosen = picked();
     if (!chosen.length && !customs.length) return err('Tick a plan or add a custom option to offer.');
     if (f.start_mode.value === 'date' && !f.service_start.value) return err('Pick the date billing starts, or choose “The day they choose”.');
+    if (f.start_mode.value === 'date' && (f.service_start.value < START_MIN() || f.service_start.value > START_MAX())) return err(`Billing can start from ${niceDate(START_MIN())} to ${niceDate(START_MAX())}. Check the year.`);
+    const months = Number(f.payments.value);
+    if (!Number.isInteger(months) || months < 1 || months > 120) return err('Number of months must be a whole number from 1 to 120.');
+    if (f.prepay_on.checked && !(Number(f.prepay_free.value) >= 1 && Number(f.prepay_free.value) < months)) return err(`Months free must be at least 1 and fewer than ${months}, or untick “pay upfront”.`);
     for (const c of customs) {
       if (!c.name.trim()) return err('Give each custom option a name.');
-      if (!parseMoney(c.amount)) return err(`Enter an amount for “${c.name.trim()}”, like 45 or 45.00.`);
+      if (!parseMoney(c.amount)) return err(`Enter an amount for “${c.name.trim()}”, like 45, 1,500 or 45.00.`);
     }
     const body = {
-      id: newId, client_name: f.client_name.value, client_email: f.client_email.value, client_address: f.client_address.value,
+      id: newId, request_key: createKey, client_name: f.client_name.value, client_email: f.client_email.value, client_address: f.client_address.value,
       message: f.message.value, payments: Number(f.payments.value), hst_enabled: f.hst_enabled.checked,
       prepay_free_months: f.prepay_on.checked ? Number(f.prepay_free.value) : 0,
       service_start: f.start_mode.value === 'date' ? f.service_start.value || null : null,
@@ -1829,12 +1896,15 @@ async function offerFormPage() {
         ...customs.map((c) => ({ custom: true, name: c.name, amount_cents: parseMoney(c.amount), interval: c.interval || null, details: c.details })),
       ],
     };
-    await busy(f.querySelector('button[type="submit"]'), async () => {
+    f.dataset.sending = '1';
+    const ok = await busy(f.querySelector('button[type="submit"]'), async () => {
       const { id } = await api('offers', { method: 'POST', body });
-      clearDraft(draftName);
+      finishDraft(f, draftName);
       toast(`Plan choice ${id} created`);
       go(`/admin/offers/${id}`, true);
+      return true;
     });
+    if (!ok) delete f.dataset.sending;
   });
 }
 
