@@ -61,7 +61,13 @@ function toast(msg, bad = false) {
   toast.t = setTimeout(() => { toastEl.hidden = true; }, bad ? 6000 : 3000);
 }
 
+// Each page draw gets a number. A page load that answers after you've already
+// moved on to another page is dropped, so a slow page can't draw over the new one.
+let routeGen = 0;
+class Stale extends Error {}
+
 async function api(path, { method = 'GET', body } = {}) {
+  const gen = routeGen;
   const res = await fetch(`/admin/api/${path}`, {
     method,
     headers: method === 'GET' ? {} : { 'Content-Type': 'application/json', 'X-Ledger': '1' },
@@ -71,6 +77,7 @@ async function api(path, { method = 'GET', body } = {}) {
   if (res.status === 401) { location.href = '/admin/login'; throw new Error('Signed out'); }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  if (method === 'GET' && gen !== routeGen) throw new Stale('Moved to another page');
   return data;
 }
 
@@ -80,7 +87,7 @@ async function api(path, { method = 'GET', body } = {}) {
 async function busy(btn, fn) {
   if (btn?.disabled) return undefined;
   if (btn) btn.disabled = true;
-  try { return await fn(); } catch (err) { toast(err.message, true); return undefined; } finally {
+  try { return await fn(); } catch (err) { if (!(err instanceof Stale)) toast(err.message, true); return undefined; } finally {
     await routing.catch(() => {});
     if (btn) btn.disabled = false;
   }
@@ -195,6 +202,7 @@ window.addEventListener('popstate', () => route());
 
 let routing = Promise.resolve();
 function route() {
+  routeGen += 1;
   routing = drawRoute();
   return routing;
 }
@@ -232,6 +240,7 @@ async function drawRoute() {
     }
     app.innerHTML = `<div class="empty">Page not found. <a href="/admin/dashboard" data-nav>Go to the dashboard</a></div>`;
   } catch (err) {
+    if (err instanceof Stale) return;
     app.innerHTML = `<div class="notice bad">${esc(err.message)}</div><p><a href="/admin/invoices" data-nav>Back to invoices</a></p>`;
   }
 }
